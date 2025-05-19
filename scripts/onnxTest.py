@@ -135,12 +135,20 @@ if False:
       print(val.name)
    sys.exit()
 
+@dataclass
+class PackedArray:
+   name: str
+   data: bytes 
+
+   def __repr__(self):
+      return f"[PackedArray] {self.name} ({len(self.data)} bytes)"
+
 class Endianess(Enum):
    NATIVE = auto()
    LITTLE_ENDIAN = auto()
    BIG_ENDIAN = auto()
 
-def PackNPArrayForCComsuption(array,endianess : Endianess = Endianess.NATIVE):
+def EndianessToStructArg(endianess: Endianess):
    endianArg = ""
    if(endianess == Endianess.NATIVE):
       endianArg = "@"
@@ -150,7 +158,40 @@ def PackNPArrayForCComsuption(array,endianess : Endianess = Endianess.NATIVE):
       endianArg = ">"
    else:
       assert(False)
+   
+   return endianArg
 
+def PackArrayNoHeader(array,endianess : Endianess = Endianess.NATIVE):
+   endianArg = EndianessToStructArg(endianess)
+
+   dtype = array.dtype
+   formatArg = "f"
+   if(dtype == np.int64):
+      formatArg = "q"
+   
+   data = struct.Struct(f"{endianArg}{formatArg}")
+   dataContent = bytes()
+   for x in np.nditer(array):
+      dataContent += data.pack(x)
+
+   return dataContent
+
+@dataclass
+class PackedArrays:
+   data: bytes
+   offsets: list[int]
+
+def PackMultipleArrays(arrayList,endianess : Endianess = Endianess.NATIVE):
+   data = bytes()
+   offsets = []
+   for array in arrayList:
+      offsets.append(len(data))
+      data += PackArrayNoHeader(array)
+
+   return PackedArrays(data,offsets)
+
+def PackNPArrayForCComsuption(array,endianess : Endianess = Endianess.NATIVE):
+   endianArg = EndianessToStructArg(endianess)
    dims = len(array.shape)
 
    header = struct.Struct(f"{endianArg}i")
@@ -167,22 +208,44 @@ def PackNPArrayForCComsuption(array,endianess : Endianess = Endianess.NATIVE):
 
    return headerContent + dataContent
 
-@dataclass
-class PackedArray:
-   name: str
-   data: bytes 
+def PackArrays(packedArrayList,endianess : Endianess = Endianess.NATIVE):
+   endianArg = EndianessToStructArg(endianess)
 
-   def __repr__(self):
-      return f"[PackedArray] {self.name} ({len(self.data)} bytes)"
+   amount = len(packedArrayList)
+   integerBuilder = struct.Struct(f"{endianArg}i")
+
+   content = integerBuilder.pack(amount)
+   for packedArray in packedArrayList:
+      content += integerBuilder.pack((len(packedArray.data)))
+
+   for packedArray in packedArrayList:
+      content += packedArray.data
+
+   return content
 
 class DataSourceType(Enum):
-   INPUT = auto()
+   MODEL_INPUT = auto()
+   NODE_INPUT = auto()
    INITIALIZER = auto()
 
 @dataclass
 class DataSource:
    sourceType : DataSourceType
-   sourceName : str
+   name : str
+
+   # Computed afterwards. Easier to store directly.
+   index : int = -1
+   correctInputIndex: int = -1
+   #correctInput: PackedArray = None
+
+class MemoryType(Enum):
+   TEMP = auto()
+   OUTPUT = auto()
+
+@dataclass
+class MemoryLocation:
+   offset : int
+   memType : MemoryType
 
 @dataclass
 class Operation:
@@ -194,14 +257,17 @@ class Operation:
 #   isOutputFinal: bool
    outputDimensions: list[int]
    testExpectedOutput: PackedArray = None
+   testExpectedOutputAsNPArray: any = None
    #TODO: Eventually implement attributes properly. 
 
    # Data computed afterwards. Easier to store here
-   outputMemoryAddress: int = 0 # Address at runtime. We precalculate it here to hopefully save memory, since embedded systems do not contain much
+   outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it here to hopefully save memory, since embedded systems do not contain much
 
 @dataclass
 class CModelRepr:
+   modelInputs : list[str]
    initializers: list[PackedArray]
+   initializersAsNp: list[any]
    operations: list[Operation]
 
 @dataclass
@@ -210,7 +276,10 @@ class MemoryAllocation:
    lastCycle: int
    amount: int
 
-cModel = CModelRepr([],[])
+cModel = CModelRepr([],[],[],[])
+
+for name in modelInputs:
+   cModel.modelInputs.append(name)
 
 # Extract all the data that we care about from the graph into a simpler struct for further processing.
 for node in model.graph.node:
@@ -236,6 +305,7 @@ for node in model.graph.node:
          asNpArray = onnx.numpy_helper.to_array(tensor)
          packedBytes = PackNPArrayForCComsuption(asNpArray)
          cModel.initializers.append(PackedArray(name,packedBytes))
+         cModel.initializersAsNp.append(asNpArray)
 
    outputDimensions = None
    print("  Output shapes")
@@ -252,8 +322,10 @@ for node in model.graph.node:
       source = None
       if(tensor):
          source = DataSource(DataSourceType.INITIALIZER,name) 
-      else:         
-         source = DataSource(DataSourceType.INPUT,name) 
+      elif(name in cModel.modelInputs):
+         source = DataSource(DataSourceType.MODEL_INPUT,name) 
+      else:
+         source = DataSource(DataSourceType.NODE_INPUT,name) 
       dataSources.append(source)
 
    outputName = node.output[0] # Can a node have more than one output? 
@@ -262,7 +334,7 @@ for node in model.graph.node:
 
    outputTest = PackedArray(outputName,packedExpectedOutput)
 
-   op = Operation(node.name,node.op_type,dataSources,outputName,outputDimensions,outputTest)
+   op = Operation(node.name,node.op_type,dataSources,outputName,outputDimensions,outputTest,expectedOutputAsNPArray)
    cModel.operations.append(op)
 
    #print(cModel)
@@ -276,9 +348,15 @@ def IndexOfNodesThatUseOutput(cModel,outputName):
    indexes = []
    for index,op in enumerate(cModel.operations):
       for inp in op.inputs:
-         if(inp.sourceName == outputName):
+         if(inp.name == outputName):
             indexes.append(index)
    return indexes
+
+def IndexOfNodeThatProducesOutput(cModel,outputName):
+   for index,op in enumerate(cModel.operations):
+      if(outputName == op.output):
+         return index
+   return None
 
 # Heavy weight algorithm to calculate the best way of performing memory allocations.
 # We reduce the problem to rectangle fitting. The memory allocation is represented as rectangles where
@@ -286,7 +364,7 @@ def IndexOfNodesThatUseOutput(cModel,outputName):
 # Each onnx operation advances time by 1 unit.
 # We encode the problem as a Integer Linear program and use a solver to find the optimal solution
 def CalculateOptimalMemoryAllocationOffset(memoryAllocations: list[MemoryAllocation]):
-   M = 1000000 # Not a big fan of this trick. What if the memory size becomes bigger than this number?
+   M = 1000000 # Not a big fan of this trick. What if the memory size becomes bigger than this number? Larger M values cause the algorithm to stop working. Might depend on the solver but regardless want to see if we can find a better way.
    # TODO: Need to find an alternative
 
    # Create all the variables that we are gonna use
@@ -307,7 +385,7 @@ def CalculateOptimalMemoryAllocationOffset(memoryAllocations: list[MemoryAllocat
 
    H = pulp.LpVariable("H",lowBound=0)
 
-   prob = pulp.LpProblem("myProblem", pulp.LpMinimize)
+   prob = pulp.LpProblem("problem", pulp.LpMinimize)
 
    for memAndIndex in itertools.combinations(enumerate(memoryAllocations),2):
       i,leftMem = memAndIndex[0]
@@ -365,7 +443,8 @@ for index,c in enumerate(cModel.operations):
    indexes = IndexOfNodesThatUseOutput(cModel,c.output)
 
    if(not indexes):
-      lastCycle = len(cModel.operations)
+      continue
+      #lastCycle = len(cModel.operations)
    else:
       lastCycle = max(indexes)
 
@@ -379,6 +458,98 @@ for index,c in enumerate(cModel.operations):
 
    memoryAllocations.append(MemoryAllocation(index,lastCycle,memoryRequired))
 
-totalMemoryNeeded,offsets = CalculateOptimalMemoryAllocationOffset(memoryAllocations)
-print("total memory needed:",totalMemoryNeeded)
+totalTempMemoryNeeded,offsets = CalculateOptimalMemoryAllocationOffset(memoryAllocations)
+print("total temporary memory needed:",totalTempMemoryNeeded)
 print(offsets)
+
+ptr = 0
+for index,c in enumerate(cModel.operations):
+   indexes = IndexOfNodesThatUseOutput(cModel,c.output)
+
+   if(not indexes):
+      continue
+   
+   c.outputMemoryAddress = MemoryLocation(offsets[ptr],MemoryType.TEMP)
+   ptr += 1
+
+totalOutputMemory = 0
+outputOffsets = []
+for index,c in enumerate(cModel.operations):
+   indexes = IndexOfNodesThatUseOutput(cModel,c.output)
+
+   if(indexes):
+      continue
+
+   memoryRequired = 4  # Size of a float
+   for dim in c.outputDimensions:
+      memoryRequired *= dim
+
+   outputOffsets.append(totalOutputMemory)
+   c.outputMemoryAddress = MemoryLocation(totalOutputMemory,MemoryType.OUTPUT)
+   totalOutputMemory += memoryRequired
+
+print("total output memory needed:",totalOutputMemory)
+print(outputOffsets)
+
+print("DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){")
+
+nameToCorrectOutputIndex = {}
+ind = 0
+for index,c in enumerate(cModel.operations):
+   if(c.testExpectedOutput):
+      nameToCorrectOutputIndex[c.output] = ind
+      ind += 1
+
+correctData = [x.testExpectedOutputAsNPArray for x in cModel.operations]
+packedCorrectData = PackMultipleArrays(correctData)
+
+packedInitializers = PackMultipleArrays([x for x in cModel.initializersAsNp])
+#sys.exit(0)
+
+# Calculate initializer position
+initializersSeen = 0
+for index,c in enumerate(cModel.operations):
+   for source in c.inputs:
+      if(source.sourceType == DataSourceType.INITIALIZER):
+         source.index = initializersSeen
+         initializersSeen += 1
+      elif(source.sourceType == DataSourceType.MODEL_INPUT):
+         for index,name in enumerate(cModel.modelInputs):
+            if(name == source.name):
+               source.index = index
+      else:
+         source.index = IndexOfNodeThatProducesOutput(cModel,source.name)
+         source.correctInputIndex = nameToCorrectOutputIndex[source.name]
+
+debugging = True
+for index,c in enumerate(cModel.operations):
+   content = []
+   for inp in c.inputs:
+      if(inp.sourceType == DataSourceType.INITIALIZER):
+         content.append(f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})")
+      elif(inp.sourceType == DataSourceType.MODEL_INPUT):
+         content.append(f"inputs[{inp.index}]")
+      else:
+         if(debugging):
+            content.append(f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})")
+         else:
+            content.append(f"res_{inp.index}")
+
+   outputStr = ""
+   if(c.outputMemoryAddress.memType == MemoryType.TEMP):
+      outputStr = f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
+   else:
+      outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
+
+   print(f"  void* res_{index} = ",c.opName,'(',",".join(content),f",{outputStr});",sep='')
+   if(debugging):
+      print(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}));")
+
+print(f"Model size: {len(packedInitializers.data)}")
+print(f"Correct size: {len(packedCorrectData.data)}")
+      
+with open("model.bin","wb") as f:
+   f.write(packedInitializers.data)
+
+with open("correctOutput.bin","wb") as f:
+   f.write(packedCorrectData.data)
