@@ -9,5 +9,5 @@ test:
 	python3 ./tester.py tests/mnist_v7 output > output/code.c
 	# -fsanitize=address -static-libasan
 	gcc -Wall -g -o output/exe tester.c software/staticSource.c output/code.c -Isoftware
-	./output/exe
+	cd output; ./exe
 	#gdb -ex run --args ./output/exe

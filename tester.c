@@ -18,7 +18,7 @@ int main(int argc,const char* argv[]){
 
   inputs[0] = malloc(100000);
   
-  FILE* modelFile = fopen("scripts/model.bin","rb");
+  FILE* modelFile = fopen("model.bin","rb");
   if(!modelFile){
     printf("Error opening model\n");
   }
@@ -28,7 +28,7 @@ int main(int argc,const char* argv[]){
     printf("Error reading model\n");
   }
 
-  FILE* correctFile = fopen("scripts/correctOutput.bin","rb");
+  FILE* correctFile = fopen("correctOutput.bin","rb");
   if(!correctFile){
     printf("Error opening correct\n");
   }

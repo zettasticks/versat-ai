@@ -1,0 +1,6 @@
+*.bin
+*.onnx
+output
+python
+__pycache__
+tests

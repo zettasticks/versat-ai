@@ -15,7 +15,7 @@ void* Conv(void* inputX,void* inputW,void* output,int index,ConvInfo* info){
 }
 
 void* Reshape(void* data,void* shape,void* output,int index,ReshapeInfo* info){
-  int64_t* view = (int64_t*) shape;
+  //int64_t* view = (int64_t*) shape;
 
   //printf("%ld %ld\n",view[0],view[1]);
   
@@ -94,23 +94,15 @@ void* Relu(void* inputX,void* output,int index,ReluInfo* info){
    float* view = (float*) inputX;
    float* out = (float*) output;
 
-  if(info->dims == 4){
-      for(int a = 0; a < info->inputDims[0]; a++){
-         for(int b = 0; b < info->inputDims[1]; b++){
-            for(int c = 0; c < info->inputDims[2]; c++){
-               for(int d = 0; d < info->inputDims[3]; d++){
-                  int da = info->inputDims[3] * info->inputDims[2] * info->inputDims[1];
-                  int db = info->inputDims[3] * info->inputDims[2];
-                  int dc = info->inputDims[3];
+   int totalSize = 1;
+   for(int i = 0; i < info->dims; i++){
+      totalSize *= info->inputDims[i];
+   }
 
-                  int index =  a * da +  b * db +  c * dc +  d;
-                  float val = view[index];
-                  out[index] = MAX(0.0f,val);
-               }
-            }   
-         }   
-      }
-   }   
+   for(int i = 0; i < totalSize; i++){
+      float val = view[i];
+      out[i] = MAX(0.0f,val);      
+   }
 
   return output;
 }

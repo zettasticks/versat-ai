@@ -448,10 +448,15 @@ def GenerateDebug(testLocation: str,outputLocation: str):
    print("  return (InferenceOutput){};")
    print("}")
 
-   with open("model.bin","wb") as f:
+   try:
+      os.makedirs(outputLocation)
+   except:
+      pass
+
+   with open(os.path.join(outputLocation,"model.bin"),"wb") as f:
       f.write(packedInitializers.data)
 
-   with open("correctOutput.bin","wb") as f:
+   with open(os.path.join(outputLocation,"correctOutput.bin"),"wb") as f:
       f.write(packedCorrectData.data)
 
 if __name__ == "__main__":
