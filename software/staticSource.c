@@ -7,122 +7,154 @@
 
 typedef char bool;
 
-size_t GetOutputMemorySize(){return 100;}
-size_t GetTemporaryMemorySize(){return 100;}
-
-typedef struct{
-   // Attributes as described by onnx.
-   int auto_pad;
-   int* dilations;
-   int group;
-   int* kernel_shape;
-   int* pads;
-   int* strides;
-
-   // Extra info to help 
-   int** inputDims;
-} ConvInfo;
-
-typedef struct{
-   // Extra info to help 
-   int** inputDims;
-   bool needToBroadcast;
-} AddInfo;
-
-// TODO: In fact, because we have all the information that we need, we do not even have to 
-//       keep the size of the arrays of the model. Everything is already know.
-//       It eventually boils down to how much of this we want to generate and how much of this we want to calculate at runtime.
-
-int GetAmountOfInitializers(void* base){
-   int* view = (int*) base;
-   return *view;
-}
-
-int* GetInitializersSize(void* base){
-   int* view = (int*) base;
-   return view + 1;
-}
-
-// TODO: This is actually not needed. We can precompute this.
-void* GetInitializer(void* base,int index){
-   int amount = GetAmountOfInitializers(base);
-   int* sizes = GetInitializersSize(base);
-
-   int* view = (int*) base;
-   // Skips the initializers sizes values and array
-   view += 1;
-   view += amount;
-
-   for(int i = 0; i < index; i++){
-      view += sizes[i];
-   }
-
-   return view;
-}
 
 #define OFFSET_PTR(PTR,OFFSET) ((void*) (((char*) PTR) + OFFSET))
 
-void* Conv(void* inputX,void* inputW,void* output){
-  return NULL;
+void* Conv(void* inputX,void* inputW,void* output,int index,ConvInfo* info){
+  return output;
 }
 
-void* Reshape(void* data,void* shape,void* output){
+void* Reshape(void* data,void* shape,void* output,int index,ReshapeInfo* info){
   int64_t* view = (int64_t*) shape;
 
-  printf("%ld %ld\n",view[0],view[1]);
+  //printf("%ld %ld\n",view[0],view[1]);
   
-  return NULL;
+  return output;
 }
 
-void* Add(void* inputA,void* inputB,void* output){
-  return NULL;
+#define MIN(A,B) ((A < B ? A : B))
+#define MAX(A,B) ((A > B ? A : B))
+
+void* Add(void* inputA,void* inputB,void* output,int index,AddInfo* info){
+  float* viewA = (float*) inputA;
+  float* viewB = (float*) inputB;
+  float* out = (float*) output;
+
+   // Code for 4 tensors
+  if(info->maxDims == 4){
+      for(int a = 0; a < info->broadCastedShape[0]; a++){
+         for(int b = 0; b < info->broadCastedShape[1]; b++){
+            for(int c = 0; c < info->broadCastedShape[2]; c++){
+               for(int d = 0; d < info->broadCastedShape[3]; d++){
+                  int da = info->firstInputDim[3] * info->firstInputDim[2] * info->firstInputDim[1];
+                  int db = info->firstInputDim[3] * info->firstInputDim[2];
+                  int dc = info->firstInputDim[3];
+
+                  int xa = info->secondInputDim[3] * info->secondInputDim[2] * info->secondInputDim[1];
+                  int xb = info->secondInputDim[3] * info->secondInputDim[2];
+                  int xc = info->secondInputDim[3];
+
+                  int oa = info->broadCastedShape[3] * info->broadCastedShape[2] * info->broadCastedShape[1];
+                  int ob = info->broadCastedShape[3] * info->broadCastedShape[2];
+                  int oc = info->broadCastedShape[3];
+
+                  int ma = MIN(info->secondInputDim[0],a);
+                  int mb = MIN(info->secondInputDim[1],b);
+                  int mc = MIN(info->secondInputDim[2],c);
+                  int md = MIN(info->secondInputDim[3],d);
+
+                  int indexA =  a * da +  b * db +  c * dc +  d;
+                  int indexB = ma * xa + mb * xb + mc * xc + md;
+                  int indexO =  a * oa +  b * ob +  c * oc +  d;
+
+                  float valA = viewA[indexA];
+                  float valB = viewB[indexB];
+
+                  out[indexO] = valA + valB;
+               }
+            }   
+         }   
+      }
+   } else if(info->maxDims == 2){
+      for(int a = 0; a < info->broadCastedShape[0]; a++){
+         for(int b = 0; b < info->broadCastedShape[1]; b++){
+            int da = info->firstInputDim[1];
+            int xa = info->secondInputDim[1];
+            int oa = info->broadCastedShape[1];
+
+            int ma = MIN(info->secondInputDim[0],a);
+            int mb = MIN(info->secondInputDim[1],b);
+
+            int indexA =  a * da +  b;
+            int indexB = ma * xa + mb;
+            int indexO =  a * oa +  b;
+
+            float valA = viewA[indexA];
+            float valB = viewB[indexB];
+
+            out[indexO] = valA + valB;
+         }   
+      }      
+   }
+
+  return output;
 }
 
-void* Relu(void* inputX,void* output){
-  return NULL;
+void* Relu(void* inputX,void* output,int index,ReluInfo* info){
+   float* view = (float*) inputX;
+   float* out = (float*) output;
+
+  if(info->dims == 4){
+      for(int a = 0; a < info->inputDims[0]; a++){
+         for(int b = 0; b < info->inputDims[1]; b++){
+            for(int c = 0; c < info->inputDims[2]; c++){
+               for(int d = 0; d < info->inputDims[3]; d++){
+                  int da = info->inputDims[3] * info->inputDims[2] * info->inputDims[1];
+                  int db = info->inputDims[3] * info->inputDims[2];
+                  int dc = info->inputDims[3];
+
+                  int index =  a * da +  b * db +  c * dc +  d;
+                  float val = view[index];
+                  out[index] = MAX(0.0f,val);
+               }
+            }   
+         }   
+      }
+   }   
+
+  return output;
 }
 
-void* MaxPool(void* inputX,void* output){
-  return NULL;
+void* MaxPool(void* inputX,void* output,int index,MaxPoolInfo* info){
+  return output;
 }
 
-void* MatMul(void* inputA,void* inputB,void* output){
-  return NULL;
+void* MatMul(void* inputA,void* inputB,void* output,int index,MatMulInfo* info){
+  return output;
 }
 
-void AssertAlmostEqual(void* toTest,void* correctValues){
-  
+static inline float absf(float a){
+   if(a < 0.0f){
+      return -a;
+   }
+   return a;
+}
+
+void AssertAlmostEqual(void* toTest,void* correctValues,int index){
+   float* test = (float*) toTest;
+   float* correct = (float*) correctValues;
+
+   size_t outputSize = layers[index].outputSize / sizeof(float);
+
+   int incorrectFound = 0;
+   for(int i = 0; i < outputSize; i++){
+      if(absf(correct[i] - test[i]) > 1.0f){
+         printf("Layer(%d)[%s] Index: %d\n",index,layers[index].typeName,i);
+         printf("  Different values %f %f\n",correct[i],test[i]);
+         incorrectFound += 1;
+      }
+
+      if(incorrectFound > 10){
+         printf("More than 10 incorrect found, quitting early\n");
+         break;
+      }
+   }
+
+   if(incorrectFound == 0){
+      printf("Fully checked and found no errors for Layer(%d)[%s]\n",index,layers[index].typeName);
+   }
 }
 
 InferenceOutput RunInference(void* outputMemory,void* temporaryMemory,void** input,void* modelMemory){
-  return (InferenceOutput){};
-}
-
-InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){
-  void* res_0 = Reshape(OFFSET_PTR(modelMemory,0),OFFSET_PTR(modelMemory,10240),OFFSET_PTR(temporaryMemory,25088));
-  AssertAlmostEqual(res_0,OFFSET_PTR(correctInput,0));
-  void* res_1 = Conv(inputs[0],OFFSET_PTR(modelMemory,10256),OFFSET_PTR(temporaryMemory,35328));
-  AssertAlmostEqual(res_1,OFFSET_PTR(correctInput,10240));
-  void* res_2 = Add(OFFSET_PTR(correctInput,10240),OFFSET_PTR(modelMemory,11056),OFFSET_PTR(temporaryMemory,0));
-  AssertAlmostEqual(res_2,OFFSET_PTR(correctInput,35328));
-  void* res_3 = Relu(OFFSET_PTR(correctInput,35328),OFFSET_PTR(temporaryMemory,35328));
-  AssertAlmostEqual(res_3,OFFSET_PTR(correctInput,60416));
-  void* res_4 = MaxPool(OFFSET_PTR(correctInput,60416),OFFSET_PTR(temporaryMemory,0));
-  AssertAlmostEqual(res_4,OFFSET_PTR(correctInput,85504));
-  void* res_5 = Conv(OFFSET_PTR(correctInput,85504),OFFSET_PTR(modelMemory,11088),OFFSET_PTR(temporaryMemory,35328));
-  AssertAlmostEqual(res_5,OFFSET_PTR(correctInput,91776));
-  void* res_6 = Add(OFFSET_PTR(correctInput,91776),OFFSET_PTR(modelMemory,23888),OFFSET_PTR(temporaryMemory,47872));
-  AssertAlmostEqual(res_6,OFFSET_PTR(correctInput,104320));
-  void* res_7 = Relu(OFFSET_PTR(correctInput,104320),OFFSET_PTR(temporaryMemory,0));
-  AssertAlmostEqual(res_7,OFFSET_PTR(correctInput,116864));
-  void* res_8 = MaxPool(OFFSET_PTR(correctInput,116864),OFFSET_PTR(temporaryMemory,24064));
-  AssertAlmostEqual(res_8,OFFSET_PTR(correctInput,129408));
-  void* res_9 = Reshape(OFFSET_PTR(correctInput,129408),OFFSET_PTR(modelMemory,23952),OFFSET_PTR(temporaryMemory,23040));
-  AssertAlmostEqual(res_9,OFFSET_PTR(correctInput,130432));
-  void* res_10 = MatMul(OFFSET_PTR(correctInput,130432),OFFSET_PTR(correctInput,0),OFFSET_PTR(temporaryMemory,0));
-  AssertAlmostEqual(res_10,OFFSET_PTR(correctInput,131456));
-  void* res_11 = Add(OFFSET_PTR(correctInput,131456),OFFSET_PTR(modelMemory,23968),OFFSET_PTR(outputMemory,0));
-  AssertAlmostEqual(res_11,OFFSET_PTR(correctInput,131496));
-
   return (InferenceOutput){};
 }

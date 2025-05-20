@@ -21,8 +21,6 @@ from onnx import numpy_helper
 
 import matplotlib.pyplot as plt
 
-print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
-
 def OnnxRenameNode(model,originalName,newName):
    for i in range(len(model.graph.node)):
       for j in range(len(model.graph.node[i].input)):
@@ -43,8 +41,7 @@ def OnnxRenameNode(model,originalName,newName):
 
    return model
 
-if __name__ == "__main__":
-   model = onnx.load(sys.argv[1])
+def AddOutputsToEachNode(model):
    onnx.checker.check_model(model)
 
    shape = onnx.shape_inference.infer_shapes(model)
@@ -52,25 +49,22 @@ if __name__ == "__main__":
    for index,node in enumerate(shape.graph.value_info):
       nodeNameToOutputTensor[node.name] = node.type.tensor_type
 
-   sess = ort.InferenceSession(sys.argv[1])
+   sess = ort.InferenceSession(shape.SerializeToString())
    modelProperOutputs = [x.name for x in sess.get_outputs()]
-
-   print(modelProperOutputs)
 
    for output in modelProperOutputs:
       if(output in nodeNameToOutputTensor):
-         del nodeNameToOutputTensor[output.name]
+         del nodeNameToOutputTensor[output]
 
    nodesToAdd = []
    for index,node in enumerate(model.graph.node):
-      print(node.name)
       if(node.output[0] in nodeNameToOutputTensor):
          nodesToAdd.append(node.output[0])
 
    for name in modelProperOutputs:
       nodesToAdd.append(name)
 
-   print(f"Adding {len(nodesToAdd)} output nodes to the graph")
+   #print(f"Adding {len(nodesToAdd)} output nodes to the graph")
    newModel = select_model_inputs_outputs(model, outputs=nodesToAdd)
 
    for index,name in enumerate(nodesToAdd):
@@ -79,5 +73,10 @@ if __name__ == "__main__":
          continue
       newModel = OnnxRenameNode(newModel,name,f"INTERMEDIATE_{index}")
 
-   shaped = onnx.shape_inference.infer_shapes(newModel)
-   save_onnx_model(shaped, sys.argv[2])
+   shaped = onnx.shape_inference.infer_shapes(newModel)   
+   return shaped
+
+if __name__ == "__main__":
+   model = onnx.load(sys.argv[1])
+   result = AddOutputsToEachNode(model)
+   save_onnx_model(result, sys.argv[2])

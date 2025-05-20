@@ -3,27 +3,28 @@
 
 #include "software/versat_ai.h"
 
-#define OUTPUT_SIZE 40
-#define TEMP_SIZE 60416
-#define MODEL_SIZE 24008
-#define CORRECT_SIZE 131536
-
 int main(int argc,const char* argv[]){
-  void* output = malloc(OUTPUT_SIZE);
-  void* temp = malloc(TEMP_SIZE);
-  void* model = malloc(MODEL_SIZE);
-  void* correct = malloc(CORRECT_SIZE);
+  void* output = malloc(GetOutputMemorySize());
+  void* temp = malloc(GetTemporaryMemorySize());
+  void* model = malloc(GetModelMemorySize());
+  void* correct = malloc(GetCorrectMemorySize());
 
   void* inputs[1];
-  inputs[0] = NULL;
+
+  printf("Output : %p\n",output);
+  printf("Temp   : %p\n",temp);
+  printf("Model  : %p\n",model);
+  printf("Correct: %p\n",correct);
+
+  inputs[0] = malloc(100000);
   
   FILE* modelFile = fopen("scripts/model.bin","rb");
   if(!modelFile){
     printf("Error opening model\n");
   }
 
-  size_t readded = fread(model,sizeof(char),MODEL_SIZE,modelFile);
-  if(readded != MODEL_SIZE){
+  size_t readded = fread(model,sizeof(char),GetModelMemorySize(),modelFile);
+  if(readded != GetModelMemorySize()){
     printf("Error reading model\n");
   }
 
@@ -32,14 +33,21 @@ int main(int argc,const char* argv[]){
     printf("Error opening correct\n");
   }
 
-  readded = fread(correct,sizeof(char),CORRECT_SIZE,correctFile);
-  if(readded != CORRECT_SIZE){
+  readded = fread(correct,sizeof(char),GetCorrectMemorySize(),correctFile);
+  if(readded != GetCorrectMemorySize()){
     printf("Error reading correct\n");
   }
 
   printf("here\n");
   
-  InferenceOutput out = DebugRunInference(output,temp,inputs,model,correct);
+  /* InferenceOutput out = */ DebugRunInference(output,temp,inputs,model,correct);
+
+  // Mainly for address sanitizer to not complain
+  free(output);
+  free(temp);
+  free(model);
+  free(correct);
+  free(inputs[0]);
 
   return 0;
 }

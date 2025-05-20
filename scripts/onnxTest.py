@@ -4,13 +4,17 @@ import glob
 
 # Missing split_complex_to_pairs
 
+from scripts.versatDefs import *
+from scripts.memoryAllocator import CalculateMemoryAllocations
+from scripts.onnxAddOutputsToIntermediate import AddOutputsToEachNode
+from copy import copy
+
 from onnx import shape_inference
 from skl2onnx.helpers.onnx_helper import enumerate_model_node_outputs
 from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
 from skl2onnx.helpers.onnx_helper import save_onnx_model
-from dataclasses import dataclass
-
-import pulp # TODO: Not sure how stable this is. Helpful for now, later we will see
+from dataclasses import dataclass,field
+from functools import reduce
 
 import struct
 import numpy as np
@@ -23,78 +27,9 @@ from onnx import __version__, IR_VERSION
 from onnx.defs import onnx_opset_version
 from onnx import numpy_helper
 
-import itertools
 import matplotlib.pyplot as plt
 
 # TODO: Try 'from onnx.reference import ReferenceEvaluator'
-
-print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
-
-#testDir = "../tests/caffenet-12-int8"
-#modelName = "caffenet-12-int8.onnx"
-
-#testDir = "../tests/tiny-yolov3_simple"
-#modelName = "yolov3-tiny_simple.onnx"
-
-testDir = "../tests/mnist_v7"
-modelName = "model.onnx"
-
-#testModel = os.path.join(testDir,modelName)
-testModel = "test.onnx" # Testing the changed model
-testDataDir = os.path.join(testDir,"test_data_set_0")
-
-model = onnx.load(testModel)
-onnx.checker.check_model(model)
-
-# Perform inference
-sess = ort.InferenceSession(testModel)
-for x in sess.get_inputs():
-   print(x.name)
-
-inputs = []
-inputs_num = len(glob.glob(os.path.join(testDataDir, 'input_*.pb')))
-for i in range(inputs_num):
-   input_file = os.path.join(testDataDir, 'input_{}.pb'.format(i))
-   tensor = onnx.TensorProto()
-   with open(input_file, 'rb') as f:
-      tensor.ParseFromString(f.read())
-   inputs.append(numpy_helper.to_array(tensor))
-
-isIntermediate = [False] * len(sess.get_outputs())
-
-for index,output in enumerate(sess.get_outputs()):
-   if("INTERMEDIATE" in output.name):
-      isIntermediate[index] = True
-
-ref_outputs = []
-ref_outputs_num = len(glob.glob(os.path.join(testDataDir, 'output_*.pb')))
-for i in range(ref_outputs_num):
-   output_file = os.path.join(testDataDir, 'output_{}.pb'.format(i))
-   tensor = onnx.TensorProto()
-   with open(output_file, 'rb') as f:
-      tensor.ParseFromString(f.read())
-   ref_outputs.append(numpy_helper.to_array(tensor))
-
-modelInputs = {x.name : y for x,y in zip(sess.get_inputs(),inputs)}
-
-modelOutput = sess.run(None,modelInputs)
-
-print(len(modelOutput))
-
-properOutputs = []
-for index,output in enumerate(modelOutput):
-   if(not isIntermediate[index]):
-      properOutputs.append(output)
-
-print(len(modelOutput))
-print(len(properOutputs))
-print(isIntermediate)
-print([x.name for x in sess.get_outputs()])
-outputNameToExpectedOutputNPArray = {x.name:y for x,y in zip(sess.get_outputs(),modelOutput)}
-
-for ref_o, o in zip(ref_outputs, properOutputs):
-   print("Gonna check if the test is good")
-   np.testing.assert_almost_equal(ref_o, o,decimal = 9)
 
 # Nodes have either inputs from other nodes or tensors, which are the constant values embedded in the model.
 # If a given node input is a tensor then it is not an input and vice versa.
@@ -123,31 +58,6 @@ def GetShape(model,name):
    print(f"Could not find shape for {name}")
    assert(false)
 
-shaped = shape_inference.infer_shapes(model)
-
-if False:
-   print(len(model.graph.value_info))
-   for val in model.graph.value_info:
-      print(val.name)
-   for val in model.graph.input:
-      print(val.name)
-   for val in model.graph.output:
-      print(val.name)
-   sys.exit()
-
-@dataclass
-class PackedArray:
-   name: str
-   data: bytes 
-
-   def __repr__(self):
-      return f"[PackedArray] {self.name} ({len(self.data)} bytes)"
-
-class Endianess(Enum):
-   NATIVE = auto()
-   LITTLE_ENDIAN = auto()
-   BIG_ENDIAN = auto()
-
 def EndianessToStructArg(endianess: Endianess):
    endianArg = ""
    if(endianess == Endianess.NATIVE):
@@ -170,178 +80,20 @@ def PackArrayNoHeader(array,endianess : Endianess = Endianess.NATIVE):
       formatArg = "q"
    
    data = struct.Struct(f"{endianArg}{formatArg}")
-   dataContent = bytes()
+   dataContent = bytearray()
    for x in np.nditer(array):
       dataContent += data.pack(x)
 
    return dataContent
 
-@dataclass
-class PackedArrays:
-   data: bytes
-   offsets: list[int]
-
 def PackMultipleArrays(arrayList,endianess : Endianess = Endianess.NATIVE):
-   data = bytes()
+   data = bytearray()
    offsets = []
    for array in arrayList:
       offsets.append(len(data))
       data += PackArrayNoHeader(array)
 
    return PackedArrays(data,offsets)
-
-def PackNPArrayForCComsuption(array,endianess : Endianess = Endianess.NATIVE):
-   endianArg = EndianessToStructArg(endianess)
-   dims = len(array.shape)
-
-   header = struct.Struct(f"{endianArg}i")
-
-   # TODO: Faster implementation using buffers. We are processing a lot of data here, slow impl here is not advised.
-   headerContent = header.pack(dims)
-   for dim in array.shape:
-      headerContent += header.pack(dim)
-
-   data = struct.Struct(f"{endianArg}f")
-   dataContent = bytes()
-   for x in np.nditer(array):
-      dataContent += data.pack(x)
-
-   return headerContent + dataContent
-
-def PackArrays(packedArrayList,endianess : Endianess = Endianess.NATIVE):
-   endianArg = EndianessToStructArg(endianess)
-
-   amount = len(packedArrayList)
-   integerBuilder = struct.Struct(f"{endianArg}i")
-
-   content = integerBuilder.pack(amount)
-   for packedArray in packedArrayList:
-      content += integerBuilder.pack((len(packedArray.data)))
-
-   for packedArray in packedArrayList:
-      content += packedArray.data
-
-   return content
-
-class DataSourceType(Enum):
-   MODEL_INPUT = auto()
-   NODE_INPUT = auto()
-   INITIALIZER = auto()
-
-@dataclass
-class DataSource:
-   sourceType : DataSourceType
-   name : str
-
-   # Computed afterwards. Easier to store directly.
-   index : int = -1
-   correctInputIndex: int = -1
-   #correctInput: PackedArray = None
-
-class MemoryType(Enum):
-   TEMP = auto()
-   OUTPUT = auto()
-
-@dataclass
-class MemoryLocation:
-   offset : int
-   memType : MemoryType
-
-@dataclass
-class Operation:
-   # Data extracted from the model
-   nodeName: str
-   opName: str
-   inputs: list[DataSource]
-   output: str # For now we are assuming that nodes only contain one output. Most graphs appear to follow this principle, even if the output is used by multiple nodes, the node itself only appaears to contain one. Maybe more exotic operations shatter this notion but will deal with them when they appear.
-#   isOutputFinal: bool
-   outputDimensions: list[int]
-   testExpectedOutput: PackedArray = None
-   testExpectedOutputAsNPArray: any = None
-   #TODO: Eventually implement attributes properly. 
-
-   # Data computed afterwards. Easier to store here
-   outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it here to hopefully save memory, since embedded systems do not contain much
-
-@dataclass
-class CModelRepr:
-   modelInputs : list[str]
-   initializers: list[PackedArray]
-   initializersAsNp: list[any]
-   operations: list[Operation]
-
-@dataclass
-class MemoryAllocation:
-   firstCycle: int
-   lastCycle: int
-   amount: int
-
-cModel = CModelRepr([],[],[],[])
-
-for name in modelInputs:
-   cModel.modelInputs.append(name)
-
-# Extract all the data that we care about from the graph into a simpler struct for further processing.
-for node in model.graph.node:
-   print("Node",node.name,":")
-   print("  Attributes:")
-   for attribute in node.attribute:
-      print("    ",attribute,end='')
-
-   print("Output:",node.output)
-
-   print("  Graph inputs:")
-   for name in node.input:
-      tensor = GetTensor(model,name)
-      if(not tensor):
-         print("    ",name,GetShape(model,name))
-
-   print("  Constant inputs:")
-   for name in node.input:
-      tensor = GetTensor(model,name)
-      if(tensor):
-         print("    ",name,tensor.dims)
-
-         asNpArray = onnx.numpy_helper.to_array(tensor)
-         packedBytes = PackNPArrayForCComsuption(asNpArray)
-         cModel.initializers.append(PackedArray(name,packedBytes))
-         cModel.initializersAsNp.append(asNpArray)
-
-   outputDimensions = None
-   print("  Output shapes")
-   for output in node.output:
-      shape = GetShape(shaped,output)
-      outputDimensions = shape
-      print("    ",shape,end=' ')
-   print()
-
-
-   dataSources = []
-   for name in node.input:
-      tensor = GetTensor(model,name)
-      source = None
-      if(tensor):
-         source = DataSource(DataSourceType.INITIALIZER,name) 
-      elif(name in cModel.modelInputs):
-         source = DataSource(DataSourceType.MODEL_INPUT,name) 
-      else:
-         source = DataSource(DataSourceType.NODE_INPUT,name) 
-      dataSources.append(source)
-
-   outputName = node.output[0] # Can a node have more than one output? 
-   expectedOutputAsNPArray = outputNameToExpectedOutputNPArray[outputName]
-   packedExpectedOutput = PackNPArrayForCComsuption(expectedOutputAsNPArray)
-
-   outputTest = PackedArray(outputName,packedExpectedOutput)
-
-   op = Operation(node.name,node.op_type,dataSources,outputName,outputDimensions,outputTest,expectedOutputAsNPArray)
-   cModel.operations.append(op)
-
-   #print(cModel)
-
-for c in cModel.operations:
-   print(c)
-   print()
 
 # Calculate memory required and memory allocation model.
 def IndexOfNodesThatUseOutput(cModel,outputName):
@@ -358,198 +110,361 @@ def IndexOfNodeThatProducesOutput(cModel,outputName):
          return index
    return None
 
-# Heavy weight algorithm to calculate the best way of performing memory allocations.
-# We reduce the problem to rectangle fitting. The memory allocation is represented as rectangles where
-# the width is the amount of memory used and the height is the "time" where the allocation occurs
-# Each onnx operation advances time by 1 unit.
-# We encode the problem as a Integer Linear program and use a solver to find the optimal solution
-def CalculateOptimalMemoryAllocationOffset(memoryAllocations: list[MemoryAllocation]):
-   M = 1000000 # Not a big fan of this trick. What if the memory size becomes bigger than this number? Larger M values cause the algorithm to stop working. Might depend on the solver but regardless want to see if we can find a better way.
-   # TODO: Need to find an alternative
-
-   # Create all the variables that we are gonna use
-   z = {}
-   r_x = [None] * len(memoryAllocations)
-
-   for index,mem in enumerate(memoryAllocations):
-      r_x[index]  = pulp.LpVariable(f"r{index}_x",lowBound=0,cat='Integer')
-
-   for memAndIndex in itertools.combinations(enumerate(memoryAllocations),2):
-      i,leftMem = memAndIndex[0]
-      k,rightMem = memAndIndex[1]
-
-      z[f"{i}_{k}_0"] = pulp.LpVariable(f"{i}_{k}_0",0,1,cat='Integer')
-      z[f"{i}_{k}_1"] = pulp.LpVariable(f"{i}_{k}_1",0,1,cat='Integer')
-      z[f"{i}_{k}_2"] = pulp.LpVariable(f"{i}_{k}_2",0,1,cat='Integer')
-      z[f"{i}_{k}_3"] = pulp.LpVariable(f"{i}_{k}_3",0,1,cat='Integer')
-
-   H = pulp.LpVariable("H",lowBound=0)
-
-   prob = pulp.LpProblem("problem", pulp.LpMinimize)
-
-   for memAndIndex in itertools.combinations(enumerate(memoryAllocations),2):
-      i,leftMem = memAndIndex[0]
-      k,rightMem = memAndIndex[1]
-
-      r0_x = r_x[i]
-      r1_x = r_x[k]
-
-      r0_w = leftMem.amount
-      r1_w = rightMem.amount
-
-      r0_y = leftMem.firstCycle
-      r1_y = rightMem.firstCycle
-
-      r0_l = leftMem.lastCycle
-      r1_l = rightMem.lastCycle
-
-      z_0 = z[f"{i}_{k}_0"]
-      z_1 = z[f"{i}_{k}_1"]
-      z_2 = z[f"{i}_{k}_2"]
-      z_3 = z[f"{i}_{k}_3"]
-
-      prob += r1_x + r1_w <= r0_x + M*z_0
-      prob += r0_x + r0_w <= r1_x + M*z_1
-      prob += r1_l        <= r0_y + M*z_2
-      prob += r0_l        <= r1_y + M*z_3
-      prob += z_0 + z_1 + z_2 + z_3 <= 3
-
-   # Objective to minimize as a constraint in a dummy variable H
-   for index,mem in enumerate(memoryAllocations):
-      x = r_x[index]
-      w = mem.amount
-      prob += x + w <= H
-
-   # True objective
-   prob += H
-
-   status = prob.solve(pulp.PULP_CBC_CMD(msg=0))
-
-   # TODO: Can this occur?
-   if(not status):
-      print("Problem calculating the optimal memory allocations")
-      return None
-
-   offsets = []
-   for x in r_x:
-      offsets.append(int(pulp.value(x)))
-
-   totalMemoryNeeded = int(pulp.value(H))
-
-   return totalMemoryNeeded,offsets
-
-memoryAllocations = []
-for index,c in enumerate(cModel.operations):
-   indexes = IndexOfNodesThatUseOutput(cModel,c.output)
-
-   if(not indexes):
-      continue
-      #lastCycle = len(cModel.operations)
-   else:
-      lastCycle = max(indexes)
-
-   # In order to prevent operations that write on top of their input
-   lastCycle += 1
-
-   # Very simple memory calculation, might be wrong, especially if we decide to add padding and stuff like that. Need to make this more customizable.
-   memoryRequired = 4  # Size of a float
-   for dim in c.outputDimensions:
-      memoryRequired *= dim
-
-   memoryAllocations.append(MemoryAllocation(index,lastCycle,memoryRequired))
-
-totalTempMemoryNeeded,offsets = CalculateOptimalMemoryAllocationOffset(memoryAllocations)
-print("total temporary memory needed:",totalTempMemoryNeeded)
-print(offsets)
-
-ptr = 0
-for index,c in enumerate(cModel.operations):
-   indexes = IndexOfNodesThatUseOutput(cModel,c.output)
-
-   if(not indexes):
-      continue
+def GenerateModelFromOnnxModel(onnxModel):
+   shaped = shape_inference.infer_shapes(onnxModel)
+   cModel = Model(shaped)
    
-   c.outputMemoryAddress = MemoryLocation(offsets[ptr],MemoryType.TEMP)
-   ptr += 1
+   inputNames = []
+   for value in onnxModel.graph.input:
+      if(not GetTensor(shaped,value.name)):
+         inputNames.append(value.name)
+   cModel.modelInputs = inputNames
 
-totalOutputMemory = 0
-outputOffsets = []
-for index,c in enumerate(cModel.operations):
-   indexes = IndexOfNodesThatUseOutput(cModel,c.output)
+   # Extract all the data that we care about from the graph into a simpler struct for further processing.
+   for node in onnxModel.graph.node:
+      for attribute in node.attribute:
+         pass # TODO: Implement attributes
 
-   if(indexes):
-      continue
+      inputDimensions = []
+      for name in node.input:
+         shape = GetShape(shaped,name)
+         inputDimensions.append(shape)
+         tensor = GetTensor(onnxModel,name)
+         if(tensor):
+            asNpArray = onnx.numpy_helper.to_array(tensor)
+            cModel.initializers.append(asNpArray)
 
-   memoryRequired = 4  # Size of a float
-   for dim in c.outputDimensions:
-      memoryRequired *= dim
+      outputDimensions = None
+      for output in node.output:
+         shape = GetShape(shaped,output)
+         outputDimensions = shape
 
-   outputOffsets.append(totalOutputMemory)
-   c.outputMemoryAddress = MemoryLocation(totalOutputMemory,MemoryType.OUTPUT)
-   totalOutputMemory += memoryRequired
+      dataSources = []
+      for name in node.input:
+         tensor = GetTensor(onnxModel,name)
+         source = None
+         if(tensor):
+            source = DataSource(DataSourceType.INITIALIZER,name) 
+         elif(name in cModel.modelInputs):
+            source = DataSource(DataSourceType.MODEL_INPUT,name) 
+         else:
+            source = DataSource(DataSourceType.NODE_INPUT,name) 
+         dataSources.append(source)
 
-print("total output memory needed:",totalOutputMemory)
-print(outputOffsets)
+      outputName = node.output[0] # Can a node have more than one output? 
 
-print("DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){")
+      op = Operation(node.name,node.op_type,dataSources,outputName,inputDimensions,outputDimensions)
+      cModel.operations.append(op)
 
-nameToCorrectOutputIndex = {}
-ind = 0
-for index,c in enumerate(cModel.operations):
-   if(c.testExpectedOutput):
-      nameToCorrectOutputIndex[c.output] = ind
+   CalculateMemoryAllocations(cModel)
+
+   return cModel
+
+def RunModel(model : Model,inputs):
+   if(not model.sess):
+      model.sess = ort.InferenceSession(model.onnxModel.SerializeToString())
+
+   modelInputs = {x.name : y for x,y in zip(model.sess.get_inputs(),inputs)}
+   modelOutput = model.sess.run(None,modelInputs)
+   
+   mappedOutputs = {x.name:y for x,y in zip(model.sess.get_outputs(),modelOutput)}
+   outputs = [None] * len(model.operations)
+   for index,op in enumerate(model.operations):
+      outputs[index] = mappedOutputs[op.output]
+
+   return ModelRunResult(outputs)
+
+def ExtendShape(shapeList,dimensions):
+   res = copy(shapeList)
+   if(len(shapeList) < dimensions):
+      for i in range(dimensions - len(shapeList)):
+         res = [1] + res
+   return res
+
+def BroadCastShape(op0,op1):
+   if(len(op0) != len(op1)):
+      length = max(len(op0),len(op1))
+      op0 = ExtendShape(op0)
+      op1 = ExtendShape(op1)
+
+   res = []
+   for a,b in zip(op0,op1):
+      res.append(max(a,b))
+   return res
+
+@dataclass
+class CDataHandle:
+   index: int
+
+@dataclass
+class TypedArray:
+   dtype: str
+   data: list[any]
+   name: str = None
+
+class CDataEmitter:
+
+   def __init__(self):
+      self.arrays = []
+      self.namedArrays = []
+
+   def EmitNamedArray(self,name,dtype,data):
+      self.namedArrays.append(TypedArray(dtype,copy(data),name))
+
+   def EmitArray(self,dtype,data):
+      index = len(self.arrays)
+
+      self.arrays.append(TypedArray(dtype,copy(data)))
+
+      return CDataHandle(index)
+
+   def Representation(self):
+      content = ""
+
+      def ItemRepr(item):
+         if isinstance(item,CDataHandle):
+            return f"temp_{item.index}"
+         elif isinstance(item,list):
+            return "{" + ",".join([ItemRepr(x) for x in item]) + "}"
+         else:
+            return str(item)
+
+      for index,tarray in enumerate(self.arrays):
+         dtype = tarray.dtype
+         data = tarray.data
+
+         content += f"{dtype} temp_{index}[] = " + "{" + ",".join(ItemRepr(x) for x in data) + "};\n"
+
+      for index,tarray in enumerate(self.namedArrays):
+         dtype = tarray.dtype
+         data = tarray.data
+         name = tarray.name
+         amount = len(tarray.data)
+
+         content += f"{dtype} {name}[{amount}] = " + "{" + ",".join(ItemRepr(x) for x in data) + "};\n"
+
+      return content
+
+def GenerateDebug(testLocation: str,outputLocation: str):
+   #print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
+
+   testModelLocation = os.path.join(testLocation,"model.onnx")
+
+   # TODO: Only fetching one test, for now
+   testDataDir = os.path.join(testLocation,"test_data_set_0")
+
+   model = onnx.load(testModelLocation)
+   model = AddOutputsToEachNode(model)
+   onnx.checker.check_model(model)
+
+   # Perform inference
+   sess = ort.InferenceSession(model.SerializeToString())
+
+   inputs = []
+   inputs_num = len(glob.glob(os.path.join(testDataDir, 'input_*.pb')))
+   for i in range(inputs_num):
+      input_file = os.path.join(testDataDir, 'input_{}.pb'.format(i))
+      tensor = onnx.TensorProto()
+      with open(input_file, 'rb') as f:
+         tensor.ParseFromString(f.read())
+      inputs.append(numpy_helper.to_array(tensor))
+
+   isIntermediate = [False] * len(sess.get_outputs())
+
+   for index,output in enumerate(sess.get_outputs()):
+      if("INTERMEDIATE" in output.name):
+         isIntermediate[index] = True
+
+   ref_outputs = []
+   ref_outputs_num = len(glob.glob(os.path.join(testDataDir, 'output_*.pb')))
+   for i in range(ref_outputs_num):
+      output_file = os.path.join(testDataDir, 'output_{}.pb'.format(i))
+      tensor = onnx.TensorProto()
+      with open(output_file, 'rb') as f:
+         tensor.ParseFromString(f.read())
+      ref_outputs.append(numpy_helper.to_array(tensor))
+
+   modelInputs = {x.name : y for x,y in zip(sess.get_inputs(),inputs)}
+   modelOutput = sess.run(None,modelInputs)
+
+   properOutputs = []
+   for index,output in enumerate(modelOutput):
+      if(not isIntermediate[index]):
+         properOutputs.append(output)
+
+   for ref_o, o in zip(ref_outputs, properOutputs):
+      np.testing.assert_almost_equal(ref_o, o,decimal = 9)
+
+   cModel = GenerateModelFromOnnxModel(model)
+   cModel.isModelOutputIntermediate = isIntermediate
+
+   # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
+   # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
+   result = RunModel(cModel,inputs)
+   correctData = result.outputs
+
+   outputNameToNodeIndex = {}
+   ind = 0
+   for index,c in enumerate(cModel.operations):
+      outputNameToNodeIndex[c.output] = ind
       ind += 1
 
-correctData = [x.testExpectedOutputAsNPArray for x in cModel.operations]
-packedCorrectData = PackMultipleArrays(correctData)
+   packedCorrectData = PackMultipleArrays(correctData)
+   packedInitializers = PackMultipleArrays([x for x in cModel.initializers])
 
-packedInitializers = PackMultipleArrays([x for x in cModel.initializersAsNp])
-#sys.exit(0)
-
-# Calculate initializer position
-initializersSeen = 0
-for index,c in enumerate(cModel.operations):
-   for source in c.inputs:
-      if(source.sourceType == DataSourceType.INITIALIZER):
-         source.index = initializersSeen
-         initializersSeen += 1
-      elif(source.sourceType == DataSourceType.MODEL_INPUT):
-         for index,name in enumerate(cModel.modelInputs):
-            if(name == source.name):
-               source.index = index
-      else:
-         source.index = IndexOfNodeThatProducesOutput(cModel,source.name)
-         source.correctInputIndex = nameToCorrectOutputIndex[source.name]
-
-debugging = True
-for index,c in enumerate(cModel.operations):
-   content = []
-   for inp in c.inputs:
-      if(inp.sourceType == DataSourceType.INITIALIZER):
-         content.append(f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})")
-      elif(inp.sourceType == DataSourceType.MODEL_INPUT):
-         content.append(f"inputs[{inp.index}]")
-      else:
-         if(debugging):
-            content.append(f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})")
+   # Calculate initializer position
+   initializersSeen = 0
+   for index,c in enumerate(cModel.operations):
+      for source in c.inputs:
+         if(source.sourceType == DataSourceType.INITIALIZER):
+            source.index = initializersSeen
+            initializersSeen += 1
+         elif(source.sourceType == DataSourceType.MODEL_INPUT):
+            for index,name in enumerate(cModel.modelInputs):
+               if(name == source.name):
+                  source.index = index
          else:
-            content.append(f"res_{inp.index}")
+            source.index = IndexOfNodeThatProducesOutput(cModel,source.name)
+            source.correctInputIndex = outputNameToNodeIndex[source.name]
 
-   outputStr = ""
-   if(c.outputMemoryAddress.memType == MemoryType.TEMP):
-      outputStr = f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
-   else:
-      outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
+   print("#include \"versat_ai.h\"")
+   print()
+   print("size_t GetOutputMemorySize(){return ",cModel.outputMemoryNeeded,";}",sep='')
+   print("size_t GetTemporaryMemorySize(){return ",cModel.tempMemoryNeeded,";}",sep='')
+   print("size_t GetModelMemorySize(){return ",len(packedInitializers.data),";}",sep='')
+   print("size_t GetCorrectMemorySize(){return ",len(packedCorrectData.data),";}",sep='')
+   print()
 
-   print(f"  void* res_{index} = ",c.opName,'(',",".join(content),f",{outputStr});",sep='')
-   if(debugging):
-      print(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}));")
+   print(f"int numberLayers = {len(cModel.operations)};")
 
-print(f"Model size: {len(packedInitializers.data)}")
-print(f"Correct size: {len(packedCorrectData.data)}")
-      
-with open("model.bin","wb") as f:
-   f.write(packedInitializers.data)
+   layerInfo = []
+   for index,c in enumerate(cModel.operations):
+      outputSize = reduce(lambda x,y : x * y,c.outputDimensions) * 4 # Sizeof(float)
+      layerInfo.append("{" + f"\"{c.nodeName}\",\"{c.opName}\",{outputSize}" + "}")
 
-with open("correctOutput.bin","wb") as f:
-   f.write(packedCorrectData.data)
+   print("LayerInfo layers[] = {",",".join(layerInfo),"};\n")
+
+   opcodeToOperationList = {}
+   for index,c in enumerate(cModel.operations):
+      opcodeToOperationList[c.opName] = opcodeToOperationList.get(c.opName,[]) + [c]
+
+   # Test is here
+   emitter = CDataEmitter()
+   aux = {}
+   for opcode in opcodeToOperationList:
+      if(opcode != "Add"):
+         continue
+
+      operationList = opcodeToOperationList[opcode]
+
+      for index,op in enumerate(operationList):
+         maxDims = max(len(op.inputDimensions[0]),len(op.inputDimensions[1]))
+
+         op0 = ExtendShape(op.inputDimensions[0],maxDims)
+         op1 = ExtendShape(op.inputDimensions[1],maxDims)
+
+         broadCastedShape = BroadCastShape(op0,op1)
+
+         aux[f"add_{index}_0"] = emitter.EmitArray("int",op0)
+         aux[f"add_{index}_1"] = emitter.EmitArray("int",op1)
+         aux[f"add_{index}_2"] = emitter.EmitArray("int",broadCastedShape)
+
+      structs = []
+      for index,op in enumerate(operationList):
+         if(op.opName == "Add"):
+            maxDims = max(len(op.inputDimensions[0]),len(op.inputDimensions[1]))
+
+            structs.append([maxDims,aux[f"add_{index}_0"],aux[f"add_{index}_1"],aux[f"add_{index}_2"]])
+
+      emitter.EmitNamedArray("AddInfos","AddInfo",structs)
+
+   for opcode in opcodeToOperationList:
+      if(opcode != "Relu"):
+         continue
+
+      operationList = opcodeToOperationList[opcode]
+
+      for index,op in enumerate(operationList):
+         aux[f"relu_{index}"] = emitter.EmitArray("int",op.inputDimensions[0])
+
+      structs = []
+      for index,op in enumerate(operationList):
+         if(op.opName == "Relu"):
+            dims = len(op.inputDimensions[0])
+            structs.append([dims,aux[f"relu_{index}"]])
+
+      emitter.EmitNamedArray("ReluInfos","ReluInfo",structs)
+
+   content = emitter.Representation()
+   print(content)
+
+   # End here
+
+   for opCode,opList in opcodeToOperationList.items():
+      amount = len(opList)
+
+      if(opCode == "Add"):
+         continue
+
+      if(opCode == "Relu"):
+         continue
+
+      content = []
+      for op in opList:
+         content.append("{}")
+
+      print(f"{opCode}Info {opCode}Infos[{amount}] = ","{",",".join(content),"};",sep='')
+
+   print()
+   print("InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){")
+
+   debugging = True
+   opSeen = {}
+   for index,c in enumerate(cModel.operations):
+      content = []
+      for inp in c.inputs:
+         if(inp.sourceType == DataSourceType.INITIALIZER):
+            content.append(f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})")
+         elif(inp.sourceType == DataSourceType.MODEL_INPUT):
+            content.append(f"inputs[{inp.index}]")
+         else:
+            if(debugging):
+               content.append(f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})")
+            else:
+               content.append(f"res_{inp.index}")
+
+      outputStr = ""
+      if(c.outputMemoryAddress.memType == MemoryType.TEMP):
+         outputStr = f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
+      else:
+         outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
+
+      opIndex = opSeen.get(c.opName,-1) + 1
+      opSeen[c.opName] = opIndex
+
+      print(f"  void* res_{index} = ",c.opName,'(',",".join(content),f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);",sep='')
+      if(debugging and (c.opName == "Add" or c.opName == "Relu")):
+         print(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}),{index});")
+   print("  return (InferenceOutput){};")
+   print("}")
+
+   with open("model.bin","wb") as f:
+      f.write(packedInitializers.data)
+
+   with open("correctOutput.bin","wb") as f:
+      f.write(packedCorrectData.data)
+
+if __name__ == "__main__":
+   GenerateDebug("../tests/mnist_v7","output")
+
+# TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
+
+# TODO: Need to start giving NAMESPACE names to C stuff, this code is supposed to be easy to integrate anywhere.
+
+# TODO: Need to also output the input file so we can start testing things and implementing the operators in C code.
+#       Need to output parameters. Do not know the approach that we should take here.
+#         Should we generate optimized functions for a given set of parameters?
+#         Or should we just embed the data in source code and let runtime deal with it?
+#         Or should we just pack it into a file and load at runtime? (Should only be a few kbs).
+#       Even if we embed the data, I think it would be helpful to make a Conv2D especial function.
+
