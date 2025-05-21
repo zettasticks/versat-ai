@@ -45,6 +45,7 @@ class Operation:
    output: str # For now we are assuming that nodes only contain one output. Most graphs appear to follow this principle, even if the output is used by multiple nodes, the node itself only appaears to contain one. Maybe more exotic operations shatter this notion but will deal with them when they appear.
    inputDimensions: list[list[int]]
    outputDimensions: list[int]
+   attributes: dict[str,list[any]]
 
    #TODO: Eventually implement attributes properly. 
 

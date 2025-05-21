@@ -46,6 +46,14 @@ typedef struct{
 } ReluInfo;
 
 typedef struct{
+   int dims;
+   int* inputDims;
+   int* outputDims;
+   int kernelSizeW;
+   int kernelSizeH;
+} MaxPoolInfo;
+
+typedef struct{
    // Attributes as described by onnx.
    int auto_pad;
    int* dilations;
@@ -60,7 +68,6 @@ typedef struct{
 } ConvInfo;
 
 typedef struct{} ReshapeInfo;
-typedef struct{} MaxPoolInfo;
 typedef struct{} MatMulInfo;
 
 extern LayerInfo layers[];

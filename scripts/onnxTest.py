@@ -7,6 +7,7 @@ import glob
 from scripts.versatDefs import *
 from scripts.memoryAllocator import CalculateMemoryAllocations
 from scripts.onnxAddOutputsToIntermediate import AddOutputsToEachNode
+from scripts.onnxOperators import EmitParameterList,IsOperatorRegistered
 from copy import copy
 
 from onnx import shape_inference
@@ -29,9 +30,7 @@ from onnx import numpy_helper
 
 import matplotlib.pyplot as plt
 
-# TODO: Try 'from onnx.reference import ReferenceEvaluator'
-
-# Nodes have either inputs from other nodes or tensors, which are the constant values embedded in the model.
+# Nodes have either inputs from other nodes or initializers, which are the constant values embedded in the model.
 # If a given node input is a tensor then it is not an input and vice versa.
 def GetTensor(model,tensorName):
    for tensor in model.graph.initializer:
@@ -95,15 +94,6 @@ def PackMultipleArrays(arrayList,endianess : Endianess = Endianess.NATIVE):
 
    return PackedArrays(data,offsets)
 
-# Calculate memory required and memory allocation model.
-def IndexOfNodesThatUseOutput(cModel,outputName):
-   indexes = []
-   for index,op in enumerate(cModel.operations):
-      for inp in op.inputs:
-         if(inp.name == outputName):
-            indexes.append(index)
-   return indexes
-
 def IndexOfNodeThatProducesOutput(cModel,outputName):
    for index,op in enumerate(cModel.operations):
       if(outputName == op.output):
@@ -122,8 +112,10 @@ def GenerateModelFromOnnxModel(onnxModel):
 
    # Extract all the data that we care about from the graph into a simpler struct for further processing.
    for node in onnxModel.graph.node:
+      attributes = {}
       for attribute in node.attribute:
-         pass # TODO: Implement attributes
+         # TODO: Proper parsing and unpacking of attributes
+         attributes[attribute.name] = attribute.ints
 
       inputDimensions = []
       for name in node.input:
@@ -153,7 +145,7 @@ def GenerateModelFromOnnxModel(onnxModel):
 
       outputName = node.output[0] # Can a node have more than one output? 
 
-      op = Operation(node.name,node.op_type,dataSources,outputName,inputDimensions,outputDimensions)
+      op = Operation(node.name,node.op_type,dataSources,outputName,inputDimensions,outputDimensions,attributes)
       cModel.operations.append(op)
 
    CalculateMemoryAllocations(cModel)
@@ -174,24 +166,6 @@ def RunModel(model : Model,inputs):
 
    return ModelRunResult(outputs)
 
-def ExtendShape(shapeList,dimensions):
-   res = copy(shapeList)
-   if(len(shapeList) < dimensions):
-      for i in range(dimensions - len(shapeList)):
-         res = [1] + res
-   return res
-
-def BroadCastShape(op0,op1):
-   if(len(op0) != len(op1)):
-      length = max(len(op0),len(op1))
-      op0 = ExtendShape(op0)
-      op1 = ExtendShape(op1)
-
-   res = []
-   for a,b in zip(op0,op1):
-      res.append(max(a,b))
-   return res
-
 @dataclass
 class CDataHandle:
    index: int
@@ -203,7 +177,6 @@ class TypedArray:
    name: str = None
 
 class CDataEmitter:
-
    def __init__(self):
       self.arrays = []
       self.namedArrays = []
@@ -212,6 +185,7 @@ class CDataEmitter:
       self.namedArrays.append(TypedArray(dtype,copy(data),name))
 
    def EmitArray(self,dtype,data):
+      assert(isinstance(data,list))
       index = len(self.arrays)
 
       self.arrays.append(TypedArray(dtype,copy(data)))
@@ -310,7 +284,7 @@ def GenerateDebug(testLocation: str,outputLocation: str):
       ind += 1
 
    packedCorrectData = PackMultipleArrays(correctData)
-   packedInitializers = PackMultipleArrays([x for x in cModel.initializers])
+   packedInitializers = PackMultipleArrays(cModel.initializers)
 
    # Calculate initializer position
    initializersSeen = 0
@@ -348,72 +322,35 @@ def GenerateDebug(testLocation: str,outputLocation: str):
    for index,c in enumerate(cModel.operations):
       opcodeToOperationList[c.opName] = opcodeToOperationList.get(c.opName,[]) + [c]
 
-   # Test is here
    emitter = CDataEmitter()
-   aux = {}
+
    for opcode in opcodeToOperationList:
-      if(opcode != "Add"):
+      if(not IsOperatorRegistered(opcode)):
          continue
 
       operationList = opcodeToOperationList[opcode]
 
-      for index,op in enumerate(operationList):
-         maxDims = max(len(op.inputDimensions[0]),len(op.inputDimensions[1]))
-
-         op0 = ExtendShape(op.inputDimensions[0],maxDims)
-         op1 = ExtendShape(op.inputDimensions[1],maxDims)
-
-         broadCastedShape = BroadCastShape(op0,op1)
-
-         aux[f"add_{index}_0"] = emitter.EmitArray("int",op0)
-         aux[f"add_{index}_1"] = emitter.EmitArray("int",op1)
-         aux[f"add_{index}_2"] = emitter.EmitArray("int",broadCastedShape)
-
       structs = []
       for index,op in enumerate(operationList):
-         if(op.opName == "Add"):
-            maxDims = max(len(op.inputDimensions[0]),len(op.inputDimensions[1]))
+         structs.append(EmitParameterList(emitter,op))
 
-            structs.append([maxDims,aux[f"add_{index}_0"],aux[f"add_{index}_1"],aux[f"add_{index}_2"]])
-
-      emitter.EmitNamedArray("AddInfos","AddInfo",structs)
-
-   for opcode in opcodeToOperationList:
-      if(opcode != "Relu"):
-         continue
-
-      operationList = opcodeToOperationList[opcode]
-
-      for index,op in enumerate(operationList):
-         aux[f"relu_{index}"] = emitter.EmitArray("int",op.inputDimensions[0])
-
-      structs = []
-      for index,op in enumerate(operationList):
-         if(op.opName == "Relu"):
-            dims = len(op.inputDimensions[0])
-            structs.append([dims,aux[f"relu_{index}"]])
-
-      emitter.EmitNamedArray("ReluInfos","ReluInfo",structs)
+      emitter.EmitNamedArray(f"{opcode}Infos",f"{opcode}Info",structs)
 
    content = emitter.Representation()
    print(content)
 
-   # End here
-
-   for opCode,opList in opcodeToOperationList.items():
+   # Placeholder for operators not yet registered
+   for opcode,opList in opcodeToOperationList.items():
       amount = len(opList)
 
-      if(opCode == "Add"):
-         continue
-
-      if(opCode == "Relu"):
+      if(IsOperatorRegistered(opcode)):
          continue
 
       content = []
       for op in opList:
          content.append("{}")
 
-      print(f"{opCode}Info {opCode}Infos[{amount}] = ","{",",".join(content),"};",sep='')
+      print(f"{opcode}Info {opcode}Infos[{amount}] = ","{",",".join(content),"};",sep='')
 
    print()
    print("InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){")
@@ -443,7 +380,7 @@ def GenerateDebug(testLocation: str,outputLocation: str):
       opSeen[c.opName] = opIndex
 
       print(f"  void* res_{index} = ",c.opName,'(',",".join(content),f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);",sep='')
-      if(debugging and (c.opName == "Add" or c.opName == "Relu")):
+      if(debugging and (IsOperatorRegistered(c.opName))):
          print(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}),{index});")
    print("  return (InferenceOutput){};")
    print("}")
@@ -458,9 +395,6 @@ def GenerateDebug(testLocation: str,outputLocation: str):
 
    with open(os.path.join(outputLocation,"correctOutput.bin"),"wb") as f:
       f.write(packedCorrectData.data)
-
-if __name__ == "__main__":
-   GenerateDebug("../tests/mnist_v7","output")
 
 # TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
 

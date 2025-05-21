@@ -37,8 +37,6 @@ int main(int argc,const char* argv[]){
   if(readded != GetCorrectMemorySize()){
     printf("Error reading correct\n");
   }
-
-  printf("here\n");
   
   /* InferenceOutput out = */ DebugRunInference(output,temp,inputs,model,correct);
 
