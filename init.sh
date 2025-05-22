@@ -1,3 +1,4 @@
+mkdir python
 pushd python
 python3 -m "venv" .
 source ./bin/activate

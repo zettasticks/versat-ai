@@ -52,6 +52,12 @@ class Operation:
    # Data computed from extracted model. 
    outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it, we do not allocate memory at runtime.
 
+@dataclass
+class Port:
+   name: str
+   shape: list[int]
+   isOriginal: bool = True # In order to extract data from nodes, we add custom output ports. This variable is true only for the ports that are original, no modification made
+
 # A more useful representation for our use cases than having to interact with the onnx model directly
 @dataclass
 class Model:
@@ -59,7 +65,7 @@ class Model:
    sess: any = None
    modelOutputs: list[str] = None
    isModelOutputIntermediate: list[bool] = None
-   modelInputs : list[str] = field(default_factory=list)
+   modelInputs : list[Port] = field(default_factory=list)
    initializers: list[np.array] = field(default_factory=list)
    operations: list[Operation] = field(default_factory=list)
    tempMemoryNeeded: int = -1

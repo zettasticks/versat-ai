@@ -212,7 +212,7 @@ void AssertAlmostEqual(void* toTest,void* correctValues,int index){
    for(int i = 0; i < outputSize; i++){
       if(absf(correct[i] - test[i]) > 0.0001f){
          if(incorrectFound == 0){
-            printf("Layer(%d)[%s] Error founds:\n",index,layers[index].typeName);
+            printf("Layer(%d)[%s] Errors founds:\n",index,layers[index].typeName);
          }
          printf("  Index: %4d Different values %.4f %.4f\n",i,correct[i],test[i]);
          incorrectFound += 1;

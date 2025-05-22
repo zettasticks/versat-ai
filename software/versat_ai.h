@@ -7,13 +7,7 @@ typedef char bool;
 
 // Memory is allocated by the user. 
 
-// These functions are constant, meaning that buffers can be reused if needed 
-// TODO: Maybe replace this by an extern variable? Function just to return a value is overkill.
-size_t GetOutputMemorySize();
-size_t GetTemporaryMemorySize();
-size_t GetModelMemorySize();
-size_t GetCorrectMemorySize();
-
+// TODO: This should not be here, we do not want to polute user space with our code.
 #define OFFSET_PTR(PTR,OFFSET) ((void*) (((char*) PTR) + OFFSET))
 
 // TODO: Remove this.

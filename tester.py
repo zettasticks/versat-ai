@@ -1,11 +1,10 @@
 from scripts.onnxTest import GenerateDebug
+import sys
 
-GenerateDebug("tests/mnist_v7","output/")
+GenerateDebug(sys.argv[1],sys.argv[2])
 
-# TODO: First PR.
-#       I do not want to store the tests inside github. Offer a simple script that downloads and unpacks the tests inside the repo
-#       Add the packing of the inputs data into an array and the logic inside the tester.c to load that file and to setup the inputs array.
-#       Generate a header file that contains the info needed by the tester.c. Remove the functions that return the amount of data, using defines is better because the compiler will known it is a constant.
+# TODO: Some models contain variable sized inputs (and maybe outputs).
+#       Before progressing further, need to find a small example that contains variable sized nodes. In fact, it would be best to check as many models as possible to see what is possible and wether we are missing some concept before diving too deep into code generation.
 
 # TODO: I want to keep track of every combination of operators that are tested.
 #       I want to run a tester and the tester will tell me if:
@@ -18,3 +17,6 @@ GenerateDebug("tests/mnist_v7","output/")
 #       NOTE: Also, if possible, I would like to "inspect" a new test and the tester reports wether this new test would add any checks or not.
 #             This should be easy if we can first "extract" a "report" from a test, and we can join reports together.
 #             Afterwards, we just have to extract a report from a test, join with the rest of the report, and calculate the difference.
+
+# TODO: Most model examples that we obtained contain only a single test. We could get a bunch of pictures and generate more testcases by changing the inputs.
+

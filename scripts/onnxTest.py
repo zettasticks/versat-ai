@@ -37,6 +37,10 @@ def GetTensor(model,tensorName):
       if(tensor.name == tensorName):
          return tensor
 
+# TODO: Need to properly handle different types and stuff like that. We might even need to handle padding 
+def TensorSize(tensor: list[int]):
+   return reduce(lambda x,y : x * y,tensor) * 4 # 4 because size of float
+
 def GetShape(model,name):
    assert(name) # Make sure that we got a name, onnx models contain a lot of members that contain optional names, which might work for some models and not others. Care
 
@@ -56,6 +60,16 @@ def GetShape(model,name):
    #       and that we did not get it from a optional location, since different graphs might not implement them and this will fail.
    print(f"Could not find shape for {name}")
    assert(false)
+
+def CalculateOffsetFromSize(sizes: list[int]):
+   offset = 0
+   result = [offset]
+   for size in sizes[:-1]:
+      offset += size
+      res.append(offset)
+
+   totalSize = offset + sizes[-1]
+   return result,totalSize
 
 def EndianessToStructArg(endianess: Endianess):
    endianArg = ""
@@ -103,11 +117,14 @@ def IndexOfNodeThatProducesOutput(cModel,outputName):
 def GenerateModelFromOnnxModel(onnxModel):
    shaped = shape_inference.infer_shapes(onnxModel)
    cModel = Model(shaped)
+
+   # Need the shape of the inputs and output tensors
    
    inputNames = []
    for value in onnxModel.graph.input:
+      shape = [x.dim_value for x in value.type.tensor_type.shape.dim]
       if(not GetTensor(shaped,value.name)):
-         inputNames.append(value.name)
+         inputNames.append(Port(value.name,shape))
    cModel.modelInputs = inputNames
 
    # Extract all the data that we care about from the graph into a simpler struct for further processing.
@@ -137,7 +154,7 @@ def GenerateModelFromOnnxModel(onnxModel):
          source = None
          if(tensor):
             source = DataSource(DataSourceType.INITIALIZER,name) 
-         elif(name in cModel.modelInputs):
+         elif(name in [x.name for x in cModel.modelInputs]):
             source = DataSource(DataSourceType.MODEL_INPUT,name) 
          else:
             source = DataSource(DataSourceType.NODE_INPUT,name) 
@@ -220,11 +237,13 @@ class CDataEmitter:
       return content
 
 def GenerateDebug(testLocation: str,outputLocation: str):
-   #print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
+   print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
 
    testModelLocation = os.path.join(testLocation,"model.onnx")
 
-   # TODO: Only fetching one test, for now
+   # TODO: Only fetching one test, mainly because only a few of the test models actually contain more than 1 test.
+   amountOfTests = len(glob.glob(os.path.join(testLocation, 'test_data_set_*')))
+   print("Tests found",amountOfTests)
    testDataDir = os.path.join(testLocation,"test_data_set_0")
 
    model = onnx.load(testModelLocation)
@@ -270,7 +289,6 @@ def GenerateDebug(testLocation: str,outputLocation: str):
       np.testing.assert_almost_equal(ref_o, o,decimal = 9)
 
    cModel = GenerateModelFromOnnxModel(model)
-   cModel.isModelOutputIntermediate = isIntermediate
 
    # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
    # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
@@ -283,7 +301,15 @@ def GenerateDebug(testLocation: str,outputLocation: str):
       outputNameToNodeIndex[c.output] = ind
       ind += 1
 
+   packedInputs = PackMultipleArrays(inputs)
    packedCorrectData = PackMultipleArrays(correctData)
+
+   with open(os.path.join(outputLocation,"inputs.bin"),"wb") as f:
+      f.write(packedInputs.data)
+
+   with open(os.path.join(outputLocation,"correctOutputs.bin"),"wb") as f:
+      f.write(packedCorrectData.data)
+
    packedInitializers = PackMultipleArrays(cModel.initializers)
 
    # Calculate initializer position
@@ -294,96 +320,111 @@ def GenerateDebug(testLocation: str,outputLocation: str):
             source.index = initializersSeen
             initializersSeen += 1
          elif(source.sourceType == DataSourceType.MODEL_INPUT):
-            for index,name in enumerate(cModel.modelInputs):
-               if(name == source.name):
+            for index,port in enumerate(cModel.modelInputs):
+               if(port.name == source.name):
                   source.index = index
          else:
             source.index = IndexOfNodeThatProducesOutput(cModel,source.name)
             source.correctInputIndex = outputNameToNodeIndex[source.name]
 
-   print("#include \"versat_ai.h\"")
-   print()
-   print("size_t GetOutputMemorySize(){return ",cModel.outputMemoryNeeded,";}",sep='')
-   print("size_t GetTemporaryMemorySize(){return ",cModel.tempMemoryNeeded,";}",sep='')
-   print("size_t GetModelMemorySize(){return ",len(packedInitializers.data),";}",sep='')
-   print("size_t GetCorrectMemorySize(){return ",len(packedCorrectData.data),";}",sep='')
-   print()
+   with open(os.path.join(outputLocation,"code.c"),"w") as f:
+      f.write("#include \"versat_ai.h\"\n")
 
-   print(f"int numberLayers = {len(cModel.operations)};")
+      f.write(f"int numberLayers = {len(cModel.operations)};\n")
 
-   layerInfo = []
-   for index,c in enumerate(cModel.operations):
-      outputSize = reduce(lambda x,y : x * y,c.outputDimensions) * 4 # Sizeof(float)
-      layerInfo.append("{" + f"\"{c.nodeName}\",\"{c.opName}\",{outputSize}" + "}")
+      layerInfo = []
+      for index,c in enumerate(cModel.operations):
+         outputSize = TensorSize(c.outputDimensions)
+         layerInfo.append("{" + f"\"{c.nodeName}\",\"{c.opName}\",{outputSize}" + "}")
 
-   print("LayerInfo layers[] = {",",".join(layerInfo),"};\n")
+      f.write("LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
 
-   opcodeToOperationList = {}
-   for index,c in enumerate(cModel.operations):
-      opcodeToOperationList[c.opName] = opcodeToOperationList.get(c.opName,[]) + [c]
+      opcodeToOperationList = {}
+      for index,c in enumerate(cModel.operations):
+         opcodeToOperationList[c.opName] = opcodeToOperationList.get(c.opName,[]) + [c]
 
-   emitter = CDataEmitter()
+      emitter = CDataEmitter()
 
-   for opcode in opcodeToOperationList:
-      if(not IsOperatorRegistered(opcode)):
-         continue
+      for opcode in opcodeToOperationList:
+         if(not IsOperatorRegistered(opcode)):
+            continue
 
-      operationList = opcodeToOperationList[opcode]
+         operationList = opcodeToOperationList[opcode]
 
-      structs = []
-      for index,op in enumerate(operationList):
-         structs.append(EmitParameterList(emitter,op))
+         structs = []
+         for index,op in enumerate(operationList):
+            structs.append(EmitParameterList(emitter,op))
 
-      emitter.EmitNamedArray(f"{opcode}Infos",f"{opcode}Info",structs)
+         emitter.EmitNamedArray(f"{opcode}Infos",f"{opcode}Info",structs)
 
-   content = emitter.Representation()
-   print(content)
+      content = emitter.Representation()
+      f.write(content)
 
-   # Placeholder for operators not yet registered
-   for opcode,opList in opcodeToOperationList.items():
-      amount = len(opList)
+      # Placeholder for operators not yet registered
+      for opcode,opList in opcodeToOperationList.items():
+         amount = len(opList)
 
-      if(IsOperatorRegistered(opcode)):
-         continue
+         if(IsOperatorRegistered(opcode)):
+            continue
 
-      content = []
-      for op in opList:
-         content.append("{}")
+         content = []
+         for op in opList:
+            content.append("{}")
 
-      print(f"{opcode}Info {opcode}Infos[{amount}] = ","{",",".join(content),"};",sep='')
+         f.write(f"{opcode}Info {opcode}Infos[{amount}] = " + "{" + ",".join(content) + "};\n")
 
-   print()
-   print("InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){")
+      f.write("\n")
+      f.write("InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){\n")
 
-   debugging = True
-   opSeen = {}
-   for index,c in enumerate(cModel.operations):
-      content = []
-      for inp in c.inputs:
-         if(inp.sourceType == DataSourceType.INITIALIZER):
-            content.append(f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})")
-         elif(inp.sourceType == DataSourceType.MODEL_INPUT):
-            content.append(f"inputs[{inp.index}]")
-         else:
-            if(debugging):
-               content.append(f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})")
+      debugging = True
+      opSeen = {}
+      for index,c in enumerate(cModel.operations):
+         content = []
+         for inp in c.inputs:
+            if(inp.sourceType == DataSourceType.INITIALIZER):
+               content.append(f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})")
+            elif(inp.sourceType == DataSourceType.MODEL_INPUT):
+               content.append(f"inputs[{inp.index}]")
             else:
-               content.append(f"res_{inp.index}")
+               if(debugging):
+                  content.append(f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})")
+               else:
+                  content.append(f"res_{inp.index}")
 
-      outputStr = ""
-      if(c.outputMemoryAddress.memType == MemoryType.TEMP):
-         outputStr = f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
-      else:
-         outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
+         outputStr = ""
+         if(c.outputMemoryAddress.memType == MemoryType.TEMP):
+            outputStr = f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
+         else:
+            outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
 
-      opIndex = opSeen.get(c.opName,-1) + 1
-      opSeen[c.opName] = opIndex
+         opIndex = opSeen.get(c.opName,-1) + 1
+         opSeen[c.opName] = opIndex
 
-      print(f"  void* res_{index} = ",c.opName,'(',",".join(content),f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);",sep='')
-      if(debugging and (IsOperatorRegistered(c.opName))):
-         print(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}),{index});")
-   print("  return (InferenceOutput){};")
-   print("}")
+         f.write(f"  void* res_{index} = " + c.opName + '(' + ",".join(content) + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n")
+         if(debugging and (IsOperatorRegistered(c.opName))):
+            f.write(f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}),{index});\n")
+      f.write("  return (InferenceOutput){};\n")
+      f.write("}\n")
+
+   with open(os.path.join(outputLocation,"modelInfo.h"),"w") as f:
+      f.write("#pragma once\n")
+      f.write(f"#define VERSAT_AI_OUTPUT_SIZE {cModel.outputMemoryNeeded}\n")
+      f.write(f"#define VERSAT_AI_TEMP_SIZE {cModel.tempMemoryNeeded}\n")
+      f.write(f"#define VERSAT_AI_MODEL_SIZE {len(packedInitializers.data)}\n")
+      f.write(f"#define VERSAT_AI_CORRECT_SIZE {len(packedCorrectData.data)}\n")
+      f.write(f"#define VERSAT_AI_N_INPUTS {len(cModel.modelInputs)}\n")
+
+      inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
+      inputOffsets,totalInputSize = CalculateOffsetFromSize(inputSizes)
+
+      for index,size in enumerate(inputSizes):
+         f.write(f"#define VERSAT_AI_INPUT_{index}_SIZE {size}\n")
+
+      f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE {totalInputSize}\n")
+
+      f.write("const int VERSAT_AI_INPUT_OFFSET[] = {")
+      f.write(",".join([str(x) for x in inputOffsets]))
+      f.write("};\n")
 
    try:
       os.makedirs(outputLocation)
@@ -393,8 +434,6 @@ def GenerateDebug(testLocation: str,outputLocation: str):
    with open(os.path.join(outputLocation,"model.bin"),"wb") as f:
       f.write(packedInitializers.data)
 
-   with open(os.path.join(outputLocation,"correctOutput.bin"),"wb") as f:
-      f.write(packedCorrectData.data)
 
 # TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
 
