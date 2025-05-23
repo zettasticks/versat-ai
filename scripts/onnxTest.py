@@ -7,7 +7,7 @@ import glob
 from scripts.versatDefs import *
 from scripts.memoryAllocator import CalculateMemoryAllocations
 from scripts.onnxAddOutputsToIntermediate import AddOutputsToEachNode
-from scripts.onnxOperators import EmitParameterList,IsOperatorRegistered
+from scripts.onnxOperators import *
 from copy import copy
 
 from onnx import shape_inference
@@ -129,10 +129,31 @@ def GenerateModelFromOnnxModel(onnxModel):
 
    # Extract all the data that we care about from the graph into a simpler struct for further processing.
    for node in onnxModel.graph.node:
-      attributes = {}
+      opType = node.op_type
+
+      # TODO: Need to properly handle the operator not being registered
+      operatorSpec = operatorNameToSpec[opType]
+      attributesSpec = operatorSpec.attributesDict
+
+      parsedAttributes = {}
       for attribute in node.attribute:
-         # TODO: Proper parsing and unpacking of attributes
-         attributes[attribute.name] = attribute.ints
+         attributeName = attribute.name
+
+         spec = attributesSpec[attributeName]
+
+         parsedAttribute = None
+         if(spec.attrType == OnnxAttributeType.INTEGER):
+            parsedAttribute = InstantiatedAttribute(spec,int(attribute.i))
+         elif(spec.attrType == OnnxAttributeType.BOUNDED_INTEGER):
+            parsedAttribute = InstantiatedAttribute(spec,int(attribute.i))
+         elif(spec.attrType == OnnxAttributeType.INTEGER_LIST):
+            parsedAttribute = InstantiatedAttribute(spec,[int(x) for x in attribute.ints])
+         elif(spec.attrType == OnnxAttributeType.BOUNDED_STRING):
+            parsedAttribute = InstantiatedAttribute(spec,str(attribute.s))
+         else:
+            assert(False)
+
+         parsedAttributes[attribute.name] = parsedAttribute
 
       inputDimensions = []
       for name in node.input:
@@ -162,7 +183,7 @@ def GenerateModelFromOnnxModel(onnxModel):
 
       outputName = node.output[0] # Can a node have more than one output? 
 
-      op = Operation(node.name,node.op_type,dataSources,outputName,inputDimensions,outputDimensions,attributes)
+      op = Operation(node.name,node.op_type,dataSources,outputName,inputDimensions,outputDimensions,parsedAttributes)
       cModel.operations.append(op)
 
    CalculateMemoryAllocations(cModel)

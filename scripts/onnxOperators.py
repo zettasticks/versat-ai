@@ -1,7 +1,9 @@
-from dataclasses import dataclass
+from typing import Callable
+from dataclasses import dataclass,field
 from copy import copy
 
-from scripts.versatDefs import Operation
+from scripts.versatDefs import Operation,InstantiatedAttribute,OnnxAttribute,OnnxAttributeType,OnnxOperatorSpec
+from enum import Enum,auto
 
 # TODO: It might be useful for us to generate the C structs from Python that to keep trying to match static C structs with the Python code that generates it.
 #       The problem is that any Python change also causes us to have to change the C code, meaning that we do not save any trouble from this change.
@@ -27,10 +29,36 @@ def BroadCastShape(op0,op1):
    return res
 
 
-@dataclass
-class OnnxOperatorSpec:
-   name: str
-   emitFunction: any
+def MakeAttrBoundedString(allowedStringValues: list[str],default: str = None):
+   return OnnxAttribute(OnnxAttributeType.BOUNDED_STRING,allowedStringValues,default)
+
+def MakeAttrBoundedInteger(allowedIntegerValues: list[int],default: int = None):
+   return OnnxAttribute(OnnxAttributeType.BOUNDED_INTEGER,allowedIntegerValues,default)
+
+def MakeAttrIntegerList(defaultValue):
+   return OnnxAttribute(OnnxAttributeType.INTEGER_LIST,[],defaultValue)
+
+def MakeAttrIngeger(defaultValue):
+   return OnnxAttribute(OnnxAttributeType.INTEGER,[],defaultValue)
+
+# Some attributes have defaults that depend on the operator (like the size of the spatial axis and such)
+# This function essentially instantiates default values such that outer code does not have to check if a attributes exists or not.
+def GetAttributesForOperator(op: Operation) -> dict[str,InstantiatedAttribute]:
+   opName = op.opName
+
+   if(not opName in operatorNameToSpec):
+      return None
+
+   opSpec = operatorNameToSpec[opName]
+
+   # TODO: We can actually remove this and the function. All we need is to use the data that we have to figure out whether we need to use a default attribute value or a value that is contained inside the operator.
+
+   if(opSpec.attributesForOperatorFunction):
+      return opSpec.attributesForOperatorFunction(op)
+   else:
+      # TODO: Need to instantiate the attributes with their default values.
+      pass
+      #return opSpec.attributesDict
 
 def EmitAdd(emitter,op : Operation):
    maxDims = max(len(op.inputDimensions[0]),len(op.inputDimensions[1]))
@@ -60,6 +88,10 @@ def EmitMaxPool(emitter,op : Operation):
 
    return [dims,inputShape,outputShape,kernel_shape[0],kernel_shape[1]]
 
+def EmitConv(emitter,op : Operation):
+   # TODO
+   pass
+
 def IsOperatorRegistered(opName : str):
    return (opName in operatorNameToSpec)
 
@@ -73,8 +105,58 @@ def EmitParameterList(emitter,op : Operation):
    else:
       return spec.emitFunction(emitter,op)
 
+convAttributes = {
+   "auto_pad"     : MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"],"NOTSET"),
+   "dilations"    : MakeAttrIntegerList(1),
+   "group"        : MakeAttrIngeger(1),
+   "kernel_shape" : MakeAttrIntegerList(None),
+   "pads"         : MakeAttrIntegerList(0),
+   "strides"      : MakeAttrIntegerList(1)
+}
+
+# TODO: This functions only exist because we are not properly parsing the attributes when parsing the model.
+#       Otherwise we could easily make this function in a generic way.
+def ConvAttributesForOperation(op: Operation) -> dict[str,InstantiatedAttribute]:
+   global convAttributes
+
+   res = {}
+   for name,attrType in convAttributes.items():
+      if(name in op.parsedAttributes):
+         res[name] = op.parsedAttributes[name]
+      else:
+         res[name] = InstantiatedAttribute(attrType,attrType.defaultValue)
+
+   return res
+
+maxPoolAttributes = {
+   "auto_pad"     : MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"],"NOTSET"),
+   "ceil_mode"    : MakeAttrIngeger(0),
+   "dilations"    : MakeAttrIntegerList(1),
+   "kernel_shape" : MakeAttrIntegerList(None),
+   "pads"         : MakeAttrIntegerList(0),
+   "storage_order": MakeAttrBoundedInteger([0,1],0),
+   "strides"      : MakeAttrIntegerList(1)
+}
+
+def MaxPoolAttributesForOperation(op: Operation) -> dict[str,InstantiatedAttribute]:
+   global maxPoolAttributes
+
+   res = {}
+   for name,attrType in maxPoolAttributes.items():
+      if(name in op.parsedAttributes):
+         res[name] = op.parsedAttributes[name]
+      else:
+        res[name] = InstantiatedAttribute(attrType,attrType.defaultValue)
+
+   return res
+
 # Register new operators here
 operatorNameToSpec = {}
-operatorNameToSpec['Add'] = OnnxOperatorSpec("Add",EmitAdd)
-operatorNameToSpec['Relu'] = OnnxOperatorSpec("Relu",EmitRelu)
-operatorNameToSpec['MaxPool'] = OnnxOperatorSpec("MaxPool",EmitMaxPool)
+operatorNameToSpec['Add'] =      OnnxOperatorSpec("Add"       ,EmitAdd    ,True ,False)
+operatorNameToSpec['Conv'] =     OnnxOperatorSpec("Conv"      ,EmitConv   ,False,False,convAttributes,ConvAttributesForOperation)
+operatorNameToSpec['Relu'] =     OnnxOperatorSpec("Relu"      ,EmitRelu   ,False,False)
+operatorNameToSpec['MaxPool'] =  OnnxOperatorSpec("MaxPool"   ,EmitMaxPool,False,False,maxPoolAttributes,MaxPoolAttributesForOperation)
+
+# Care, not fully defined, mostly to stop key errors from appearing
+operatorNameToSpec['Reshape'] =  OnnxOperatorSpec("Reshape"   ,None       ,False,False)
+operatorNameToSpec['MatMul']  =  OnnxOperatorSpec("MatMul "   ,None       ,False,False)

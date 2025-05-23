@@ -1,3 +1,4 @@
+from typing import Callable
 from dataclasses import dataclass,field
 from enum import Enum,auto
 
@@ -36,6 +37,26 @@ class MemoryLocation:
    offset : int
    memType : MemoryType
 
+class OnnxAttributeType(Enum):
+   INTEGER = auto()
+   BOUNDED_INTEGER = auto()
+   INTEGER_LIST = auto()
+   BOUNDED_STRING = auto()
+
+@dataclass
+class OnnxAttribute:
+   attrType: OnnxAttributeType
+   allowedValues: list[any]
+   defaultValue: any
+
+@dataclass
+class InstantiatedAttribute:
+   attributeSpec: OnnxAttribute
+   value: any
+
+   def __repr__(self):
+      return str(self.value)
+
 @dataclass
 class Operation:
    # Data extracted from the model
@@ -45,12 +66,19 @@ class Operation:
    output: str # For now we are assuming that nodes only contain one output. Most graphs appear to follow this principle, even if the output is used by multiple nodes, the node itself only appaears to contain one. Maybe more exotic operations shatter this notion but will deal with them when they appear.
    inputDimensions: list[list[int]]
    outputDimensions: list[int]
-   attributes: dict[str,list[any]]
-
-   #TODO: Eventually implement attributes properly. 
+   parsedAttributes: dict[str,InstantiatedAttribute] = None
 
    # Data computed from extracted model. 
    outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it, we do not allocate memory at runtime.
+
+@dataclass
+class OnnxOperatorSpec:
+   name: str
+   emitFunction: Callable
+   supportsMultidirectionalBroadcasting: bool
+   supportsUnidirectionalBroadcasting: bool
+   attributesDict: dict[str,OnnxAttribute] = field(default_factory=dict)
+   attributesForOperatorFunction: Callable[Operation,dict[str,InstantiatedAttribute]] = None
 
 @dataclass
 class Port:

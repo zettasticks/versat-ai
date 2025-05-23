@@ -34,6 +34,6 @@ This project was funded through the NGI0 Core Fund, a fund established by NLnet 
 <table>
     <tr>
         <td align="center" width="50%"><img src="https://nlnet.nl/logo/banner.svg" alt="NLnet foundation logo" style="width:90%"></td>
-        <td align="center"><img src="https://nlnet.nl/image/logos/NGIAssure_tag.svg" alt="NGI Assure logo" style="width:90%"></td>
+        <td align="center"><img src="https://nlnet.nl/image/logos/NGI0Core_tag.svg" alt="NGI0 Core logo" style="width:90%"></td>
     </tr>
 </table>
