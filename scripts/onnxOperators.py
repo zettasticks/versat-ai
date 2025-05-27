@@ -5,10 +5,11 @@ from copy import copy
 from scripts.versatDefs import Operation,InstantiatedAttribute,OnnxAttribute,OnnxAttributeType,OnnxOperatorSpec
 from enum import Enum,auto
 
-# TODO: It might be useful for us to generate the C structs from Python that to keep trying to match static C structs with the Python code that generates it.
-#       The problem is that any Python change also causes us to have to change the C code, meaning that we do not save any trouble from this change.
-#       If we eventually generate all the C code from Python, that this is something that we could do easily, since Python generates both code and data.
-#       But this might be overkill. It is also easier to start this way and move runtime to python as we progress.
+#TODO: I eventually want to start generating the C structs from the emitters defined here. Really clubersome to have to match 
+#      the emitter code with the C code, any change requires to carefully interact with 
+
+#TODO: Because Onnx supports variable sized tensors, we might want to start moving the tensors shape calculations to runtime.
+#      For now this is fine because most models do not have dynamic tensor shapes, but eventually need to do this.
 
 def ExtendShape(shapeList,dimensions):
    res = copy(shapeList)
@@ -68,29 +69,50 @@ def EmitAdd(emitter,op : Operation):
 
    broadCastedShape = BroadCastShape(op0,op1)
 
-   aux_0 = emitter.EmitArray("int",op0)
-   aux_1 = emitter.EmitArray("int",op1)
-   aux_2 = emitter.EmitArray("int",broadCastedShape)
+   aux_0 = emitter.EmitArray("int64_t",op0)
+   aux_1 = emitter.EmitArray("int64_t",op1)
+   aux_2 = emitter.EmitArray("int64_t",broadCastedShape)
 
    return [maxDims,aux_0,aux_1,aux_2]
 
 def EmitRelu(emitter,op : Operation):
-   aux = emitter.EmitArray("int",op.inputDimensions[0])
+   aux = emitter.EmitArray("int64_t",op.inputDimensions[0])
    dims = len(op.inputDimensions[0])
    return [dims,aux]
 
 def EmitMaxPool(emitter,op : Operation):
    dims = len(op.inputDimensions[0])
-   inputShape = emitter.EmitArray("int",op.inputDimensions[0])
-   outputShape = emitter.EmitArray("int",op.outputDimensions)
+   inputShape = emitter.EmitArray("int64_t",op.inputDimensions[0])
+   outputShape = emitter.EmitArray("int64_t",op.outputDimensions)
 
-   kernel_shape = op.attributes['kernel_shape']
+   kernel_shape = op.parsedAttributes['kernel_shape'].value
+
+   print(kernel_shape)
 
    return [dims,inputShape,outputShape,kernel_shape[0],kernel_shape[1]]
 
 def EmitConv(emitter,op : Operation):
-   # TODO
-   pass
+   return "{}"
+
+def EmitReshape(emitter,op : Operation):
+   op0 = op.inputDimensions[0]
+   dimIn = len(op.inputDimensions[0])
+   dimOut = op.inputDimensions[1]
+
+   aux_0 = emitter.EmitArray("int64_t",op0)
+
+   return [aux_0,dimIn,dimOut]
+
+def EmitMatMul(emitter,op : Operation):
+   op0 = op.inputDimensions[0]
+   op1 = op.inputDimensions[1]
+   res = [op0[0],op1[1]]
+
+   aux_0 = emitter.EmitArray("int64_t",op0)
+   aux_1 = emitter.EmitArray("int64_t",op1)
+   aux_2 = emitter.EmitArray("int64_t",res)
+
+   return [aux_0,len(op0),aux_1,len(op1),aux_2,len(res)]
 
 def IsOperatorRegistered(opName : str):
    return (opName in operatorNameToSpec)
@@ -102,8 +124,10 @@ def EmitParameterList(emitter,op : Operation):
    if(not spec):
       print(f"Operator {op.opName} is not registered and no implementation exists for it")
       print(f"Know operators: {operatorNameToSpec.keys()}")
-   else:
+   elif(spec.emitFunction):
       return spec.emitFunction(emitter,op)
+   else:
+      return "{}"
 
 convAttributes = {
    "auto_pad"     : MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"],"NOTSET"),
@@ -158,5 +182,6 @@ operatorNameToSpec['Relu'] =     OnnxOperatorSpec("Relu"      ,EmitRelu   ,False
 operatorNameToSpec['MaxPool'] =  OnnxOperatorSpec("MaxPool"   ,EmitMaxPool,False,False,maxPoolAttributes,MaxPoolAttributesForOperation)
 
 # Care, not fully defined, mostly to stop key errors from appearing
-operatorNameToSpec['Reshape'] =  OnnxOperatorSpec("Reshape"   ,None       ,False,False)
-operatorNameToSpec['MatMul']  =  OnnxOperatorSpec("MatMul "   ,None       ,False,False)
+operatorNameToSpec['Reshape'] =  OnnxOperatorSpec("Reshape"   ,EmitReshape,False,False)
+operatorNameToSpec['MatMul']  =  OnnxOperatorSpec("MatMul "   ,EmitMatMul ,False,False)
+

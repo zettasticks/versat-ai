@@ -257,10 +257,8 @@ class CDataEmitter:
 
       return content
 
-def GenerateDebug(testLocation: str,outputLocation: str):
+def GenerateDebug(testModelLocation: str,testLocation: str,outputLocation: str):
    print(f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}")
-
-   testModelLocation = os.path.join(testLocation,"model.onnx")
 
    # TODO: Only fetching one test, mainly because only a few of the test models actually contain more than 1 test.
    amountOfTests = len(glob.glob(os.path.join(testLocation, 'test_data_set_*')))
@@ -350,6 +348,7 @@ def GenerateDebug(testLocation: str,outputLocation: str):
 
    with open(os.path.join(outputLocation,"code.c"),"w") as f:
       f.write("#include \"versat_ai.h\"\n")
+      f.write("#include \"stdint.h\"\n")
 
       f.write(f"int numberLayers = {len(cModel.operations)};\n")
 

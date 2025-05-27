@@ -2,8 +2,8 @@
 #define INCLUDED_VERSAT_AI
 
 #include <stddef.h>
-
-typedef char bool;
+#include <stdint.h>
+#include <stdbool.h>
 
 // Memory is allocated by the user. 
 
@@ -16,53 +16,65 @@ typedef char bool;
 // That not only fixes the output to the correct address but also fills it with some information.
 
 typedef struct{
-   int numberOfOutputs;
-   void** outputLocation; // outputLocation[N] gives the address of the N output.
+  int numberOfOutputs;
+  void** outputLocation; // outputLocation[N] gives the address of the N output.
 } InferenceOutput;
 
 typedef struct{
-   const char* name;
-   const char* typeName;
-   size_t outputSize;
+  const char* name;
+  const char* typeName;
+  size_t outputSize;
 } LayerInfo;
 
 typedef struct{
-   // Extra info to help 
-   int maxDims;
-   int* firstInputDim;
-   int* secondInputDim;
-   int* broadCastedShape;
+  // Extra info to help 
+  int maxDims;
+  int64_t* firstInputDim;
+  int64_t* secondInputDim;
+  int64_t* broadCastedShape;
 } AddInfo;
 
 typedef struct{
-   int dims;
-   int* inputDims;
+  int dims;
+  int64_t* inputDims;
 } ReluInfo;
 
 typedef struct{
-   int dims;
-   int* inputDims;
-   int* outputDims;
-   int kernelSizeW;
-   int kernelSizeH;
+  int dims;
+  int64_t* inputDims;
+  int64_t* outputDims;
+  int kernelSizeW;
+  int kernelSizeH;
 } MaxPoolInfo;
 
 typedef struct{
-   // Attributes as described by onnx.
-   int auto_pad;
-   int* dilations;
-   int group;
-   int* kernel_shape;
-   int* pads;
-   int* strides;
+  // Attributes as described by onnx.
+  int auto_pad;
+  int* dilations;
+  int group;
+  int* kernel_shape;
+  int* pads;
+  int* strides;
 
-   // Extra info to help 
-   int inputs;
-   int* inputDims;
+  // Extra info to help 
+  int inputs;
+  int64_t* inputDims;
 } ConvInfo;
 
-typedef struct{} ReshapeInfo;
-typedef struct{} MatMulInfo;
+typedef struct{
+  int64_t* inputDims;
+  int numberInputDims;
+  int numberShapeDims;
+} ReshapeInfo;
+
+typedef struct{
+  int64_t* inputADims;
+  int numberInputADims;
+  int64_t* inputBDims;
+  int numberInputBDims;
+  int64_t* outputDims;
+  int numberOutputDims;
+}  MatMulInfo; 
 
 extern LayerInfo layers[];
 extern int numberLayers;
