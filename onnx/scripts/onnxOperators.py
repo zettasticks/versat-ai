@@ -57,7 +57,7 @@ def MakeAttrIngeger(defaultValue):
 
 
 # Some attributes have defaults that depend on the operator (like the size of the spatial axis and such)
-# This function essentially instantiates default values such that outer code does not have to check if a attributes exists or not.
+# This function essentially instantiates default values such that outer code does not have to check if an attributes exists or not.
 def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
     opName = op.opName
 
