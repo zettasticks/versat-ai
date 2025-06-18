@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+int main() { return 0; }
+
+#if 0
+
 #include "iob_bsp.h"
 #include "iob_printf.h"
 #include "iob_timer.h"
@@ -98,3 +102,5 @@ int main() {
 
   uart_finish();
 }
+
+#endif

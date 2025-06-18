@@ -4,8 +4,11 @@
 #include "stdint.h"
 
 // TODO: Eventually remove this, cannot depend on OS specific code
-#include "stdio.h"
-#include <stdlib.h>
+//#include "stdio.h"
+//#include <stdlib.h>
+
+#define printf(...) ((void)0)
+#define exit(...) ((void)0)
 
 #define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
 
