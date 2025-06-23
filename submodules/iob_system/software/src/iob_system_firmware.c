@@ -6,11 +6,10 @@
 
 #include "iob_bsp.h"
 #include "iob_printf.h"
+#include "iob_system_conf.h"
+#include "iob_system_mmap.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
-#include "versat_accel.h"
-#include "versat_ai_conf.h"
-#include "versat_ai_mmap.h"
 #include <string.h>
 
 char *send_string = "Sending this string as a file to console.\n"
@@ -20,16 +19,6 @@ char *send_string = "Sending this string as a file to console.\n"
                     "Generating the file in the firmware creates an uniform "
                     "file transfer between pc-emul, simulation and fpga without"
                     " adding extra targets for file generation.\n";
-
-void clear_cache() {
-#ifndef PC
-  // Delay to ensure all data is written to memory
-  for (unsigned int i = 0; i < 10; i++)
-    asm volatile("nop");
-  // Flush VexRiscv CPU internal cache
-  asm volatile(".word 0x500F" ::: "memory");
-#endif
-}
 
 int main() {
   char pass_string[] = "Test passed!";
@@ -43,32 +32,7 @@ int main() {
   printf_init(&uart_putc);
 
   // test puts
-  uart_puts("\n\n\nHello world from versat_ai!\n\n\n");
-
-  uart_puts("\n\n\nGonna init versat!\n\n\n");
-  versat_init(VERSAT0_BASE);
-
-  int *testMem = (int *)malloc(4);
-  *testMem = 123;
-  int test2 = 123;
-
-  clear_cache();
-
-  accelConfig->debug.address = testMem;
-
-  printf("Value Before = %d\n\n", accelState->debug.lastRead);
-
-  RunAccelerator(3);
-
-  printf("Value After = %d\n\n", accelState->debug.lastRead);
-
-  accelConfig->debug.address = &test2;
-
-  printf("Value Before = %d\n\n", accelState->debug.lastRead);
-
-  RunAccelerator(3);
-
-  printf("Value After = %d\n\n", accelState->debug.lastRead);
+  uart_puts("\n\n\nHello world!\n\n\n");
 
   // test printf with floats
   printf("Value of Pi = %f\n\n", 3.1415);

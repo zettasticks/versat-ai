@@ -11,8 +11,8 @@ BOARD ?= iob_cyclonev_gt_dk
 
 BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
 
-USE_INTMEM ?= 0
-USE_EXTMEM ?= 1
+USE_INTMEM ?= 1
+USE_EXTMEM ?= 0
 INIT_MEM ?= 1
 
 VERSION ?=$(shell cat versat_ai.py | grep version | cut -d '"' -f 4)
@@ -21,18 +21,11 @@ ifneq ($(DEBUG),)
 EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
 
-onnx-test:
-	rm -rf output
-	mkdir output
-	python3 ./tester.py tests/mnist_v7/model.onnx output tests/mnist_v7
-	gcc -Wall -g -o output/exe tester.c software/staticSource.c output/code.c -Isoftware
-	cd output; ./exe
-
-versat-generate:
-	nix-shell --run "python3 ./versatGenerate.py"
-
 setup:
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS)"
+
+versat-generate:
+	nix-shell --run "python3 versatGenerate.py"
 
 pc-emul-run:
 	nix-shell --run "make clean setup && make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"

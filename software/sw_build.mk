@@ -29,9 +29,9 @@ versat_ai_firmware.bin: ../../software/versat_ai_firmware.bin
 	cp $< $@
 
 ../../software/%.bin:
-	make -C ../../ sw-build
+	make -C ../../ fw-build
 
-UTARGETS+=build_versat_ai_software tb versat_ai_firmware
+UTARGETS+=build_versat_ai_software tb
 CSRS=./src/iob_uart_csrs.c
 
 TEMPLATE_LDS=src/$@.lds
@@ -41,12 +41,9 @@ VERSAT_AI_INCLUDES=-Isrc -I.
 VERSAT_AI_LFLAGS=-Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS),--strip-debug
 
 # FIRMWARE SOURCES
-#VERSAT_AI_FW_SRC=src/versat_ai_firmware.S
+VERSAT_AI_FW_SRC=src/versat_ai_firmware.S
 VERSAT_AI_FW_SRC+=src/versat_ai_firmware.c
 VERSAT_AI_FW_SRC+=src/iob_printf.c
-VERSAT_AI_FW_SRC+=src/code.c
-VERSAT_AI_FW_SRC+=src/staticSource.c
-
 # PERIPHERAL SOURCES
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 # Only add driver files if they exist
@@ -74,10 +71,10 @@ iob_bsp:
 	sed 's/$(WRAPPER_CONFS_PREFIX)/IOB_BSP/Ig' src/$(WRAPPER_CONFS_PREFIX)_conf.h > src/iob_bsp.h
 
 versat_ai_firmware: iob_bsp
-	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_FW_SRC)" TEMPLATE_LDS="src/auto_versat_ai_firmware.lds"
+	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_FW_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)"
 
 versat_ai_boot: iob_bsp
-	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_BOOT_SRC)" TEMPLATE_LDS="src/auto_versat_ai_boot.lds"
+	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_BOOT_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)"
 
 versat_ai_preboot:
 	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_PREBOOT_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)" NO_HW_DRIVER=1
@@ -94,8 +91,7 @@ EMUL_HDR+=iob_bsp
 # SOURCES
 EMUL_SRC+=src/versat_ai_firmware.c
 EMUL_SRC+=src/iob_printf.c
-EMUL_SRC+=src/code.c
-EMUL_SRC+=src/staticSource.c
+#EMUL_SRC+=versat_emul.c
 
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))

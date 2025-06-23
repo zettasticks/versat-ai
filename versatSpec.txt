@@ -1,5 +1,5 @@
 module Test(){
-   
+   DebugReadMem debug;   
 #
 
 }

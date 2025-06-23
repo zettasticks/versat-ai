@@ -4,3 +4,4 @@ output
 python
 __pycache__
 tests
+submodules/iob_versat

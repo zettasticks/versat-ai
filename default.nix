@@ -1,11 +1,12 @@
+# SPDX-FileCopyrightText: 2025 IObundle
+#
+# SPDX-License-Identifier: MIT
+
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  py2hwsw_commit = "e74fb642d48f25383466fb12017c040dc9616a74"; # Replace with the desired commit.
-  py2hwsw_sha256 = "mi+R35KkacqNLCygFPmEY98kdCTgtxGuC1j9B9lpgWk="; # Replace with the actual SHA256 hash.
-
-  # py2hwsw_commit = "b4ddec01e54954573b0a50d581411f34d0fec8dc"; # Replace with the desired commit.
-  # py2hwsw_sha256 = "0NstYUgtj02nzFL10XMCooHgfR778XZJVFv8AnaUAEY="; # Replace with the actual SHA256 hash.
+  py2hwsw_commit = "b4ddec01e54954573b0a50d581411f34d0fec8dc"; # Replace with the desired commit.
+  py2hwsw_sha256 = "0NstYUgtj02nzFL10XMCooHgfR778XZJVFv8AnaUAEY="; # Replace with the actual SHA256 hash.
   # Get local py2hwsw root from `PY2HWSW_ROOT` env variable
   py2hwswRoot = builtins.getEnv "PY2HWSW_ROOT";
 
@@ -43,6 +44,7 @@ let
 
   extra_pkgs = with pkgs; [
     # Define other Nix packages for your project here
+    (callPackage ../../Versat/iob-soc-versat/submodules/VERSAT/versat.nix {})
   ];
 
 in

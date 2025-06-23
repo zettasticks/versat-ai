@@ -5,6 +5,8 @@
 # This makefile is used at build-time in $(BUILD_DIR)/software/Makefile
 include ../config_build.mk
 
+-include VerilatorMake.mk
+
 #########################################
 #            General settings           #
 #########################################
@@ -39,7 +41,6 @@ endif
 TOOLCHAIN_PREFIX ?=riscv64-unknown-elf-
 CFLAGS ?=-Os -nostdlib -march=$(MFLAGS) -mabi=ilp32 --specs=nano.specs -Wcast-align=strict $(USER_CFLAGS)
 LFLAGS ?= -Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS),--strip-debug
-LFLAGS2 ?= -Wl,-L,src,-Bstatic,-T,src/auto_versat_ai_firmware.lds,--strip-debug
 LLIBS ?=-lgcc -lc -lnosys
 INCLUDES ?=-I. -Isrc
 
@@ -63,15 +64,6 @@ build: $(UTARGETS)
 	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ $(*F).bin
 
-versat_ai_firmware.elf: src/auto_versat_ai_firmware.lds $(HDR) $(SRC) $(EXTRA_SRC)
-	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) $(LFLAGS2) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
-	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ $(*F).bin
-
-versat_ai_boot.elf: src/auto_versat_ai_boot.lds $(HDR) $(SRC) $(EXTRA_SRC)
-	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
-	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ $(*F).bin
-
-
 ifneq ($(BOARD),)
 FPGA_TOOL:=$(shell find ../hardware/fpga -name $(BOARD) | cut -d"/" -f5)
 endif
@@ -88,8 +80,8 @@ debug:
 #         PC emulation targets          #
 #########################################
 
-fw_emul: $(EMUL_HDR) $(EMUL_SRC)
-	gcc -o $@ $(EMUL_CFLAGS) $(EMUL_INCLUDES) $(EMUL_SRC) -lgcc -lc
+fw_emul: $(EMUL_HDR) $(EMUL_SRC) libaccel.a
+	gcc -o $@ $(EMUL_CFLAGS) $(EMUL_INCLUDES) $(EMUL_SRC) -lm libaccel.a -lstdc++
 
 build_emul: fw_emul
 	@echo "build"

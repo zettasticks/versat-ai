@@ -9,7 +9,6 @@ import pprint
 def RunVersat(
     pc_emul, versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debug_path
 ):
-    # versat_dir = os.path.dirname(__file__)
 
     versat_args = [
         "versat",
@@ -17,10 +16,10 @@ def RunVersat(
         "-s",
         f"-b{axi_data_w}",
         "-d",  # DMA
+        "-p",
+        "iob_csrs_",
         "-t",
         versat_top,
-        "-I",
-        os.path.realpath(build_dir + "/hardware/src/"),
         "-o",
         os.path.realpath(build_dir + "/hardware/src"),  # Output hardware files
         "-O",
@@ -40,7 +39,9 @@ def RunVersat(
     result = None
     try:
         result = sp.run(versat_args, capture_output=True)
-    except:
+        print("ran versat")
+    except Exception as e:
+        print(e)
         return []
 
     returnCode = result.returncode
@@ -50,6 +51,7 @@ def RunVersat(
 
     print(output, file=sys.stderr)
     print(errorOutput, file=sys.stderr)
+    print(returnCode)
 
     if returnCode != 0:
         print("Failed to generate accelerator\n", file=sys.stderr)
@@ -61,8 +63,18 @@ def RunVersat(
 
 
 output = RunVersat(
-    True, "versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None
+    False, "versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None
 )
+
+shutil.move(
+    "submodules/iob_versat/software/versat_emul.c",
+    "submodules/iob_versat/software/src/versat_emul.c",
+)
+shutil.move(
+    "submodules/iob_versat/software/iob-versat.c",
+    "submodules/iob_versat/software/src/iob_versat.c",
+)
+
 with open("submodules/iob_versat/iob_versat.py", "w") as f:
     attributes_dict = {
         "generate_hw": True,
@@ -108,11 +120,8 @@ with open("submodules/iob_versat/iob_versat.py", "w") as f:
                 "name": "interface",
                 "descr": "",
                 "signals": [
-                    {"name": "interface_valid_o", "width": 1},
-                    {"name": "interface_addr_o", "width": 1},
-                    {"name": "interface_rdata_i", "width": 1},
-                    {"name": "interface_ready_i", "width": 1},
-                    {"name": "interface_rvalid_i", "width": 1},
+                    {"name": "interface_raddr_o", "width": 1},
+                    {"name": "interface_i", "width": 1},
                 ],
             }
         ],
@@ -125,12 +134,11 @@ with open("submodules/iob_versat/iob_versat.py", "w") as f:
                 "csrs": [
                     {
                         "name": "interface",
-                        "type": "NOAUTO",
-                        "mode": "WR",
-                        "n_bits": 1,
+                        "type": "R",
+                        "n_bits": 20,
                         "rst_val": 0,
                         "log2n_items": 2,
-                        "descr": "Versat soft reset",
+                        "descr": "Versat interface",
                     }
                 ],
                 "connect": {
@@ -144,7 +152,7 @@ with open("submodules/iob_versat/iob_versat.py", "w") as f:
     f.write(
         f"""
 def setup(py_params_dict):
-   attributes_dict = {attributes.__repr__()}
+   attributes_dict = {attributes_dict.__repr__()}
 
    return attributes_dict"""
     )
