@@ -93,6 +93,8 @@ EMUL_SRC+=src/versat_ai_firmware.c
 EMUL_SRC+=src/iob_printf.c
 
 EMUL_SRC+=src/versat_emul.c
+EMUL_SRC+=src/code.c
+EMUL_SRC+=src/staticSource.c
 
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))

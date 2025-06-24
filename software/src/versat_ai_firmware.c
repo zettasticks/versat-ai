@@ -13,6 +13,9 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
+#include "modelInfo.h"
+#include "versat_ai.h"
+
 char *send_string = "Sending this string as a file to console.\n"
                     "The file is then requested back from console.\n"
                     "The sent file is compared to the received file to confirm "
@@ -50,47 +53,34 @@ int main() {
 
   printf("here\n");
 
-  int *testMem = (int *)malloc(4);
-  *testMem = 1234;
-  clear_cache();
+  void *output = malloc(VERSAT_AI_OUTPUT_SIZE);
+  void *temp = malloc(VERSAT_AI_TEMP_SIZE);
+  void *model = malloc(VERSAT_AI_MODEL_SIZE);
+  void *correct = malloc(VERSAT_AI_CORRECT_SIZE);
+  void *inputMemory = malloc(VERSAT_AI_ALL_INPUTS_SIZE);
 
-  accelConfig->debug.address = testMem;
-
-  printf("Address: %p\n", testMem);
-  printf("Value Before = %d\n\n", accelState->debug.lastRead);
-
-  RunAccelerator(3);
-
-  printf("Value After = %d\n\n", accelState->debug.lastRead);
-
-  // test printf with floats
-  printf("Value of Pi = %f\n\n", 3.1415);
-
-// Don't transfer files when running alongside tester
-#ifndef TESTER
-  // test file send
-  char *sendfile = malloc(1000);
-  int send_file_size = 0;
-  send_file_size = strlen(strcpy(sendfile, send_string));
-  uart_sendfile("Sendfile.txt", send_file_size, sendfile);
-
-  // test file receive
-  char *recvfile = malloc(10000);
-  int file_size = 0;
-  file_size = uart_recvfile("Sendfile.txt", recvfile);
-
-  // compare files
-  if (strcmp(sendfile, recvfile)) {
-    printf("FAILURE: Send and received file differ!\n");
-  } else {
-    printf("SUCCESS: Send and received file match!\n");
+  void *inputs[VERSAT_AI_N_INPUTS];
+  for (int i = 0; i < VERSAT_AI_N_INPUTS; i++) {
+    inputs[i] = OFFSET_PTR(inputMemory, VERSAT_AI_INPUT_OFFSET[i]);
   }
 
-  free(sendfile);
-  free(recvfile);
+  printf("Output : %p\n", output);
+  printf("Temp   : %p\n", temp);
+  printf("Model  : %p\n", model);
+  printf("Correct: %p\n", correct);
 
-  uart_sendfile("test.log", strlen(pass_string), pass_string);
-#endif // TESTER
+  uart_recvfile("model.bin", model);
+  uart_recvfile("correctOutputs.bin", correct);
+  uart_recvfile("inputs.bin", inputMemory);
+
+  DebugRunInference(output, temp, inputs, model, correct);
+
+  // Mainly for address sanitizer to not complain
+  free(output);
+  free(temp);
+  free(model);
+  free(correct);
+  free(inputMemory);
 
   // read current timer count, compute elapsed time
   unsigned long long elapsed = timer_get_count();

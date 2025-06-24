@@ -7,7 +7,9 @@
 //#include "stdio.h"
 //#include <stdlib.h>
 
-#define printf(...) ((void)0)
+#include "iob_printf.h"
+
+//#define printf(...) ((void)0)
 #define exit(...) ((void)0)
 
 #define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))

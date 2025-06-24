@@ -28,6 +28,7 @@ setup:
 versat-generate:
 	nix-shell --run "python3 versatGenerate.py"
 
+# Need to be inside nix-shell for this to work properly
 fast-pc-run:
 	cp -r software ../versat_ai_V0.8/
 	cp -r hardware ../versat_ai_V0.8/
