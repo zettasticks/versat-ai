@@ -91,9 +91,11 @@ EMUL_HDR+=iob_bsp
 # SOURCES
 EMUL_SRC+=src/versat_ai_firmware.c
 EMUL_SRC+=src/iob_printf.c
-#EMUL_SRC+=versat_emul.c
+
+EMUL_SRC+=src/versat_emul.c
 
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 EMUL_SRC+=$(addprefix src/,$(addsuffix _csrs_pc_emul.c,$(PERIPHERALS)))
 
+EMUL_SRC:=$(filter-out src/iob_versat.c,$(EMUL_SRC))

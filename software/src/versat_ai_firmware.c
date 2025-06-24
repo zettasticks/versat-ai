@@ -48,22 +48,15 @@ int main() {
   uart_puts("\n\n\nGonna init versat!\n\n\n");
   versat_init(VERSAT0_BASE);
 
-  int *testMem = (int *)malloc(4);
-  *testMem = 123;
-  int test2 = 123;
+  printf("here\n");
 
+  int *testMem = (int *)malloc(4);
+  *testMem = 1234;
   clear_cache();
 
   accelConfig->debug.address = testMem;
 
-  printf("Value Before = %d\n\n", accelState->debug.lastRead);
-
-  RunAccelerator(3);
-
-  printf("Value After = %d\n\n", accelState->debug.lastRead);
-
-  accelConfig->debug.address = &test2;
-
+  printf("Address: %p\n", testMem);
   printf("Value Before = %d\n\n", accelState->debug.lastRead);
 
   RunAccelerator(3);

@@ -63,7 +63,7 @@ def RunVersat(
 
 
 output = RunVersat(
-    False, "versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None
+    True, "versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None
 )
 
 shutil.move(

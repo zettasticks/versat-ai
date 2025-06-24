@@ -11,9 +11,9 @@ BOARD ?= iob_cyclonev_gt_dk
 
 BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
 
-USE_INTMEM ?= 1
-USE_EXTMEM ?= 0
-INIT_MEM ?= 1
+USE_INTMEM ?= 0
+USE_EXTMEM ?= 1
+INIT_MEM ?= 0
 
 VERSION ?=$(shell cat versat_ai.py | grep version | cut -d '"' -f 4)
 
@@ -22,10 +22,25 @@ EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
 
 setup:
-	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS)"
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
 versat-generate:
 	nix-shell --run "python3 versatGenerate.py"
+
+fast-pc-run:
+	cp -r software ../versat_ai_V0.8/
+	cp -r hardware ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
+	make -C ../versat_ai_V0.8/ pc-emul-run
+
+fast-sim-run:
+	cp -r software ../versat_ai_V0.8/
+	cp -r hardware ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
+	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
 pc-emul-run:
 	nix-shell --run "make clean setup && make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
