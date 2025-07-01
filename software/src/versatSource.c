@@ -17,9 +17,15 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
 
   printf("Addr: %x",&accelConfig->inputs_0);
 
-  ReadDataBroadCasted_VRead(&accelConfig->inputs_0, inputA, 4, 2);
-  ReadDataBroadCasted_VRead_2(&accelConfig->inputs_1, inputB, 4, 2);
-  WriteDataBroadCasted_VWrite(&accelConfig->output, output, 4, 2);
+  DataBroadCasted_VRead(  &accelConfig->inputs_0, inputA,2,4);
+  DataBroadCasted_VRead_2(&accelConfig->inputs_1, inputB,2,4);
+  DataBroadCasted_VWrite( &accelConfig->output  , output,2,4);
+
+#if 0
+  DataBroadCasted_VRead(  &accelConfig->inputs_0, inputA,2,4,0,0,0,0);
+  DataBroadCasted_VRead_2(&accelConfig->inputs_1, inputB,2,4,0,0,0,0);
+  DataBroadCasted_VWrite( &accelConfig->output  , output,2,4,0,0,0,0);
+#endif
 
   RunAccelerator(3);
 

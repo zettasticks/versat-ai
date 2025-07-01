@@ -1,19 +1,34 @@
-AddressGen Read ReadDataBroadCasted(yWidth,xWidth)
+
+/*
+AddressGen Read DataBroadCasted(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth)
+   for c 0..cWidth
+   for b 0..bWidth
+   for a 0..aWidth
+   for z 0..zWidth
    for y 0..yWidth
    for x 0..xWidth
-   addr = y * xWidth + x;
+   addr = ((((c * bWidth + b) * aWidth + a) * zWidth + z) * yWidth + y) * xWidth + x;
+*/
 
-AddressGen Read WriteDataBroadCasted(yWidth,xWidth)
+/*
+AddressGen Read DataBroadCasted(xWidth,yWidth,zWidth)
+   for z 0..zWidth
+   for y 0..yWidth
+   for x 0..xWidth
+   addr = (z * yWidth + y) * xWidth + x;
+*/
+
+AddressGen Read DataBroadCasted(xWidth,yWidth)
    for y 0..yWidth
    for x 0..xWidth
    addr = y * xWidth + x;
 
 module Test(){
-   using(ReadDataBroadCasted) share(config) VRead(ext_addr,length){
+   using(DataBroadCasted) share(config) VRead(ext_addr,length){
       inputs[2];
    }
 
-   using(WriteDataBroadCasted) VWrite output;
+   using(DataBroadCasted) VWrite output;
    F_Add adder;
 #
    inputs[0..1] -> adder:0..1;
