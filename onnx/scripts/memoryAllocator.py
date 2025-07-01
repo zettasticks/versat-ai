@@ -1,4 +1,4 @@
-from scripts.versatDefs import *
+from versatDefs import *
 
 import pulp  # TODO: Not sure how stable this is. Helpful for now, later we will see
 import itertools

@@ -4,10 +4,10 @@ import glob
 
 # Missing split_complex_to_pairs
 
-from scripts.versatDefs import *
-from scripts.memoryAllocator import CalculateMemoryAllocations
-from scripts.onnxAddOutputsToIntermediate import AddOutputsToEachNode
-from scripts.onnxOperators import *
+from versatDefs import *
+from memoryAllocator import CalculateMemoryAllocations
+from onnxAddOutputsToIntermediate import AddOutputsToEachNode
+from onnxOperators import *
 from copy import copy
 
 from onnx import shape_inference
@@ -70,7 +70,7 @@ def CalculateOffsetFromSize(sizes: list[int]):
     result = [offset]
     for size in sizes[:-1]:
         offset += size
-        res.append(offset)
+        result.append(offset)
 
     totalSize = offset + sizes[-1]
     return result, totalSize
@@ -291,7 +291,9 @@ class CDataEmitter:
         return content
 
 
-def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str):
+def GenerateDebug(
+    testLocation: str, modelName: str, binOutputLocation: str, sourceOutputLocation: str
+):
     print(
         f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}"
     )
@@ -300,6 +302,7 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
     amountOfTests = len(glob.glob(os.path.join(testLocation, "test_data_set_*")))
     print("Tests found", amountOfTests)
     testDataDir = os.path.join(testLocation, "test_data_set_0")
+    testModelLocation = os.path.join(testLocation, modelName)
 
     model = onnx.load(testModelLocation)
     model = AddOutputsToEachNode(model)
@@ -343,6 +346,8 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
     for ref_o, o in zip(ref_outputs, properOutputs):
         np.testing.assert_almost_equal(ref_o, o, decimal=9)
 
+    print("Test outputs match with the expected values")
+
     cModel = GenerateModelFromOnnxModel(model)
 
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
@@ -358,13 +363,6 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
 
     packedInputs = PackMultipleArrays(inputs)
     packedCorrectData = PackMultipleArrays(correctData)
-
-    with open(os.path.join(outputLocation, "inputs.bin"), "wb") as f:
-        f.write(packedInputs.data)
-
-    with open(os.path.join(outputLocation, "correctOutputs.bin"), "wb") as f:
-        f.write(packedCorrectData.data)
-
     packedInitializers = PackMultipleArrays(cModel.initializers)
 
     # Calculate initializer position
@@ -382,7 +380,7 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
                 source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
                 source.correctInputIndex = outputNameToNodeIndex[source.name]
 
-    with open(os.path.join(outputLocation, "code.c"), "w") as f:
+    with open(os.path.join(sourceOutputLocation, "code.c"), "w") as f:
         f.write('#include "versat_ai.h"\n')
         f.write('#include "stdint.h"\n')
 
@@ -473,6 +471,7 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
 
             f.write(
                 f"  void* res_{index} = "
+                + "Software_"
                 + c.opName
                 + "("
                 + ",".join(content)
@@ -485,7 +484,7 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
         f.write("  return (InferenceOutput){};\n")
         f.write("}\n")
 
-    with open(os.path.join(outputLocation, "modelInfo.h"), "w") as f:
+    with open(os.path.join(sourceOutputLocation, "modelInfo.h"), "w") as f:
         f.write("#pragma once\n")
         f.write(f"#define VERSAT_AI_OUTPUT_SIZE {cModel.outputMemoryNeeded}\n")
         f.write(f"#define VERSAT_AI_TEMP_SIZE {cModel.tempMemoryNeeded}\n")
@@ -506,11 +505,17 @@ def GenerateDebug(testModelLocation: str, testLocation: str, outputLocation: str
         f.write("};\n")
 
     try:
-        os.makedirs(outputLocation)
+        os.makedirs(binOutputLocation)
     except:
         pass
 
-    with open(os.path.join(outputLocation, "model.bin"), "wb") as f:
+    with open(os.path.join(binOutputLocation, "inputs.bin"), "wb") as f:
+        f.write(packedInputs.data)
+
+    with open(os.path.join(binOutputLocation, "correctOutputs.bin"), "wb") as f:
+        f.write(packedCorrectData.data)
+
+    with open(os.path.join(binOutputLocation, "model.bin"), "wb") as f:
         f.write(packedInitializers.data)
 
 

@@ -2,7 +2,7 @@ from typing import Callable
 from dataclasses import dataclass, field
 from copy import copy
 
-from scripts.versatDefs import (
+from versatDefs import (
     Operation,
     InstantiatedAttribute,
     OnnxAttribute,

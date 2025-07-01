@@ -66,7 +66,6 @@ def AddOutputsToEachNode(model):
     for name in modelProperOutputs:
         nodesToAdd.append(name)
 
-    # print(f"Adding {len(nodesToAdd)} output nodes to the graph")
     newModel = select_model_inputs_outputs(model, outputs=nodesToAdd)
 
     for index, name in enumerate(nodesToAdd):

@@ -96,7 +96,7 @@ report = ExtractModelOperatorsTestableInfo(
 
 ReportOperatorsTestedByModel(report)
 
-GenerateDebug(sys.argv[1], sys.argv[3], sys.argv[2])
+# GenerateDebug(sys.argv[1], sys.argv[3], sys.argv[2])
 
 
 # TODO: Some models contain variable sized inputs (and maybe outputs).

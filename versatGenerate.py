@@ -6,20 +6,20 @@ import codecs
 import pprint
 
 
-def RunVersat(
-    pc_emul, versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debug_path
-):
-
+def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debug_path):
     versat_args = [
         "versat",
         os.path.realpath(versat_spec),
         "-s",
         f"-b{axi_data_w}",
         "-d",  # DMA
+        "-E",  # Extra stuff that is mostly hardcoded for this project
         "-p",
         "iob_csrs_",
         "-t",
         versat_top,
+        "-u",
+        os.path.realpath("./hardware/units"),
         "-o",
         os.path.realpath(build_dir + "/hardware/src"),  # Output hardware files
         "-O",
@@ -31,9 +31,6 @@ def RunVersat(
 
     if versat_extra:
         versat_args = versat_args + ["-u", versat_extra]
-
-    if pc_emul:
-        versat_args = versat_args + ["-x64"]
 
     print(*versat_args, "\n", file=sys.stderr)
     result = None
@@ -62,9 +59,7 @@ def RunVersat(
     return lines
 
 
-output = RunVersat(
-    True, "versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None
-)
+output = RunVersat("versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None)
 
 shutil.move(
     "submodules/iob_versat/software/versat_emul.c",

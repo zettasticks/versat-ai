@@ -3,13 +3,8 @@
 #include "stdbool.h"
 #include "stdint.h"
 
-// TODO: Eventually remove this, cannot depend on OS specific code
-//#include "stdio.h"
-//#include <stdlib.h>
-
 #include "iob_printf.h"
 
-//#define printf(...) ((void)0)
 #define exit(...) ((void)0)
 
 #define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
@@ -102,8 +97,8 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
   return gen;
 }
 
-void *Conv(void *inputX, void *inputW, void *output, int index,
-           ConvInfo *info) {
+void *Software_Conv(void *inputX, void *inputW, void *output, int index,
+                    ConvInfo *info) {
   int batchSize = info->inputDims[0];
   int inChannels = info->inputDims[1];
   int inH = info->inputDims[2];
@@ -175,8 +170,8 @@ void *Conv(void *inputX, void *inputW, void *output, int index,
   return output;
 }
 
-void *Reshape(void *data, void *shape, void *output, int index,
-              ReshapeInfo *info) {
+void *Software_Reshape(void *data, void *shape, void *output, int index,
+                       ReshapeInfo *info) {
   int64_t *shapeDims = (int64_t *)shape;
 
   AddressGen in =
@@ -204,7 +199,8 @@ void *Reshape(void *data, void *shape, void *output, int index,
   return output;
 }
 
-void *Add(void *inputA, void *inputB, void *output, int index, AddInfo *info) {
+void *Software_Add(void *inputA, void *inputB, void *output, int index,
+                   AddInfo *info) {
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;
   float *out = (float *)output;
@@ -221,6 +217,8 @@ void *Add(void *inputA, void *inputB, void *output, int index, AddInfo *info) {
     int indexB = GetAddress(&inB);
     int indexO = GetAddress(&outGen);
 
+    // printf("%d %d %d\n",indexA,indexB,indexO);
+
     Advance(&inA);
     Advance(&inB);
     Advance(&outGen);
@@ -229,12 +227,13 @@ void *Add(void *inputA, void *inputB, void *output, int index, AddInfo *info) {
     float valB = viewB[indexB];
 
     out[indexO] = valA + valB;
+    // printf("%f   %f   %f\n",viewA[indexA],viewB[indexB],out[indexO]);
   }
 
   return output;
 }
 
-void *Relu(void *inputX, void *output, int index, ReluInfo *info) {
+void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
@@ -251,7 +250,8 @@ void *Relu(void *inputX, void *output, int index, ReluInfo *info) {
   return output;
 }
 
-void *MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
+void *Software_MaxPool(void *inputX, void *output, int index,
+                       MaxPoolInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
@@ -345,8 +345,8 @@ void *MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
-void *MatMul(void *inputA, void *inputB, void *output, int index,
-             MatMulInfo *info) {
+void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
+                      MatMulInfo *info) {
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;
   float *viewOut = (float *)output;

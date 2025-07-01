@@ -1,5 +1,21 @@
-module Test(){
-   DebugReadMem debug;   
-#
+AddressGen Read ReadDataBroadCasted(yWidth,xWidth)
+   for y 0..yWidth
+   for x 0..xWidth
+   addr = y * xWidth + x;
 
+AddressGen Read WriteDataBroadCasted(yWidth,xWidth)
+   for y 0..yWidth
+   for x 0..xWidth
+   addr = y * xWidth + x;
+
+module Test(){
+   using(ReadDataBroadCasted) share(config) VRead(ext_addr,length){
+      inputs[2];
+   }
+
+   using(WriteDataBroadCasted) VWrite output;
+   F_Add adder;
+#
+   inputs[0..1] -> adder:0..1;
+   adder -> output;
 }

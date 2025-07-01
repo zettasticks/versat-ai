@@ -44,6 +44,11 @@ VERSAT_AI_LFLAGS=-Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS),--strip-debug
 VERSAT_AI_FW_SRC=src/versat_ai_firmware.S
 VERSAT_AI_FW_SRC+=src/versat_ai_firmware.c
 VERSAT_AI_FW_SRC+=src/iob_printf.c
+
+VERSAT_AI_FW_SRC+=src/code.c
+VERSAT_AI_FW_SRC+=src/staticSource.c
+VERSAT_AI_FW_SRC+=src/versatSource.c
+
 # PERIPHERAL SOURCES
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 # Only add driver files if they exist
@@ -95,6 +100,7 @@ EMUL_SRC+=src/iob_printf.c
 EMUL_SRC+=src/versat_emul.c
 EMUL_SRC+=src/code.c
 EMUL_SRC+=src/staticSource.c
+EMUL_SRC+=src/versatSource.c
 
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))

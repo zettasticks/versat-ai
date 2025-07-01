@@ -87,15 +87,23 @@ typedef struct {
 extern LayerInfo layers[];
 extern int numberLayers;
 
-// Operations
-void *Conv(void *inputX, void *inputW, void *output, int index, ConvInfo *info);
-void *Reshape(void *data, void *shape, void *output, int index,
-              ReshapeInfo *info);
-void *Add(void *inputA, void *inputB, void *output, int index, AddInfo *info);
-void *Relu(void *inputX, void *output, int index, ReluInfo *info);
-void *MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
-void *MatMul(void *inputA, void *inputB, void *output, int index,
-             MatMulInfo *info);
+// Software implementations
+void *Software_Conv(void *inputX, void *inputW, void *output, int index,
+                    ConvInfo *info);
+void *Software_Reshape(void *data, void *shape, void *output, int index,
+                       ReshapeInfo *info);
+void *Software_Add(void *inputA, void *inputB, void *output, int index,
+                   AddInfo *info);
+void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info);
+void *Software_MaxPool(void *inputX, void *output, int index,
+                       MaxPoolInfo *info);
+void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
+                      MatMulInfo *info);
+
+// Accelerator implementations
+void *Versat_Add(void *inputA, void *inputB, void *output, int index,
+                 AddInfo *info);
+
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 
 // Output and Temporary memory must be allocated by the user. Call the

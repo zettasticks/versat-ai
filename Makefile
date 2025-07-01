@@ -11,9 +11,9 @@ BOARD ?= iob_cyclonev_gt_dk
 
 BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
 
-USE_INTMEM ?= 0
+USE_INTMEM ?= 1
 USE_EXTMEM ?= 1
-INIT_MEM ?= 0
+INIT_MEM ?= 1
 
 VERSION ?=$(shell cat versat_ai.py | grep version | cut -d '"' -f 4)
 
@@ -28,12 +28,24 @@ setup:
 versat-generate:
 	nix-shell --run "python3 versatGenerate.py"
 
-# Need to be inside nix-shell for this to work properly
-fast-pc-run:
+# Need to run this inside the python3 virtual environment
+test-generate:
+	python3 generateTest.py onnx/tests/SimpleAdd model.onnx software/ software/src
+
+# Need to be inside nix-shell for fast- rules to work
+fast-versat:
+	python3 versatGenerate.py
+
+fast-pc-soft: fast-versat
+	cp -r software ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
+	make -C ../versat_ai_V0.8/ pc-emul-run
+
+fast-pc-hard: fast-versat
 	cp -r software ../versat_ai_V0.8/
 	cp -r hardware ../versat_ai_V0.8/
-	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
 	make -C ../versat_ai_V0.8/ pc-emul-run
 
 fast-sim-run:

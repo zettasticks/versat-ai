@@ -50,8 +50,7 @@ int main() {
 
   uart_puts("\n\n\nGonna init versat!\n\n\n");
   versat_init(VERSAT0_BASE);
-
-  printf("here\n");
+  printf("Versat base: %x\n",VERSAT0_BASE);
 
   void *output = malloc(VERSAT_AI_OUTPUT_SIZE);
   void *temp = malloc(VERSAT_AI_TEMP_SIZE);
@@ -75,7 +74,6 @@ int main() {
 
   DebugRunInference(output, temp, inputs, model, correct);
 
-  // Mainly for address sanitizer to not complain
   free(output);
   free(temp);
   free(model);
