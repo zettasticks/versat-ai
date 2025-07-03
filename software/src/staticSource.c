@@ -384,12 +384,18 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
 
   size_t outputSize = layers[index].outputSize / sizeof(float);
 
+  if (outputSize == 0) {
+    printf("Error, AssertAlmostEqual with output size of 0. Should not be "
+           "possible\n");
+    return 0;
+  }
+
   int maxIncorrect = 10;
   bool printOk = true;
 
   int incorrectFound = 0;
   for (int i = 0; i < outputSize; i++) {
-    if (absf(correct[i] - test[i]) > 0.001f) {
+    if (absf(correct[i] - test[i]) > 0.000001f) {
       if (incorrectFound == 0) {
         printf("\n");
         printf("[%s] (Layer %d) FAIL:\n", layers[index].typeName, index);

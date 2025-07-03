@@ -94,6 +94,7 @@ class OnnxOperatorSpec:
     attributesForOperatorFunction: Callable[
         Operation, dict[str, InstantiatedAttribute]
     ] = None
+    generateVersatCode: bool = False
 
 
 @dataclass

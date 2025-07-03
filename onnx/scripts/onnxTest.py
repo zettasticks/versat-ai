@@ -469,9 +469,13 @@ def GenerateDebug(
             opIndex = opSeen.get(c.opName, -1) + 1
             opSeen[c.opName] = opIndex
 
+            # TODO: Just move spec to inside the operator and have the parse function initialize it.
+            spec = GetOperatorSpec(c.opName)
+            decider = "Software_" if not spec.generateVersatCode else "Versat_"
+
             f.write(
                 f"  void* res_{index} = "
-                + "Software_"
+                + decider
                 + c.opName
                 + "("
                 + ",".join(content)

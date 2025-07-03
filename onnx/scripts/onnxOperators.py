@@ -216,9 +216,14 @@ def MaxPoolAttributesForOperation(op: Operation) -> dict[str, InstantiatedAttrib
     return res
 
 
+def GetOperatorSpec(opName):
+    global operatorNameToSpec
+    return operatorNameToSpec[opName]
+
+
 # Register new operators here
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False)
+operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], [], True)
 operatorNameToSpec["Conv"] = OnnxOperatorSpec(
     "Conv", EmitConv, False, False, convAttributes, ConvAttributesForOperation
 )

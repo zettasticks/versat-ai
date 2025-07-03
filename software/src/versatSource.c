@@ -34,19 +34,29 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   int64_t *o = info->broadCastedShape;
   int d = info->maxDims;
 
-  //- LEFT HERE - Somewhere along the interconnection, the rdata that goes from
-  //the memory to Versat becomes different. Probably something to do with the
-  //inteconnect.
-
-  DataBroadCasted_VRead(&accelConfig->inputs_0, inputA, GetDim(l, d, 0),
+  AddressVArguments args0 = CompileVUnit_DataBroadCasted(inputA, 4, GetDim(l, d, 0),
                         GetDim(l, d, 1), GetDim(l, d, 2), GetDim(l, d, 3),
-                        GetDim(l, d, 4), GetDim(l, d, 5));
-  DataBroadCasted_VRead_2(&accelConfig->inputs_1, inputB, GetDim(r, d, 0),
+                        GetDim(l, d, 4));
+
+  AddressVArguments args1 = CompileVUnit_DataBroadCasted(inputB, 4, GetDim(r, d, 0),
                           GetDim(r, d, 1), GetDim(r, d, 2), GetDim(r, d, 3),
-                          GetDim(r, d, 4), GetDim(r, d, 5));
-  DataBroadCasted_VWrite(&accelConfig->output, output, GetDim(o, d, 0),
+                          GetDim(r, d, 4));
+
+  int loopSize0 = CalculateLoopSize(args0);
+  int loopSize1 = CalculateLoopSize(args1);
+
+#if 0
+  DataBroadCasted_VRead(&accelConfig->inputs_0, inputA, 4, GetDim(l, d, 0),
+                        GetDim(l, d, 1), GetDim(l, d, 2), GetDim(l, d, 3),
+                        GetDim(l, d, 4));
+  DataBroadCasted_VRead(&accelConfig->inputs_1, inputB, 4, GetDim(r, d, 0),
+                          GetDim(r, d, 1), GetDim(r, d, 2), GetDim(r, d, 3),
+                          GetDim(r, d, 4));
+#endif
+
+  DataBroadCasted_VWrite(&accelConfig->output, output, 1, GetDim(o, d, 0),
                          GetDim(o, d, 1), GetDim(o, d, 2), GetDim(o, d, 3),
-                         GetDim(o, d, 4), GetDim(o, d, 5));
+                         GetDim(o, d, 4));
 
   RunAccelerator(3);
 
