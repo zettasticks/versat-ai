@@ -34,7 +34,9 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   int64_t *o = info->broadCastedShape;
   int d = info->maxDims;
 
-  //- LEFT HERE - Somewhere along the interconnection, the rdata that goes from the memory to Versat becomes different. Probably something to do with the inteconnect.
+  //- LEFT HERE - Somewhere along the interconnection, the rdata that goes from
+  //the memory to Versat becomes different. Probably something to do with the
+  //inteconnect.
 
   DataBroadCasted_VRead(&accelConfig->inputs_0, inputA, GetDim(l, d, 0),
                         GetDim(l, d, 1), GetDim(l, d, 2), GetDim(l, d, 3),
@@ -46,13 +48,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                          GetDim(o, d, 1), GetDim(o, d, 2), GetDim(o, d, 3),
                          GetDim(o, d, 4), GetDim(o, d, 5));
 
-  clear_cache();
-
-  viewA[0] = 0.1234f;
-
   RunAccelerator(3);
-
-  clear_cache();
 
   return output;
 }
