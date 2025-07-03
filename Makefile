@@ -11,7 +11,7 @@ BOARD ?= iob_cyclonev_gt_dk
 
 BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
 
-USE_INTMEM ?= 1
+USE_INTMEM ?= 0
 USE_EXTMEM ?= 1
 INIT_MEM ?= 1
 

@@ -14,7 +14,7 @@ from iob_system_utils import convert_params_dict, update_params, iob_system_scri
 def setup(py_params_dict):
     params = {
         "name": ("iob_system", "Name of the generated System"),
-        "init_mem": (False, "If should initialize memories from data in .hex files"),
+        "init_mem": (True, "If should initialize memories from data in .hex files"),
         "use_intmem": (False, "If should include an internal memory"),
         "use_extmem": (True, "If should use external memory (usually DDR)"),
         "use_bootrom": (True, "If should include a bootrom"),

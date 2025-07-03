@@ -49,7 +49,7 @@ INCLUDES ?=-I. -Isrc
 #########################################
 
 # compiler flags
-EMUL_CFLAGS ?=-std=gnu99 -g
+EMUL_CFLAGS ?=-std=gnu99 -g -DPC
 
 CONSOLE_CMD ?=rm -f soc2cnsl cnsl2soc; ../scripts/console.py -L
 

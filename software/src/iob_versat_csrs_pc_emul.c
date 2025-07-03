@@ -14,6 +14,6 @@ static uint32_t base;
 void iob_versat_csrs_init_baseaddr(uint32_t addr) { base = addr; }
 
 // Core Setters and Getters
-uint32_t iob_versat_csrs_get_interface() { return 0; }
+uint32_t iob_versat_csrs_get_interface(int addr) { return 0; }
 
 uint16_t iob_versat_csrs_get_version() { return 0; }

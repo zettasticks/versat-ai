@@ -130,9 +130,9 @@ with open("submodules/iob_versat/iob_versat.py", "w") as f:
                     {
                         "name": "interface",
                         "type": "R",
-                        "n_bits": 20,
+                        "n_bits": 32,
                         "rst_val": 0,
-                        "log2n_items": 2,
+                        "log2n_items": 10,
                         "descr": "Versat interface",
                     }
                 ],

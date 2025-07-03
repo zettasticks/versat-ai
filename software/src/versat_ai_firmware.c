@@ -27,6 +27,7 @@ char *send_string = "Sending this string as a file to console.\n"
 void clear_cache() {
 #ifndef PC
   // Delay to ensure all data is written to memory
+  printf("Gonna clear the cache\n");
   for (unsigned int i = 0; i < 10; i++)
     asm volatile("nop");
   // Flush VexRiscv CPU internal cache
@@ -50,7 +51,7 @@ int main() {
 
   uart_puts("\n\n\nGonna init versat!\n\n\n");
   versat_init(VERSAT0_BASE);
-  printf("Versat base: %x\n",VERSAT0_BASE);
+  printf("Versat base: %x\n", VERSAT0_BASE);
 
   void *output = malloc(VERSAT_AI_OUTPUT_SIZE);
   void *temp = malloc(VERSAT_AI_TEMP_SIZE);

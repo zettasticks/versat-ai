@@ -37,7 +37,7 @@ let
               GIT_CONFIG_VALUE_0 = "git@github.com:";
             });
         # Add any necessary dependencies here.
-        #propagatedBuildInputs = [ pkgs.python38Packages.someDependency ];
+        # propagatedBuildInputs = [ pkgs.python38Packages.someDependency ];
       }
     else
       null;

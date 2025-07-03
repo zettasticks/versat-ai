@@ -8,3 +8,4 @@ submodules/iob_versat
 software/*.bin
 software/src/code.c
 software/src/modelInfo.h
+*.bin

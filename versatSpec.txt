@@ -1,5 +1,4 @@
 
-/*
 AddressGen Read DataBroadCasted(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth)
    for c 0..cWidth
    for b 0..bWidth
@@ -8,20 +7,6 @@ AddressGen Read DataBroadCasted(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth)
    for y 0..yWidth
    for x 0..xWidth
    addr = ((((c * bWidth + b) * aWidth + a) * zWidth + z) * yWidth + y) * xWidth + x;
-*/
-
-/*
-AddressGen Read DataBroadCasted(xWidth,yWidth,zWidth)
-   for z 0..zWidth
-   for y 0..yWidth
-   for x 0..xWidth
-   addr = (z * yWidth + y) * xWidth + x;
-*/
-
-AddressGen Read DataBroadCasted(xWidth,yWidth)
-   for y 0..yWidth
-   for x 0..xWidth
-   addr = y * xWidth + x;
 
 module Test(){
    using(DataBroadCasted) share(config) VRead(ext_addr,length){
