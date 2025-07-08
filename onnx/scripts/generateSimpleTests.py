@@ -70,16 +70,53 @@ def CreateTest(leftShape, rightShape):
 
     tests.append(test)
 
-#CreateTest([2, 3, 4, 5], [1])
+if True:
+    CreateTest([2, 3, 4, 5], [1])
+    CreateTest([2, 3, 4, 5], [5])
+    CreateTest([4, 5], [2, 3, 4, 5])
+    CreateTest([1, 4, 5], [2, 3, 1, 1])
+    CreateTest([3, 4, 5], [2, 1, 1, 1])
 
-#CreateTest([4], [1])
-#CreateTest([4, 2], [1])
+if True:
+    CreateTest([4], [1])
+    CreateTest([4], [4])
 
+    CreateTest([4, 2], [1,1])
+    CreateTest([4,2], [4,1])
+    CreateTest([4,2], [1,2]) 
+    CreateTest([4,2], [4,2]) 
 
-CreateTest([4, 2], [4,1])
-CreateTest([4, 2], [1,2])
+if True:
+    CreateTest([6, 4, 2], [6, 4, 2])
+    CreateTest([6, 4, 2], [1, 1, 1])
+    CreateTest([6, 4, 2], [6, 1, 1])
+    CreateTest([6, 4, 2], [1, 4, 1])
+    CreateTest([6, 4, 2], [1, 1, 2])
 
-if False:
+if True:
+    CreateTest([8, 6, 4, 2], [8, 6, 4, 2])
+    CreateTest([8, 6, 4, 2], [8, 6, 4, 1])
+    CreateTest([8, 6, 4, 2], [8, 6, 1, 2])
+    CreateTest([8, 6, 4, 2], [8, 1, 4, 2])
+    CreateTest([8, 6, 4, 2], [1, 6, 4, 2])
+    CreateTest([8, 6, 4, 2], [8, 6, 1, 1])
+    CreateTest([8, 6, 4, 2], [8, 1, 4, 1])
+    CreateTest([8, 6, 4, 2], [1, 6, 4, 1])
+    CreateTest([8, 6, 4, 2], [8, 1, 1, 2])
+    CreateTest([8, 6, 4, 2], [1, 6, 1, 2])
+    CreateTest([8, 6, 4, 2], [1, 1, 4, 2])
+    CreateTest([8, 6, 4, 2], [8, 1, 1, 1])
+    CreateTest([8, 6, 4, 2], [1, 6, 1, 1])
+    CreateTest([8, 6, 4, 2], [1, 1, 4, 1])
+    CreateTest([8, 6, 4, 2], [1, 1, 1, 2])
+    CreateTest([8, 6, 4, 2], [1, 1, 1, 1])
+
+if True:
+    CreateTest([6, 4, 2], [1,1,1])
+    CreateTest([6, 4, 2], [6,1,1])
+    CreateTest([6, 4, 2], [1,4,1])
+    CreateTest([6, 4, 2], [1,1,2])
+
     # Simplest tests, no broadcast or abusing dimensions
     CreateTest([1], [1])
     CreateTest([4], [4])
@@ -95,7 +132,7 @@ if False:
     CreateTest([3, 4, 5], [2, 1, 1, 1])
 
     # Really Big Operator
-    CreateTest([2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+    #CreateTest([2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
 
 allInputNodesAndValuesInOrder = []
 for x in tests:

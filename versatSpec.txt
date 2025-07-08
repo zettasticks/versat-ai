@@ -1,16 +1,25 @@
 
-AddressGen Read DataBroadCasted(extraLoops,xWidth,yWidth,zWidth,aWidth,bWidth)
-   for e 0..extraLoops
+addressGen Read DataSimple(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth)
+   for c 0..cWidth
    for b 0..bWidth
    for a 0..aWidth
    for z 0..zWidth
    for y 0..yWidth
    for x 0..xWidth
-   addr = (((b * aWidth + a) * zWidth + z) * yWidth + y) * xWidth + x;
+   addr = ((((c * bWidth + b) * aWidth + a) * zWidth + z) * yWidth + y) * xWidth + x;
+
+addressGen Read DataBroadCasted(cEnable,cLoop,bEnable,bLoop,cWidth,aEnable,aLoop,bWidth,zEnable,zLoop,aWidth,yEnable,yLoop,zWidth,xEnable,xLoop,yWidth)
+   for c 0..cLoop
+   for b 0..bLoop
+   for a 0..aLoop
+   for z 0..zLoop
+   for y 0..yLoop
+   for x 0..xLoop
+   addr = ((((c * cEnable * cWidth + b * bEnable) * bWidth + a * aEnable) * aWidth + z * zEnable) * zWidth + y * yEnable) * yWidth + x * xEnable;
 
 module Test(){
    using(DataBroadCasted) VRead inputs[2];
-   using(DataBroadCasted) VWrite output;
+   using(DataSimple) VWrite output;
    F_Add adder;
 #
    inputs[0..1] -> adder:0..1;

@@ -51,6 +51,9 @@ int main() {
 
   uart_puts("\n\n\nGonna init versat!\n\n\n");
   versat_init(VERSAT0_BASE);
+
+  SetVersatDebugPrintfFunction(printf);
+
   printf("Versat base: %x\n", VERSAT0_BASE);
 
   void *output = malloc(VERSAT_AI_OUTPUT_SIZE);
