@@ -30,8 +30,9 @@ versat-generate:
 
 # Need to run this inside the python3 virtual environment
 test-generate:
-	python3 ./onnx/scripts/generateSimpleTests.py ./onnx/tests/test
+	python3 ./onnx/scripts/generateSimpleTests.py ./onnx/tests/test 
 	python3 generateTest.py onnx/tests/test model.onnx software/ software/src
+	#bash -c "source ../python/bin/activate ; python3 ./onnx/scripts/generateSimpleTests.py ./onnx/tests/test ; python3 generateTest.py onnx/tests/test model.onnx software/ software/src"
 
 # Need to be inside nix-shell for fast- rules to work
 fast-versat:

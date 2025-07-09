@@ -104,7 +104,12 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info);
 
+void *Versat_Relu(void *inputA, void *output, int index,
+                 ReluInfo *info);
+
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
+
+int64_t CalculateSizeOfDim(int64_t* dim,int dims);
 
 // Output and Temporary memory must be allocated by the user. Call the
 // GetXXXMemorySize functions to obtain the amount of memory required. Model

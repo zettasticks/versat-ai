@@ -131,7 +131,6 @@ def EmitReshape(emitter, op: Operation):
 
     return [aux_0, dimIn, dimOut]
 
-
 def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
@@ -227,7 +226,7 @@ operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], []
 operatorNameToSpec["Conv"] = OnnxOperatorSpec(
     "Conv", EmitConv, False, False, convAttributes, ConvAttributesForOperation
 )
-operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False)
+operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False,[],[],True)
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
     "MaxPool",
     EmitMaxPool,

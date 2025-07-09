@@ -19,23 +19,30 @@ import onnxruntime as ort
 import os
 import shutil
 
-
 @dataclass
 class Test:
-    leftShape: list[int] = None
-    rightShape: list[int] = None
-    leftTensor: any = None
-    rightTensor: any = None
+    shapes: list[list[int]] = None
+    tensors: list[any] = None
     outputTensor: any = None
     node: any = None
-    leftRandomArray: any = None
-    rightRandomArray: any = None
-
+    randomArrays: list[any] = None
+    initializerArrays: list[any] = None
 
 tests: list[Test] = []
 
+def GetInputTrueName(testIndex,inputIndex):
+    VARS = ["X","Y","Z"]
+    assert(inputIndex < len(VARS))
 
-def CreateTest(leftShape, rightShape):
+    return f"{VARS[inputIndex]}{testIndex}"
+
+def GetOutputTrueName(testIndex):
+    return f"OUT{testIndex}"
+
+def GetInitializerTrueName(testIndex):
+    return f"A{testIndex}"
+
+def CreateBinaryOpTest(op,leftShape, rightShape):
     global tests
 
     maxDims = max(len(leftShape), len(rightShape))
@@ -48,143 +55,156 @@ def CreateTest(leftShape, rightShape):
     testIndex = len(tests)
 
     test = Test()
-    test.leftShape = leftShape
-    test.rightShape = rightShape
+    test.shapes = [leftShape,rightShape]
 
-    test.leftTensor = make_tensor_value_info(
-        f"X{testIndex}", TensorProto.FLOAT, leftShape
+    leftTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex,0), TensorProto.FLOAT, leftShape
     )
-    test.rightTensor = make_tensor_value_info(
-        f"Y{testIndex}", TensorProto.FLOAT, rightShape
+    rightTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex,1), TensorProto.FLOAT, rightShape
     )
 
-    OUT = make_tensor_value_info(f"OUT{testIndex}", TensorProto.FLOAT, broadCastedShape)
-    test.outputTensor = OUT
-
+    test.tensors = [leftTensor,rightTensor]
+    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, broadCastedShape)
     test.node = make_node(
-        f"Add", [f"X{testIndex}", f"Y{testIndex}"], [f"OUT{testIndex}"]
+        op, [GetInputTrueName(testIndex,0),GetInputTrueName(testIndex,1)], [GetOutputTrueName(testIndex)]
     )
 
-    test.leftRandomArray = np.random.randn(*leftShape).astype(np.float32)
-    test.rightRandomArray = np.random.randn(*rightShape).astype(np.float32)
+    leftRandomArray = np.random.randn(*leftShape).astype(np.float32)
+    rightRandomArray = np.random.randn(*rightShape).astype(np.float32)
+    test.randomArrays = [leftRandomArray,rightRandomArray]
+
+    tests.append(test)
+
+def CreateUnaryOpTest(op,shape):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+    test.shapes = [shape]
+
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex,0), TensorProto.FLOAT, shape
+    )
+ 
+    test.tensors = [tensor]
+    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, shape)
+    test.node = make_node(
+        op, [GetInputTrueName(testIndex,0)], [GetOutputTrueName(testIndex)]
+    )
+
+    randomArray = np.random.randn(*shape).astype(np.float32)
+    test.randomArrays = [randomArray]
+
+    tests.append(test)
+
+def CreateReshapeTest(shapeIn,shapeOut):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+
+    val = np.array(shapeOut,dtype=np.int64)
+    A = numpy_helper.from_array(val,name=GetInitializerTrueName(testIndex))
+
+    test.shapes = [shapeIn]
+
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex,0), TensorProto.FLOAT, shapeIn
+    )
+ 
+    test.tensors = [tensor]
+    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, shapeOut)
+    test.node = make_node(
+        "Reshape", [GetInputTrueName(testIndex,0),GetInitializerTrueName(testIndex)], [GetOutputTrueName(testIndex)]
+    )
+
+    randomArray = np.random.randn(*shapeIn).astype(np.float32)
+    test.randomArrays = [randomArray]
+    test.initializerArrays = [A]
 
     tests.append(test)
 
 if True:
-    CreateTest([2, 3, 4, 5], [1])
-    CreateTest([2, 3, 4, 5], [5])
-    CreateTest([4, 5], [2, 3, 4, 5])
-    CreateTest([1, 4, 5], [2, 3, 1, 1])
-    CreateTest([3, 4, 5], [2, 1, 1, 1])
-
-if True:
-    CreateTest([4], [1])
-    CreateTest([4], [4])
-
-    CreateTest([4, 2], [1,1])
-    CreateTest([4,2], [4,1])
-    CreateTest([4,2], [1,2]) 
-    CreateTest([4,2], [4,2]) 
-
-if True:
-    CreateTest([6, 4, 2], [6, 4, 2])
-    CreateTest([6, 4, 2], [1, 1, 1])
-    CreateTest([6, 4, 2], [6, 1, 1])
-    CreateTest([6, 4, 2], [1, 4, 1])
-    CreateTest([6, 4, 2], [1, 1, 2])
-
-if True:
-    CreateTest([8, 6, 4, 2], [8, 6, 4, 2])
-    CreateTest([8, 6, 4, 2], [8, 6, 4, 1])
-    CreateTest([8, 6, 4, 2], [8, 6, 1, 2])
-    CreateTest([8, 6, 4, 2], [8, 1, 4, 2])
-    CreateTest([8, 6, 4, 2], [1, 6, 4, 2])
-    CreateTest([8, 6, 4, 2], [8, 6, 1, 1])
-    CreateTest([8, 6, 4, 2], [8, 1, 4, 1])
-    CreateTest([8, 6, 4, 2], [1, 6, 4, 1])
-    CreateTest([8, 6, 4, 2], [8, 1, 1, 2])
-    CreateTest([8, 6, 4, 2], [1, 6, 1, 2])
-    CreateTest([8, 6, 4, 2], [1, 1, 4, 2])
-    CreateTest([8, 6, 4, 2], [8, 1, 1, 1])
-    CreateTest([8, 6, 4, 2], [1, 6, 1, 1])
-    CreateTest([8, 6, 4, 2], [1, 1, 4, 1])
-    CreateTest([8, 6, 4, 2], [1, 1, 1, 2])
-    CreateTest([8, 6, 4, 2], [1, 1, 1, 1])
-
-if True:
-    CreateTest([6, 4, 2], [1,1,1])
-    CreateTest([6, 4, 2], [6,1,1])
-    CreateTest([6, 4, 2], [1,4,1])
-    CreateTest([6, 4, 2], [1,1,2])
-
     # Simplest tests, no broadcast or abusing dimensions
-    CreateTest([1], [1])
-    CreateTest([4], [4])
-    CreateTest([4, 2], [4, 2])
-    CreateTest([2, 4, 6], [2, 4, 6])
-    CreateTest([2, 4, 6, 8], [2, 4, 6, 8])
+    CreateBinaryOpTest("Add",[1], [1])
+    CreateBinaryOpTest("Add",[4], [4])
+    CreateBinaryOpTest("Add",[2, 4], [2, 4])
+    CreateBinaryOpTest("Add",[2, 4, 6], [2, 4, 6])
+    CreateBinaryOpTest("Add",[2, 4, 6, 8], [2, 4, 6, 8])
 
     # Broadcasting
-    CreateTest([2, 3, 4, 5], [1])
-    CreateTest([2, 3, 4, 5], [5])
-    CreateTest([4, 5], [2, 3, 4, 5])
-    CreateTest([1, 4, 5], [2, 3, 1, 1])
-    CreateTest([3, 4, 5], [2, 1, 1, 1])
+    CreateBinaryOpTest("Add",[2, 3, 4, 5], [1])
+    CreateBinaryOpTest("Add",[2, 3, 4, 5], [5])
+    CreateBinaryOpTest("Add",[4, 5], [2, 3, 4, 5])
+    CreateBinaryOpTest("Add",[1, 4, 5], [2, 3, 1, 1])
+    CreateBinaryOpTest("Add",[3, 4, 5], [2, 1, 1, 1])
 
-    # Really Big Operator
-    #CreateTest([2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+    CreateUnaryOpTest("Relu",[1])
+    CreateUnaryOpTest("Relu",[4])
+    CreateUnaryOpTest("Relu",[2,4])
+    CreateUnaryOpTest("Relu",[2,4,6])
+    CreateUnaryOpTest("Relu",[2,4,6,8])
 
-allInputNodesAndValuesInOrder = []
-for x in tests:
-    allInputNodesAndValuesInOrder.append([x.leftTensor, x.leftRandomArray])
-    allInputNodesAndValuesInOrder.append([x.rightTensor, x.rightRandomArray])
+    CreateReshapeTest([4,2],[8])
 
-allNodes = [x.node for x in tests]
-allInputNodes = [x[0] for x in allInputNodesAndValuesInOrder]
-allOutputNodes = [x.outputTensor for x in tests]
+if True:
+    allInputNodesAndValuesInOrder = []
+    for x in tests:
+        for tensor,randomArray in zip(x.tensors,x.randomArrays):
+            allInputNodesAndValuesInOrder.append([tensor, randomArray])
 
-graph = make_graph(allNodes, "simpleTest", allInputNodes, allOutputNodes)
+    allNodes = [x.node for x in tests]
+    allInputNodes = [x[0] for x in allInputNodesAndValuesInOrder]
+    allOutputNodes = [x.outputTensor for x in tests]
 
-onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
-check_model(onnx_model)
-onnx_model = version_converter.convert_version(onnx_model, 7)
-check_model(onnx_model)
-shaped = onnx.shape_inference.infer_shapes(onnx_model)
-check_model(shaped)
-shaped = onnx.shape_inference.infer_shapes(shaped)
+    allInitializers = [] 
+    for test in tests:
+        if(test.initializerArrays):
+            for x in test.initializerArrays:
+                allInitializers.append(x)
 
-outputPath = sys.argv[1]
-try:
-    shutil.rmtree(outputPath)
-except:
-    pass
+    graph = make_graph(allNodes, "simpleTest", allInputNodes, allOutputNodes, allInitializers)
 
-try:
-    os.makedirs(os.path.join(outputPath, "test_data_set_0"))
-except FileNotFoundError:
-    print(f"Error creating path for output: {outputPath}")
-    sys.exit(0)
-except FileExistsError:
-    pass  # Not a problem if folder already exists.
+    onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
+    check_model(onnx_model)
+    onnx_model = version_converter.convert_version(onnx_model, 7)
+    check_model(onnx_model)
+    shaped = onnx.shape_inference.infer_shapes(onnx_model)
+    check_model(shaped)
 
-for i, nodeAndValue in enumerate(allInputNodesAndValuesInOrder):
-    value = nodeAndValue[1]
-    with open(os.path.join(outputPath, f"test_data_set_0/input_{i}.pb"), "wb") as f:
-        asTensor = numpy_helper.from_array(value)
-        f.write(asTensor.SerializeToString())
+    outputPath = sys.argv[1]
+    try:
+        shutil.rmtree(outputPath)
+    except:
+        pass
 
-sess = ort.InferenceSession(shaped.SerializeToString())
+    try:
+        os.makedirs(os.path.join(outputPath, "test_data_set_0"))
+    except FileNotFoundError:
+        print(f"Error creating path for output: {outputPath}")
+        sys.exit(0)
+    except FileExistsError:
+        pass  # Not a problem if folder already exists.
 
-modelInputs = {}
-for i, test in enumerate(tests):
-    modelInputs[f"X{i}"] = test.leftRandomArray
-    modelInputs[f"Y{i}"] = test.rightRandomArray
+    for i, nodeAndValue in enumerate(allInputNodesAndValuesInOrder):
+        value = nodeAndValue[1]
+        with open(os.path.join(outputPath, f"test_data_set_0/input_{i}.pb"), "wb") as f:
+            asTensor = numpy_helper.from_array(value)
+            f.write(asTensor.SerializeToString())
 
-modelOutput = sess.run(None, modelInputs)
+    sess = ort.InferenceSession(shaped.SerializeToString())
 
-for i in range(len(tests)):
-    with open(os.path.join(outputPath, f"test_data_set_0/output_{i}.pb"), "wb") as f:
-        asTensor = numpy_helper.from_array(modelOutput[i])
-        f.write(asTensor.SerializeToString())
+    modelInputs = {}
+    for i, test in enumerate(tests):
+        for j,randomArray in enumerate(test.randomArrays):
+            modelInputs[GetInputTrueName(i,j)] = randomArray
 
-save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
+    modelOutput = sess.run(None, modelInputs)
+
+    for i in range(len(tests)):
+        with open(os.path.join(outputPath, f"test_data_set_0/output_{i}.pb"), "wb") as f:
+            asTensor = numpy_helper.from_array(modelOutput[i])
+            f.write(asTensor.SerializeToString())
+
+    save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))

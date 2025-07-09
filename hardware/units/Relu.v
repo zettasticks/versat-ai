@@ -11,7 +11,7 @@ module Relu
 
    input [31:0] in0,
 
-   (* versat_latency = 1 *) output [31:0] out0
+   (* versat_latency = 1 *) output reg [31:0] out0
    );
 
 wire sign = in0[31];

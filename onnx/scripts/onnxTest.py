@@ -56,13 +56,18 @@ def GetShape(model, name):
     for value in model.graph.value_info:
         if value.name == name:
             return [x.dim_value for x in value.type.tensor_type.shape.dim]
+    for value in model.graph.initializer:
+        if(value.name == name):
+            return value.dims
 
     # NOTE: We want this function to be able to obtain all the shapes from a given name.
     #       Need to care with the fact that some onnx names are optional. All the names that this function check are mandatory
     #       so this function works fine, just need to make sure that the name that we receive as input actually exists,
     #       and that we did not get it from a optional location, since different graphs might not implement them and this will fail.
+
+    print(model.graph)
     print(f"Could not find shape for {name}")
-    assert false
+    assert False
 
 
 def CalculateOffsetFromSize(sizes: list[int]):

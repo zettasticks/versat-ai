@@ -237,12 +237,9 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  int totalSize = 1;
-  for (int i = 0; i < info->dims; i++) {
-    totalSize *= info->inputDims[i];
-  }
+  int64_t totalSize = CalculateSizeOfDim(info->inputDims,info->dims);
 
-  for (int i = 0; i < totalSize; i++) {
+  for (int64_t i = 0; i < totalSize; i++) {
     float val = view[i];
     out[i] = MAX(0.0f, val);
   }
@@ -378,6 +375,15 @@ static inline float absf(float a) {
   return a;
 }
 
+int64_t CalculateSizeOfDim(int64_t* dim,int dims){
+  int64_t size = 1;
+  for(int i = 0; i < dims; i++){
+    size *= dim[i];
+  }
+
+  return size;
+}
+
 void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
   float *test = (float *)toTest;
   float *correct = (float *)correctValues;
@@ -387,7 +393,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
   if (outputSize == 0) {
     printf("Error, AssertAlmostEqual with output size of 0. Should not be "
            "possible\n");
-    return 0;
+    return;
   }
 
   int maxIncorrect = 10;

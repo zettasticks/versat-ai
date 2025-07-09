@@ -17,7 +17,11 @@ addressGen Read DataBroadCasted(cEnable,cLoop,bEnable,bLoop,cWidth,aEnable,aLoop
    for x 0..xLoop
    addr = ((((c * cEnable * cWidth + b * bEnable) * bWidth + a * aEnable) * aWidth + z * zEnable) * zWidth + y * yEnable) * yWidth + x * xEnable;
 
-module Test(){
+addressGen Read Linear(size)
+   for x 0..size
+   addr = x;
+
+module Top_Add(){
    using(DataBroadCasted) VRead inputs[2];
    using(DataSimple) VWrite output;
    F_Add adder;
@@ -25,3 +29,14 @@ module Test(){
    inputs[0..1] -> adder:0..1;
    adder -> output;
 }
+
+module Top_Relu(){
+   using(Linear) VRead input;
+   using(Linear) VWrite output;
+   Relu relu;
+#
+   input -> relu;
+   relu -> output;   
+}
+
+merge Test = Top_Add | Top_Relu;
