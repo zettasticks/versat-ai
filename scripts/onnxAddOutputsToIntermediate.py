@@ -4,8 +4,6 @@ import sys
 import os
 import glob
 
-# Missing split_complex_to_pairs
-
 from skl2onnx.helpers.onnx_helper import enumerate_model_node_outputs
 from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
 from skl2onnx.helpers.onnx_helper import save_onnx_model

@@ -57,7 +57,7 @@ def GetShape(model, name):
         if value.name == name:
             return [x.dim_value for x in value.type.tensor_type.shape.dim]
     for value in model.graph.initializer:
-        if(value.name == name):
+        if value.name == name:
             return value.dims
 
     # NOTE: We want this function to be able to obtain all the shapes from a given name.

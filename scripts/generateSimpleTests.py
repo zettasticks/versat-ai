@@ -19,6 +19,7 @@ import onnxruntime as ort
 import os
 import shutil
 
+
 @dataclass
 class Test:
     shapes: list[list[int]] = None
@@ -28,21 +29,26 @@ class Test:
     randomArrays: list[any] = None
     initializerArrays: list[any] = None
 
+
 tests: list[Test] = []
 
-def GetInputTrueName(testIndex,inputIndex):
-    VARS = ["X","Y","Z"]
-    assert(inputIndex < len(VARS))
+
+def GetInputTrueName(testIndex, inputIndex):
+    VARS = ["X", "Y", "Z"]
+    assert inputIndex < len(VARS)
 
     return f"{VARS[inputIndex]}{testIndex}"
+
 
 def GetOutputTrueName(testIndex):
     return f"OUT{testIndex}"
 
+
 def GetInitializerTrueName(testIndex):
     return f"A{testIndex}"
 
-def CreateBinaryOpTest(op,leftShape, rightShape):
+
+def CreateBinaryOpTest(op, leftShape, rightShape):
     global tests
 
     maxDims = max(len(leftShape), len(rightShape))
@@ -55,28 +61,33 @@ def CreateBinaryOpTest(op,leftShape, rightShape):
     testIndex = len(tests)
 
     test = Test()
-    test.shapes = [leftShape,rightShape]
+    test.shapes = [leftShape, rightShape]
 
     leftTensor = make_tensor_value_info(
-        GetInputTrueName(testIndex,0), TensorProto.FLOAT, leftShape
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, leftShape
     )
     rightTensor = make_tensor_value_info(
-        GetInputTrueName(testIndex,1), TensorProto.FLOAT, rightShape
+        GetInputTrueName(testIndex, 1), TensorProto.FLOAT, rightShape
     )
 
-    test.tensors = [leftTensor,rightTensor]
-    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, broadCastedShape)
+    test.tensors = [leftTensor, rightTensor]
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, broadCastedShape
+    )
     test.node = make_node(
-        op, [GetInputTrueName(testIndex,0),GetInputTrueName(testIndex,1)], [GetOutputTrueName(testIndex)]
+        op,
+        [GetInputTrueName(testIndex, 0), GetInputTrueName(testIndex, 1)],
+        [GetOutputTrueName(testIndex)],
     )
 
     leftRandomArray = np.random.randn(*leftShape).astype(np.float32)
     rightRandomArray = np.random.randn(*rightShape).astype(np.float32)
-    test.randomArrays = [leftRandomArray,rightRandomArray]
+    test.randomArrays = [leftRandomArray, rightRandomArray]
 
     tests.append(test)
 
-def CreateUnaryOpTest(op,shape):
+
+def CreateUnaryOpTest(op, shape):
     global tests
     testIndex = len(tests)
 
@@ -84,13 +95,15 @@ def CreateUnaryOpTest(op,shape):
     test.shapes = [shape]
 
     tensor = make_tensor_value_info(
-        GetInputTrueName(testIndex,0), TensorProto.FLOAT, shape
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
     )
- 
+
     test.tensors = [tensor]
-    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, shape)
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, shape
+    )
     test.node = make_node(
-        op, [GetInputTrueName(testIndex,0)], [GetOutputTrueName(testIndex)]
+        op, [GetInputTrueName(testIndex, 0)], [GetOutputTrueName(testIndex)]
     )
 
     randomArray = np.random.randn(*shape).astype(np.float32)
@@ -98,25 +111,30 @@ def CreateUnaryOpTest(op,shape):
 
     tests.append(test)
 
-def CreateReshapeTest(shapeIn,shapeOut):
+
+def CreateReshapeTest(shapeIn, shapeOut):
     global tests
     testIndex = len(tests)
 
     test = Test()
 
-    val = np.array(shapeOut,dtype=np.int64)
-    A = numpy_helper.from_array(val,name=GetInitializerTrueName(testIndex))
+    val = np.array(shapeOut, dtype=np.int64)
+    A = numpy_helper.from_array(val, name=GetInitializerTrueName(testIndex))
 
     test.shapes = [shapeIn]
 
     tensor = make_tensor_value_info(
-        GetInputTrueName(testIndex,0), TensorProto.FLOAT, shapeIn
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shapeIn
     )
- 
+
     test.tensors = [tensor]
-    test.outputTensor = make_tensor_value_info(GetOutputTrueName(testIndex), TensorProto.FLOAT, shapeOut)
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, shapeOut
+    )
     test.node = make_node(
-        "Reshape", [GetInputTrueName(testIndex,0),GetInitializerTrueName(testIndex)], [GetOutputTrueName(testIndex)]
+        "Reshape",
+        [GetInputTrueName(testIndex, 0), GetInitializerTrueName(testIndex)],
+        [GetOutputTrueName(testIndex)],
     )
 
     randomArray = np.random.randn(*shapeIn).astype(np.float32)
@@ -125,46 +143,52 @@ def CreateReshapeTest(shapeIn,shapeOut):
 
     tests.append(test)
 
+
+# CreateBinaryOpTest("Add", [1], [1])
+# CreateBinaryOpTest("Add", [4], [4])
+
 if True:
     # Simplest tests, no broadcast or abusing dimensions
-    CreateBinaryOpTest("Add",[1], [1])
-    CreateBinaryOpTest("Add",[4], [4])
-    CreateBinaryOpTest("Add",[2, 4], [2, 4])
-    CreateBinaryOpTest("Add",[2, 4, 6], [2, 4, 6])
-    CreateBinaryOpTest("Add",[2, 4, 6, 8], [2, 4, 6, 8])
+    CreateBinaryOpTest("Add", [1], [1])
+    CreateBinaryOpTest("Add", [4], [4])
+    CreateBinaryOpTest("Add", [2, 4], [2, 4])
+    CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+    CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
     # Broadcasting
-    CreateBinaryOpTest("Add",[2, 3, 4, 5], [1])
-    CreateBinaryOpTest("Add",[2, 3, 4, 5], [5])
-    CreateBinaryOpTest("Add",[4, 5], [2, 3, 4, 5])
-    CreateBinaryOpTest("Add",[1, 4, 5], [2, 3, 1, 1])
-    CreateBinaryOpTest("Add",[3, 4, 5], [2, 1, 1, 1])
+    CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+    CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+    CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+    CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+    CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
-    CreateUnaryOpTest("Relu",[1])
-    CreateUnaryOpTest("Relu",[4])
-    CreateUnaryOpTest("Relu",[2,4])
-    CreateUnaryOpTest("Relu",[2,4,6])
-    CreateUnaryOpTest("Relu",[2,4,6,8])
+    CreateUnaryOpTest("Relu", [1])
+    CreateUnaryOpTest("Relu", [4])
+    CreateUnaryOpTest("Relu", [2, 4])
+    CreateUnaryOpTest("Relu", [2, 4, 6])
+    CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
-    CreateReshapeTest([4,2],[8])
+    CreateReshapeTest([4, 2], [8])
 
 if True:
     allInputNodesAndValuesInOrder = []
     for x in tests:
-        for tensor,randomArray in zip(x.tensors,x.randomArrays):
+        for tensor, randomArray in zip(x.tensors, x.randomArrays):
             allInputNodesAndValuesInOrder.append([tensor, randomArray])
 
     allNodes = [x.node for x in tests]
     allInputNodes = [x[0] for x in allInputNodesAndValuesInOrder]
     allOutputNodes = [x.outputTensor for x in tests]
 
-    allInitializers = [] 
+    allInitializers = []
     for test in tests:
-        if(test.initializerArrays):
+        if test.initializerArrays:
             for x in test.initializerArrays:
                 allInitializers.append(x)
 
-    graph = make_graph(allNodes, "simpleTest", allInputNodes, allOutputNodes, allInitializers)
+    graph = make_graph(
+        allNodes, "simpleTest", allInputNodes, allOutputNodes, allInitializers
+    )
 
     onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
     check_model(onnx_model)
@@ -197,13 +221,15 @@ if True:
 
     modelInputs = {}
     for i, test in enumerate(tests):
-        for j,randomArray in enumerate(test.randomArrays):
-            modelInputs[GetInputTrueName(i,j)] = randomArray
+        for j, randomArray in enumerate(test.randomArrays):
+            modelInputs[GetInputTrueName(i, j)] = randomArray
 
     modelOutput = sess.run(None, modelInputs)
 
     for i in range(len(tests)):
-        with open(os.path.join(outputPath, f"test_data_set_0/output_{i}.pb"), "wb") as f:
+        with open(
+            os.path.join(outputPath, f"test_data_set_0/output_{i}.pb"), "wb"
+        ) as f:
             asTensor = numpy_helper.from_array(modelOutput[i])
             f.write(asTensor.SerializeToString())
 

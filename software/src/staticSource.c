@@ -237,7 +237,7 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  int64_t totalSize = CalculateSizeOfDim(info->inputDims,info->dims);
+  int64_t totalSize = CalculateSizeOfDim(info->inputDims, info->dims);
 
   for (int64_t i = 0; i < totalSize; i++) {
     float val = view[i];
@@ -375,9 +375,9 @@ static inline float absf(float a) {
   return a;
 }
 
-int64_t CalculateSizeOfDim(int64_t* dim,int dims){
+int64_t CalculateSizeOfDim(int64_t *dim, int dims) {
   int64_t size = 1;
-  for(int i = 0; i < dims; i++){
+  for (int i = 0; i < dims; i++) {
     size *= dim[i];
   }
 
@@ -398,6 +398,9 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
 
   int maxIncorrect = 10;
   bool printOk = true;
+
+  // Make sure that cache is not affecting the verification process
+  clear_cache();
 
   int incorrectFound = 0;
   for (int i = 0; i < outputSize; i++) {

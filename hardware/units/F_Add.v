@@ -20,19 +20,6 @@ module F_Add  #(
    (* versat_latency = 5 *) output [DATA_W-1:0] out0
    );
 
-/*
-reg [6:0] delay;
-always @(posedge clk, posedge rst) begin
-  if (rst) begin
-     delay <= 0;
-  end else if (run) begin
-     delay <= delay0;
-  end else if (|delay) begin
-     delay <= delay - 1;
-  end
-end
-*/
-
 wire [DATA_W-1:0] adder_out;
 
 iob_fp_add adder (
@@ -52,7 +39,6 @@ iob_fp_add adder (
   .rst_i(rst)
 );
 
-//assign out0 = (running && (|delay) == 0) ? adder_out : 0;
 assign out0 = running ? adder_out : 0;
 
 endmodule
