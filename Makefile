@@ -11,6 +11,7 @@ BOARD ?= iob_cyclonev_gt_dk
 
 PYTHON_ENV := ../python
 VERSAT_FOLDER := ./submodules/iob_versat
+VERSAT_SUBMODULE := ./submodules/VERSAT
 TEST_MODEL := ./tests/model.onnx
 ALL_SCRIPTS := $(wildcard ./scripts/*.py)
 
@@ -27,7 +28,8 @@ EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
 
 # Resources that are generated as they are needed. Mostly the generated tests and Versat
-$(VERSAT_FOLDER): versatSpec.txt 
+$(VERSAT_FOLDER): versatSpec.txt
+	@rm $(VERSAT_SUBMODULE)/iob_versat.py
 	nix-shell --run "python3 versatGenerate.py"
 
 $(PYTHON_ENV):
@@ -36,8 +38,6 @@ $(PYTHON_ENV):
 $(TEST_MODEL): $(PYTHON_ENV) $(ALL_SCRIPTS)
 	bash -c "source ../python/bin/activate ; python3 ./scripts/generateSimpleTests.py ./tests ; python3 generateTest.py tests/ model.onnx software/ software/src"
 	cp software/*.bin hardware/simulation
-
-test-generate: $(TEST_MODEL) 
 
 setup: $(VERSAT_FOLDER) $(TEST_MODEL)
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
@@ -72,8 +72,14 @@ fast-sim-run:
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
 	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
+# Rules to force certain files to be build, mostly for debugging as the files should just be built by the rules of the makefile
+test-generate: $(TEST_MODEL) 
+
 clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
+	@rm -rf hardware/simulation/*.bin
+	@rm -rf software/*.bin
+	@rm ./software/src/code.c ./software/src/modelInfo.h
 	@rm -rf ../python
 	@rm -rf ../*.summary ../*.rpt
 	@find . -name \*~ -delete

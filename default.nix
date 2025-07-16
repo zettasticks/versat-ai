@@ -44,7 +44,7 @@ let
 
   extra_pkgs = with pkgs; [
     # Define other Nix packages for your project here
-    (callPackage ../../Versat/iob-soc-versat/submodules/VERSAT/versat.nix {})
+    (callPackage ./submodules/VERSAT/versat.nix {})
   ];
 
 in

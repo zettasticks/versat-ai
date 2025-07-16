@@ -144,9 +144,6 @@ def CreateReshapeTest(shapeIn, shapeOut):
     tests.append(test)
 
 
-# CreateBinaryOpTest("Add", [1], [1])
-# CreateBinaryOpTest("Add", [4], [4])
-
 if True:
     # Simplest tests, no broadcast or abusing dimensions
     CreateBinaryOpTest("Add", [1], [1])
@@ -169,6 +166,11 @@ if True:
     CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
     CreateReshapeTest([4, 2], [8])
+    CreateReshapeTest([4, 2], [2, 4])
+    CreateReshapeTest([1, 8], [8])
+    CreateReshapeTest([2, 3, 4], [24])
+    CreateReshapeTest([24], [2, 3, 4])
+    CreateReshapeTest([24], [4, 3, 2])
 
 if True:
     allInputNodesAndValuesInOrder = []

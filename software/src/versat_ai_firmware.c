@@ -78,6 +78,8 @@ int main() {
 
   DebugRunInference(output, temp, inputs, model, correct);
 
+  uart_sendfile("test.log", strlen(pass_string), pass_string);
+
   free(output);
   free(temp);
   free(model);
