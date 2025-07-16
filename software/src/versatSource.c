@@ -31,7 +31,7 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
 
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
-  printf("Using Versat\n");
+  printf("[Add] Using Versat\n");
 
   int64_t *l = info->firstInputDim;
   int64_t *r = info->secondInputDim;
@@ -66,7 +66,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
 }
 
 void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
-  printf("Using Versat\n");
+  printf("[Relu] Using Versat\n");
 
   volatile Top_ReluConfig *config = &accelConfig->Top_Relu;
   ActivateMergedAccelerator(MergeType_Top_Relu);
@@ -86,7 +86,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info) {
-  printf("Using Versat\n");
+  printf("[Reshape] Using Versat\n");
 
   return data;
 }
