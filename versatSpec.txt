@@ -1,0 +1,42 @@
+
+addressGen Read DataSimple(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth)
+   for c 0..cWidth
+   for b 0..bWidth
+   for a 0..aWidth
+   for z 0..zWidth
+   for y 0..yWidth
+   for x 0..xWidth
+   addr = ((((c * bWidth + b) * aWidth + a) * zWidth + z) * yWidth + y) * xWidth + x;
+
+addressGen Read DataBroadCasted(cEnable,cLoop,bEnable,bLoop,cWidth,aEnable,aLoop,bWidth,zEnable,zLoop,aWidth,yEnable,yLoop,zWidth,xEnable,xLoop,yWidth)
+   for c 0..cLoop
+   for b 0..bLoop
+   for a 0..aLoop
+   for z 0..zLoop
+   for y 0..yLoop
+   for x 0..xLoop
+   addr = ((((c * cEnable * cWidth + b * bEnable) * bWidth + a * aEnable) * aWidth + z * zEnable) * zWidth + y * yEnable) * yWidth + x * xEnable;
+
+addressGen Read Linear(size)
+   for x 0..size
+   addr = x;
+
+module Top_Add(){
+   using(DataBroadCasted) VRead inputs[2];
+   using(DataSimple) VWrite output;
+   F_Add adder;
+#
+   inputs[0..1] -> adder:0..1;
+   adder -> output;
+}
+
+module Top_Relu(){
+   using(Linear) VRead input;
+   using(Linear) VWrite output;
+   Relu relu;
+#
+   input -> relu;
+   relu -> output;   
+}
+
+merge Test = Top_Add | Top_Relu;

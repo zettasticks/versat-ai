@@ -4,3 +4,8 @@ output
 python
 __pycache__
 tests
+submodules/iob_versat
+software/*.bin
+software/src/code.c
+software/src/modelInfo.h
+*.bin
