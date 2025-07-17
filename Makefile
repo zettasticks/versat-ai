@@ -89,6 +89,8 @@ fast-sim-run:
 # Rules to force certain files to be build, mostly for debugging as the files should just be built by the rules of the makefile
 test-generate: $(GENERATED_TEST) 
 
+versat-generate: $(VERSAT_FOLDER)
+
 clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
 	@rm -rf tests
