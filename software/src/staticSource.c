@@ -250,15 +250,13 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
 
 void *Software_MaxPool(void *inputX, void *output, int index,
                        MaxPoolInfo *info) {
-  // Currently disabled in preparation for a delivery that does not depend on
-  // maxpool and current implementation is giving compilation errors due to
-  // other changes.
-#if 0
+  // Currently software impl of maxpool is hardcoded to run the downloadable
+  // example.
   float *view = (float *)inputX;
   float *out = (float *)output;
 
   // Code for 4 tensors and kernel of 2x2 size and 2x2 strides
-  if (info->dims == 4 && info->kernelSizeW == 2 && info->kernelSizeH == 2) {
+  if (info->dims == 4 && info->kernelDims[0] == 2 && info->kernelDims[1] == 2) {
     for (int a = 0; a < info->outputDims[0]; a++) {
       for (int b = 0; b < info->outputDims[1]; b++) {
         for (int c = 0; c < info->outputDims[2]; c++) {
@@ -292,8 +290,8 @@ void *Software_MaxPool(void *inputX, void *output, int index,
         }
       }
     } // Code for 4 tensors and kernel of 3x3 size and 3x3 strides
-  } else if (info->dims == 4 && info->kernelSizeW == 3 &&
-             info->kernelSizeH == 3) {
+  } else if (info->dims == 4 && info->kernelDims[0] == 3 &&
+             info->kernelDims[1] == 3) {
     for (int a = 0; a < info->outputDims[0]; a++) {
       for (int b = 0; b < info->outputDims[1]; b++) {
         for (int c = 0; c < info->outputDims[2]; c++) {
@@ -343,8 +341,6 @@ void *Software_MaxPool(void *inputX, void *output, int index,
       }
     }
   }
-  return output;
-#endif
   return output;
 }
 
