@@ -48,6 +48,8 @@ class OnnxAttributeType(Enum):
     INTEGER = auto()
     BOUNDED_INTEGER = auto()
     INTEGER_LIST = auto()
+    AXIS_LIST = auto()
+    AXIS_PAIR_LIST = auto()
     BOUNDED_STRING = auto()
 
 
@@ -91,9 +93,6 @@ class OnnxOperatorSpec:
     supportsMultidirectionalBroadcasting: bool
     supportsUnidirectionalBroadcasting: bool
     attributesDict: dict[str, OnnxAttribute] = field(default_factory=dict)
-    attributesForOperatorFunction: Callable[
-        Operation, dict[str, InstantiatedAttribute]
-    ] = None
     generateVersatCode: bool = False
 
 
