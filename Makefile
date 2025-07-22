@@ -11,7 +11,7 @@ BOARD ?= iob_cyclonev_gt_dk
 
 TEST := test1 # Possible values: test1,test2
 
-PYTHON_ENV := ../python
+PYTHON_ENV := ../python_env
 VERSAT_ACCEL := ./submodules/iob_versat/iob_versat.py
 VERSAT_SUBMODULE := ./submodules/VERSAT
 GENERATED_TEST := ./tests/generated/model.onnx
@@ -36,23 +36,23 @@ $(VERSAT_ACCEL): versatSpec.txt
 	nix-shell --run "python3 ./scripts/versatGenerate.py"
 
 $(PYTHON_ENV):
-	./makePythonEnv.sh
+	./scripts/makePythonEnv.sh
 
 $(GENERATED_TEST): $(PYTHON_ENV) $(ALL_SCRIPTS)
-	bash -c "source ../python_env/bin/activate ; python3 ./scripts/generateSimpleTests.py ./tests/generated/"
+	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./scripts/generateSimpleTests.py ./tests/generated/"
 
 $(DOWNLOADED_TEST): $(PYTHON_ENV)
 	./scripts/downloadTests.sh
 
 # TODO: When adding more tests, we need a better way of doing this.
 test1: $(VERSAT_ACCEL) $(GENERATED_TEST)
-	bash -c "source ../python_env/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
 	cp software/*.bin hardware/simulation
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
 test2: $(VERSAT_ACCEL) $(DOWNLOADED_TEST)
-	bash -c "source ../python_env/bin/activate; python3 ./scripts/onnxMain.py tests/mnist_v7/ model.onnx software/ software/src"
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/mnist_v7/ model.onnx software/ software/src"
 	cp software/*.bin hardware/simulation
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
@@ -90,7 +90,7 @@ fast-sim-run:
 test-generate: 
 	rm -f $(GENERATED_TEST)
 	$(MAKE) $(GENERATED_TEST) 
-	bash -c "source ../python_env/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
 
 versat-generate:
 	rm -f $(VERSAT_ACCEL)
@@ -107,7 +107,7 @@ clean:
 	@find . -name \*~ -delete
 
 full-clean: clean
-	@rm -rf ../python
+	@rm -rf $(PYTHON_ENV)
 
 # Remove all __pycache__ folders with python bytecode
 python-cache-clean:

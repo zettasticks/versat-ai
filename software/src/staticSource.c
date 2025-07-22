@@ -6,6 +6,7 @@
 #include "iob_printf.h"
 
 #define exit(...) ((void)0)
+void clear_cache();
 
 #define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
 
@@ -249,6 +250,10 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
 
 void *Software_MaxPool(void *inputX, void *output, int index,
                        MaxPoolInfo *info) {
+  // Currently disabled in preparation for a delivery that does not depend on
+  // maxpool and current implementation is giving compilation errors due to
+  // other changes.
+#if 0
   float *view = (float *)inputX;
   float *out = (float *)output;
 
@@ -338,7 +343,8 @@ void *Software_MaxPool(void *inputX, void *output, int index,
       }
     }
   }
-
+  return output;
+#endif
   return output;
 }
 
