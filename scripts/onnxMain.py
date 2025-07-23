@@ -160,6 +160,14 @@ def GenerateModelFromOnnxModel(onnxModel):
                 parsedAttribute = InstantiatedAttribute(spec, int(attribute.i))
             elif spec.attrType == OnnxAttributeType.BOUNDED_INTEGER:
                 parsedAttribute = InstantiatedAttribute(spec, int(attribute.i))
+            elif spec.attrType == OnnxAttributeType.AXIS_LIST:
+                parsedAttribute = InstantiatedAttribute(
+                    spec, [int(x) for x in attribute.ints]
+                )
+            elif spec.attrType == OnnxAttributeType.AXIS_PAIR_LIST:
+                parsedAttribute = InstantiatedAttribute(
+                    spec, [int(x) for x in attribute.ints]
+                )
             elif spec.attrType == OnnxAttributeType.INTEGER_LIST:
                 parsedAttribute = InstantiatedAttribute(
                     spec, [int(x) for x in attribute.ints]
@@ -527,6 +535,14 @@ def GenerateDebug(
     with open(os.path.join(binOutputLocation, "model.bin"), "wb") as f:
         f.write(packedInitializers.data)
 
+
+if __name__ == "__main__":
+    if len(sys.argv) < 5:
+        print(
+            "Error, script requires 4 parameters, <testLocation> <modelName> <binOutputLocation> <sourceOutputLocation>"
+        )
+        sys.exit(0)
+    GenerateDebug(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
 
 # TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
 

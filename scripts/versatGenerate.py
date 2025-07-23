@@ -4,6 +4,7 @@ import shutil
 import subprocess as sp
 import codecs
 import pprint
+import time
 
 
 def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debug_path):
@@ -21,9 +22,11 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         "-u",
         os.path.realpath("./hardware/units"),
         "-o",
-        os.path.realpath(os.path.join(build_dir,"hardware","src")),  # Output hardware files
+        os.path.realpath(
+            os.path.join(build_dir, "hardware", "src")
+        ),  # Output hardware files
         "-O",
-        os.path.realpath(os.path.join(build_dir,"software")),  # Output software files
+        os.path.realpath(os.path.join(build_dir, "software")),  # Output software files
     ]
 
     if debug_path:
@@ -33,7 +36,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         versat_args = versat_args + ["-u", versat_extra]
 
     print(*versat_args, "\n", file=sys.stderr)
-    result = sp.run(versat_args, capture_output=True, encoding='utf-8')
+    result = sp.run(versat_args, capture_output=True, encoding="utf-8")
 
     returnCode = result.returncode
     output = result.stdout
@@ -50,20 +53,28 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
 
     return lines
 
+
 if __name__ == "__main__":
     try:
-        output = RunVersat("versatSpec.txt", "Test", None, "submodules/iob_versat", 32, None)
-    except :
+        output = RunVersat(
+            "./versatSpec.txt", "Test", None, "./submodules/iob_versat", 32, None
+        )
+    except:
         print("Failed to generate Versat")
         sys.exit(-1)
 
+    try:
+        os.mkdir("./submodules/iob_versat/software/src/")
+    except:
+        pass  # Nothing if dir already exists
+
     shutil.move(
-        "submodules/iob_versat/software/versat_emul.c",
-        "submodules/iob_versat/software/src/versat_emul.c",
+        "./submodules/iob_versat/software/versat_emul.c",
+        "./submodules/iob_versat/software/src/versat_emul.c",
     )
     shutil.move(
-        "submodules/iob_versat/software/iob-versat.c",
-        "submodules/iob_versat/software/src/iob_versat.c",
+        "./submodules/iob_versat/software/iob-versat.c",
+        "./submodules/iob_versat/software/src/iob_versat.c",
     )
 
     with open("submodules/iob_versat/iob_versat.py", "w") as f:
@@ -142,8 +153,8 @@ if __name__ == "__main__":
 
         f.write(
             f"""
-    def setup(py_params_dict):
-       attributes_dict = {attributes_dict.__repr__()}
+def setup(py_params_dict):
+    attributes_dict = {attributes_dict.__repr__()}
 
-       return attributes_dict"""
+    return attributes_dict"""
         )

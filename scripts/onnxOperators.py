@@ -52,7 +52,15 @@ def MakeAttrIntegerList(defaultValue):
     return OnnxAttribute(OnnxAttributeType.INTEGER_LIST, [], defaultValue)
 
 
-def MakeAttrIngeger(defaultValue):
+def MakeAttrAxisList(defaultValue):
+    return OnnxAttribute(OnnxAttributeType.AXIS_LIST, [], defaultValue)
+
+
+def MakeAttrAxisPairList(defaultValue):
+    return OnnxAttribute(OnnxAttributeType.AXIS_PAIR_LIST, [], defaultValue)
+
+
+def MakeAttrInteger(defaultValue):
     return OnnxAttribute(OnnxAttributeType.INTEGER, [], defaultValue)
 
 
@@ -68,12 +76,24 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
 
     # TODO: We can actually remove this and the function. All we need is to use the data that we have to figure out whether we need to use a default attribute value or a value that is contained inside the operator.
 
-    if opSpec.attributesForOperatorFunction:
-        return opSpec.attributesForOperatorFunction(op)
-    else:
-        # TODO: Need to instantiate the attributes with their default values.
-        pass
-        # return opSpec.attributesDict
+    res = {}
+    for name, attrType in opSpec.attributesDict.items():
+        if name in op.parsedAttributes:
+            res[name] = op.parsedAttributes[name]
+        else:
+            # For spatial axis attributes, calculate spatialAxes from output.
+            if (
+                attrType.attrType == OnnxAttributeType.AXIS_LIST
+                or attrType.attrType == OnnxAttributeType.AXIS_PAIR_LIST
+            ):
+                spatialAxes = len(op.outputDimensions) - 2
+                trueDefaultValue = [attrType.defaultValue] * spatialAxes
+
+                res[name] = InstantiatedAttribute(attrType, trueDefaultValue)
+            else:
+                res[name] = InstantiatedAttribute(attrType, attrType.defaultValue)
+
+    return res
 
 
 def EmitAdd(emitter, op: Operation):
@@ -102,11 +122,15 @@ def EmitMaxPool(emitter, op: Operation):
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
     outputShape = emitter.EmitArray("int64_t", op.outputDimensions)
 
-    kernel_shape = op.parsedAttributes["kernel_shape"].value
+    attr = GetAttributesForOperator(op)
 
-    print(kernel_shape)
+    kernel = attr["kernel_shape"].value
+    kernelShape = emitter.EmitArray("int", kernel)
 
-    return [dims, inputShape, outputShape, kernel_shape[0], kernel_shape[1]]
+    dil = attr["dilations"].value
+    dilShape = emitter.EmitArray("int", dil)
+
+    return [dims, inputShape, outputShape, len(kernel), kernelShape, len(dil), dilShape]
 
 
 def EmitConv(emitter, op: Operation):
@@ -167,53 +191,24 @@ convAttributes = {
     "auto_pad": MakeAttrBoundedString(
         ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
     ),
-    "dilations": MakeAttrIntegerList(1),
-    "group": MakeAttrIngeger(1),
+    "dilations": MakeAttrAxisList(1),
+    "group": MakeAttrInteger(1),
     "kernel_shape": MakeAttrIntegerList(None),
-    "pads": MakeAttrIntegerList(0),
-    "strides": MakeAttrIntegerList(1),
+    "pads": MakeAttrAxisPairList(0),
+    "strides": MakeAttrAxisList(1),
 }
-
-
-# TODO: This functions only exist because we are not properly parsing the attributes when parsing the model.
-#       Otherwise we could easily make this function in a generic way.
-def ConvAttributesForOperation(op: Operation) -> dict[str, InstantiatedAttribute]:
-    global convAttributes
-
-    res = {}
-    for name, attrType in convAttributes.items():
-        if name in op.parsedAttributes:
-            res[name] = op.parsedAttributes[name]
-        else:
-            res[name] = InstantiatedAttribute(attrType, attrType.defaultValue)
-
-    return res
-
 
 maxPoolAttributes = {
     "auto_pad": MakeAttrBoundedString(
         ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
     ),
-    "ceil_mode": MakeAttrIngeger(0),
-    "dilations": MakeAttrIntegerList(1),
+    "ceil_mode": MakeAttrInteger(0),
+    "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
-    "pads": MakeAttrIntegerList(0),
+    "pads": MakeAttrAxisPairList(0),
     "storage_order": MakeAttrBoundedInteger([0, 1], 0),
-    "strides": MakeAttrIntegerList(1),
+    "strides": MakeAttrAxisList(1),
 }
-
-
-def MaxPoolAttributesForOperation(op: Operation) -> dict[str, InstantiatedAttribute]:
-    global maxPoolAttributes
-
-    res = {}
-    for name, attrType in maxPoolAttributes.items():
-        if name in op.parsedAttributes:
-            res[name] = op.parsedAttributes[name]
-        else:
-            res[name] = InstantiatedAttribute(attrType, attrType.defaultValue)
-
-    return res
 
 
 def GetOperatorSpec(opName):
@@ -223,22 +218,19 @@ def GetOperatorSpec(opName):
 
 # Register new operators here
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], [], True)
+operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], True)
 operatorNameToSpec["Conv"] = OnnxOperatorSpec(
-    "Conv", EmitConv, False, False, convAttributes, ConvAttributesForOperation
+    "Conv", EmitConv, False, False, convAttributes
 )
-operatorNameToSpec["Relu"] = OnnxOperatorSpec(
-    "Relu", EmitRelu, False, False, [], [], True
-)
+operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False, [], True)
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
     "MaxPool",
     EmitMaxPool,
     False,
     False,
     maxPoolAttributes,
-    MaxPoolAttributesForOperation,
 )
 operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
-    "Reshape", EmitReshape, False, False, [], [], True
+    "Reshape", EmitReshape, False, False, [], True
 )
 operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul ", EmitMatMul, False, False)

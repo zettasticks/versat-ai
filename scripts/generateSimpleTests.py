@@ -112,6 +112,38 @@ def CreateUnaryOpTest(op, shape):
     tests.append(test)
 
 
+def CreateMaxPool(shape, kernel, strides):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+    test.shapes = [shape]
+
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    # Let onnx infer shape specifics
+    outputShape = [None] * len(shape)
+
+    test.tensors = [tensor]
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+    )
+    test.node = make_node(
+        "MaxPool",
+        [GetInputTrueName(testIndex, 0)],
+        [GetOutputTrueName(testIndex)],
+        kernel_shape=kernel,
+        strides=strides,
+    )
+
+    randomArray = np.random.randn(*shape).astype(np.float32)
+    test.randomArrays = [randomArray]
+
+    tests.append(test)
+
+
 def CreateReshapeTest(shapeIn, shapeOut):
     global tests
     testIndex = len(tests)
@@ -144,35 +176,44 @@ def CreateReshapeTest(shapeIn, shapeOut):
     tests.append(test)
 
 
-if True:
-    # Simplest tests, no broadcast or abusing dimensions
-    CreateBinaryOpTest("Add", [1], [1])
-    CreateBinaryOpTest("Add", [4], [4])
-    CreateBinaryOpTest("Add", [2, 4], [2, 4])
-    CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-    CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+if __name__ == "__main__":
+    if True:
+        # Simplest tests, no broadcast or abusing dimensions
+        CreateBinaryOpTest("Add", [1], [1])
+        CreateBinaryOpTest("Add", [4], [4])
+        CreateBinaryOpTest("Add", [2, 4], [2, 4])
+        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-    # Broadcasting
-    CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-    CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-    CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-    CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-    CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+        # Broadcasting
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
-    CreateUnaryOpTest("Relu", [1])
-    CreateUnaryOpTest("Relu", [4])
-    CreateUnaryOpTest("Relu", [2, 4])
-    CreateUnaryOpTest("Relu", [2, 4, 6])
-    CreateUnaryOpTest("Relu", [2, 4, 6, 8])
+    if True:
+        CreateUnaryOpTest("Relu", [1])
+        CreateUnaryOpTest("Relu", [4])
+        CreateUnaryOpTest("Relu", [2, 4])
+        CreateUnaryOpTest("Relu", [2, 4, 6])
+        CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
-    CreateReshapeTest([4, 2], [8])
-    CreateReshapeTest([4, 2], [2, 4])
-    CreateReshapeTest([1, 8], [8])
-    CreateReshapeTest([2, 3, 4], [24])
-    CreateReshapeTest([24], [2, 3, 4])
-    CreateReshapeTest([24], [4, 3, 2])
+        # Test different strides and dilations
+    if False:
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
+        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2])
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3])
+        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3])
 
-if True:
+    if True:
+        CreateReshapeTest([4, 2], [8])
+        CreateReshapeTest([4, 2], [2, 4])
+        CreateReshapeTest([1, 8], [8])
+        CreateReshapeTest([2, 3, 4], [24])
+        CreateReshapeTest([24], [2, 3, 4])
+        CreateReshapeTest([24], [4, 3, 2])
+
     allInputNodesAndValuesInOrder = []
     for x in tests:
         for tensor, randomArray in zip(x.tensors, x.randomArrays):

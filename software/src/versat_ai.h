@@ -45,8 +45,10 @@ typedef struct {
   int dims;
   int64_t *inputDims;
   int64_t *outputDims;
-  int kernelSizeW;
-  int kernelSizeH;
+  int kernelSize;
+  int *kernelDims;
+  int dilationsSize;
+  int *dilationsDims;
 } MaxPoolInfo;
 
 typedef struct {
