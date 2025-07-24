@@ -15,12 +15,12 @@ void clear_cache();
 
 typedef struct {
   int addressVars[16];
-  int64_t *iterationDims;
-  int64_t *properDims;
+  int64_t iterationDims[16];
+  int64_t properDims[16];
   int numberDims;
 } AddressGen;
 
-void Print(AddressGen *gen) {
+void Address_Print(AddressGen *gen) {
   for (int i = 0; i < gen->numberDims; i++) {
     if (i != 0) {
       printf(" x ");
@@ -38,7 +38,7 @@ void Print(AddressGen *gen) {
   printf("]\n");
 }
 
-int GetAddress(AddressGen *gen) {
+int Address_GetValue(AddressGen *gen) {
   int address = 0;
   for (int i = 0; i < gen->numberDims; i++) {
     int index = gen->addressVars[i];
@@ -56,7 +56,7 @@ int GetAddress(AddressGen *gen) {
   return address;
 }
 
-bool IsValid(AddressGen *gen) {
+bool Address_IsValid(AddressGen *gen) {
   // Is this the only thing that we need?
   if (gen->addressVars[0] >= gen->iterationDims[0]) {
     return false;
@@ -72,7 +72,7 @@ bool IsValid(AddressGen *gen) {
   return false;
 }
 
-void Advance(AddressGen *gen) {
+void Address_Advance(AddressGen *gen) {
   if (gen->addressVars[0] >= gen->iterationDims[0]) {
     return;
   }
@@ -91,11 +91,149 @@ void Advance(AddressGen *gen) {
 AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
                         int numberDims) {
   AddressGen gen = {};
-  gen.iterationDims = iterationDims;
-  gen.properDims = properDims;
+
+  for(int i = 0; i < numberDims; i++){
+    gen.iterationDims[i] = iterationDims[i];
+    gen.properDims[i] = properDims[i];
+  }
   gen.numberDims = numberDims;
 
   return gen;
+}
+
+AddressGen Address_Map(AddressGen* in,int64_t* biggerDim,int* stride) {
+  AddressGen gen = *in;  
+
+  for(int i = 0; i < in->numberDims; i++){
+    gen.addressVars[i] *= stride[i];
+    gen.iterationDims[i] = biggerDim[i];
+    gen.properDims[i] = biggerDim[i];
+  }
+
+#if 0
+  printf("here\n");
+  Address_Print(in);
+  Address_Print(&gen);
+#endif
+
+  return gen;
+}
+
+typedef struct {
+  int kernelVars[16]; // Current state
+
+  // Kernel Info
+  AddressGen* address;
+  int kernelDims[16];
+  int kernelDilations[16]; // NOTE: Not properly tested, do not rely on dilations being correct
+  int numberDims;
+} KernelGen;
+
+KernelGen StartKernel(AddressGen* addresss,int* kernelDims,int numberDims){
+  KernelGen gen = {};
+  gen.address = addresss;
+  gen.kernelDims[0] = 1;
+  gen.kernelDims[1] = 1;
+  gen.numberDims = numberDims + 2;
+
+  for(int i = 0; i < 16; i++){
+    gen.kernelDilations[i] = 1;
+  }
+
+  for(int i = 0; i < numberDims; i++){
+    gen.kernelDims[2+i] = kernelDims[i];
+  }
+
+  return gen;
+}
+
+void Kernel_Print(KernelGen *gen) {
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (i != 0) {
+      printf(" x ");
+    }
+    printf("%d", gen->kernelVars[i]);
+  }
+
+  printf(" [");
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (i != 0) {
+      printf(" x ");
+    }
+    printf("%ld", gen->kernelDims[i]);
+  }
+  printf("]\n");
+}
+
+int Kernel_GetValue(KernelGen *gen) {
+  int properVars[16];
+
+  for(int i = 0; i < gen->numberDims; i++){
+    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] + gen->address->addressVars[i];
+  }
+
+  int address = 0;
+  for (int i = 0; i < gen->numberDims; i++) {
+    int index = properVars[i];
+
+    if (index >= gen->address->iterationDims[i]) {
+      index = 0;
+    }
+
+    if (i > 0) {
+      address *= gen->address->iterationDims[i];
+    }
+    address += index;
+  }
+
+  return address;
+}
+
+bool Kernel_IsValid(KernelGen *gen){
+  // Is this the only thing that we need?
+  if (gen->kernelVars[0] >= gen->kernelDims[0]) {
+    return false;
+  }
+
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (gen->kernelVars[i] >= gen->kernelDims[i]) {
+      continue;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Kernel_IsInsidePad(KernelGen* gen){
+  int properVars[16];
+
+  for(int i = 0; i < gen->numberDims; i++){
+    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] + gen->address->addressVars[i];
+  }
+
+  for(int i = 0; i < gen->numberDims; i++){
+    if(properVars[i] >= gen->address->properDims[i]){
+      return true;
+    }
+  }
+
+  return false;
+}
+void Kernel_Advance(KernelGen* gen){
+  if (gen->kernelVars[0] >= gen->kernelDims[0]) {
+    return;
+  }
+
+  for (int i = gen->numberDims - 1; i >= 0; i--) {
+    if (i != 0 && gen->kernelVars[i] + 1 >= gen->kernelDims[i]) {
+      gen->kernelVars[i] = 0;
+      continue;
+    } else {
+      gen->kernelVars[i] += 1;
+      return;
+    }
+  }
 }
 
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
@@ -185,12 +323,12 @@ void *Software_Reshape(void *data, void *shape, void *output, int index,
   // TODO: Looking at the indexes produced, it appears that the Reshape
   // operation does not need to copy data around, altought I still need to look
   // further into this.
-  while (IsValid(&out)) {
-    int inAddr = GetAddress(&in);
-    int outAddr = GetAddress(&out);
+  while (Address_IsValid(&out)) {
+    int inAddr = Address_GetValue(&in);
+    int outAddr = Address_GetValue(&out);
 
-    Advance(&in);
-    Advance(&out);
+    Address_Advance(&in);
+    Address_Advance(&out);
 
     // printf("%d %d\n",outAddr,inAddr);
 
@@ -213,16 +351,16 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
   AddressGen outGen = StartAddress(info->broadCastedShape,
                                    info->broadCastedShape, info->maxDims);
 
-  while (IsValid(&outGen)) {
-    int indexA = GetAddress(&inA);
-    int indexB = GetAddress(&inB);
-    int indexO = GetAddress(&outGen);
+  while (Address_IsValid(&outGen)) {
+    int indexA = Address_GetValue(&inA);
+    int indexB = Address_GetValue(&inB);
+    int indexO = Address_GetValue(&outGen);
 
     // printf("%d %d %d\n",indexA,indexB,indexO);
 
-    Advance(&inA);
-    Advance(&inB);
-    Advance(&outGen);
+    Address_Advance(&inA);
+    Address_Advance(&inB);
+    Address_Advance(&outGen);
 
     float valA = viewA[indexA];
     float valB = viewB[indexB];
@@ -250,63 +388,49 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
 
 void *Software_MaxPool(void *inputX, void *output, int index,
                        MaxPoolInfo *info) {
-  // Currently software impl of maxpool is hardcoded to run the downloadable
-  // example.
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  // Code for 4 tensors, we probably can make it more generic without a lot of changes.
-  if (info->dims == 4) {
-    for (int a = 0; a < info->outputDims[0]; a++) {
-      for (int b = 0; b < info->outputDims[1]; b++) {
-        for (int c = 0; c < info->outputDims[2]; c++) {
-          for (int d = 0; d < info->outputDims[3]; d++) {
-            int ia =
-                info->inputDims[3] * info->inputDims[2] * info->inputDims[1];
-            int ib = info->inputDims[3] * info->inputDims[2];
-            int ic = info->inputDims[3];
+  AddressGen outGenInst = StartAddress(info->outputDims,info->outputDims,info->dims);
+  AddressGen* outGen = &outGenInst;
 
-            int oa =
-                info->outputDims[3] * info->outputDims[2] * info->outputDims[1];
-            int ob = info->outputDims[3] * info->outputDims[2];
-            int oc = info->outputDims[3];
+  // We probably want to move this to the array generated by python.
+  // Emit the proper array directly
+  int stride[16];
+  stride[0] = 1;
+  stride[1] = 1;
+  for(int i = 0; i < info->strideSize; i++){
+    stride[i+2] = info->strideDims[i];
+  }
 
-            float max = 0.0f;
-            bool firstSet = false;
-            for(int y = 0; y < info->kernelDims[0]; y++){
-              for(int x = 0; x < info->kernelDims[1]; x++){
-                int trueY = (c * info->strideDims[0] + y);
-                int trueX = (d * info->strideDims[1] + x);
+  for(;Address_IsValid(outGen); Address_Advance(outGen)){
+    float max = 0.0f;
+    bool firstSet = false;
 
-                // Padding, we just skip ahead since we use a flag to indicate validity
-                if(trueY >= info->inputDims[2]){
-                  continue;
-                } else if(trueX >= info->inputDims[3]){
-                  continue;
-                }
+    AddressGen inputPos = Address_Map(outGen,info->inputDims,stride);
+    KernelGen kernInst = StartKernel(&inputPos,info->kernelDims,info->kernelSize);
+    KernelGen* kern = &kernInst;
+    for(;Kernel_IsValid(kern);Kernel_Advance(kern)){
+      if(Kernel_IsInsidePad(kern)){
+        continue;
+      }
+      int index = Kernel_GetValue(kern);
 
-                int index = a * ia + b * ib + trueY * ic + trueX;
+      float val = view[index];
 
-                float val = view[index];
-
-                // NOTE: Padding should never affect the output value.
-                //       Because negative values exist, we cannot just use zero to represent a padded value.
-                //       We might get away with using -inf, but for now we just use an extra flag to check validity.
-                if(!firstSet){
-                  max = val;
-                  firstSet = true;
-                } else {
-                  max = MAX(max,val);
-                }
-              }
-            }
-
-            int outputIndex = a * oa + b * ob + c * oc + d;
-            out[outputIndex] = max;
-          }
-        }
+      // NOTE: Padding should never affect the output value.
+      //       Because negative values exist, we cannot just use zero to represent a padded value.
+      //       We might get away with using -inf, but for now we just use an extra flag to check validity.
+      if(!firstSet){
+        max = val;
+        firstSet = true;
+      } else {
+        max = MAX(max,val);
       }
     }
+
+    int outputIndex = Address_GetValue(outGen);
+    out[outputIndex] = max;
   }
 
   return output;
@@ -323,7 +447,7 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
       int indexOut = info->outputDims[0] * y + x;
 
       viewOut[indexOut] = 0.0f;
-      for (int c = 0; c < 256; c++) {
+      for (int c = 0; c < 256; c++) { // 256 is being hardcoded for the mnist example.
         int indexA = info->inputADims[1] * y + c;
         int indexB = info->inputBDims[1] * c + x;
 

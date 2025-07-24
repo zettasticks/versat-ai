@@ -211,6 +211,7 @@ if __name__ == "__main__":
         # Test different kernels, strides
     if True:
         CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
+
         CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3])
         CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2])
         CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2])
@@ -248,6 +249,10 @@ if __name__ == "__main__":
         #CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "VALID")
         #CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "VALID")
         #CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "VALID")
+
+        # 3 D
+        CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
+
 
     allInputNodesAndValuesInOrder = []
     for x in tests:
