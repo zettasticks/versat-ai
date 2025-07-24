@@ -39,4 +39,13 @@ module Top_Relu(){
    relu -> output;   
 }
 
-merge Test = Top_Add | Top_Relu;
+module Top_Maxpool(){
+   VRead features;
+   F_AccumMax unit;
+   VWrite output;
+#   
+   features -> unit;
+   unit -> output;
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool;

@@ -127,10 +127,15 @@ def EmitMaxPool(emitter, op: Operation):
     kernel = attr["kernel_shape"].value
     kernelShape = emitter.EmitArray("int", kernel)
 
-    dil = attr["dilations"].value
-    dilShape = emitter.EmitArray("int", dil)
+    #dil = attr["dilations"].value
+    #dilShape = emitter.EmitArray("int", dil)
 
-    return [dims, inputShape, outputShape, len(kernel), kernelShape, len(dil), dilShape]
+    stride = attr['strides'].value
+    strideShape = emitter.EmitArray("int", stride)
+
+    #print(attr)
+
+    return [dims, inputShape, outputShape, len(kernel), kernelShape, len(stride), strideShape]
 
 
 def EmitConv(emitter, op: Operation):
@@ -202,11 +207,11 @@ maxPoolAttributes = {
     "auto_pad": MakeAttrBoundedString(
         ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
     ),
-    "ceil_mode": MakeAttrInteger(0),
-    "dilations": MakeAttrAxisList(1),
+    #"ceil_mode": MakeAttrInteger(0),
+    #"dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
     "pads": MakeAttrAxisPairList(0),
-    "storage_order": MakeAttrBoundedInteger([0, 1], 0),
+    #"storage_order": MakeAttrBoundedInteger([0, 1], 0),
     "strides": MakeAttrAxisList(1),
 }
 
@@ -217,6 +222,7 @@ def GetOperatorSpec(opName):
 
 
 # Register new operators here
+# Remember, currently we only care about supporting up to version 7 operators.
 operatorNameToSpec = {}
 operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], True)
 operatorNameToSpec["Conv"] = OnnxOperatorSpec(

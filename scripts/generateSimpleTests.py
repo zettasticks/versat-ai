@@ -112,7 +112,7 @@ def CreateUnaryOpTest(op, shape):
     tests.append(test)
 
 
-def CreateMaxPool(shape, kernel, strides):
+def CreateMaxPool(shape, kernel, strides, auto_pad = "NOTSET"):
     global tests
     testIndex = len(tests)
 
@@ -136,6 +136,7 @@ def CreateMaxPool(shape, kernel, strides):
         [GetOutputTrueName(testIndex)],
         kernel_shape=kernel,
         strides=strides,
+        auto_pad=auto_pad
     )
 
     randomArray = np.random.randn(*shape).astype(np.float32)
@@ -177,7 +178,7 @@ def CreateReshapeTest(shapeIn, shapeOut):
 
 
 if __name__ == "__main__":
-    if True:
+    if False:
         # Simplest tests, no broadcast or abusing dimensions
         CreateBinaryOpTest("Add", [1], [1])
         CreateBinaryOpTest("Add", [4], [4])
@@ -192,27 +193,61 @@ if __name__ == "__main__":
         CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
         CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
-    if True:
+    if False:
         CreateUnaryOpTest("Relu", [1])
         CreateUnaryOpTest("Relu", [4])
         CreateUnaryOpTest("Relu", [2, 4])
         CreateUnaryOpTest("Relu", [2, 4, 6])
         CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
-        # Test different strides and dilations
     if False:
-        CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
-        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2])
-        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3])
-        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3])
-
-    if True:
         CreateReshapeTest([4, 2], [8])
         CreateReshapeTest([4, 2], [2, 4])
         CreateReshapeTest([1, 8], [8])
         CreateReshapeTest([2, 3, 4], [24])
         CreateReshapeTest([24], [2, 3, 4])
         CreateReshapeTest([24], [4, 3, 2])
+
+        # Test different kernels, strides
+    if True:
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
+        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3])
+        CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2])
+        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2])
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3])
+
+        # Single cell
+        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2])
+        #CreateMaxPool([1, 3, 1, 1], [3, 2], [2, 3])
+        #CreateMaxPool([1, 3, 1, 1], [2, 3], [3, 2])
+        #CreateMaxPool([1, 3, 1, 1], [3, 3], [2, 2])
+        #CreateMaxPool([1, 3, 1, 1], [2, 2], [3, 3])
+
+        # Very low size
+        CreateMaxPool([1, 3, 2, 2], [2, 2], [2, 2])
+        CreateMaxPool([1, 3, 2, 2], [3, 2], [2, 3])
+        CreateMaxPool([1, 3, 2, 2], [2, 3], [3, 2])
+        CreateMaxPool([1, 3, 2, 2], [3, 3], [2, 2])
+        CreateMaxPool([1, 3, 2, 2], [2, 2], [3, 3])
+
+        # Testing auto pad
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
+
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
+
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
+        #CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "VALID")
+        #CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "VALID")
+        #CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "VALID")
+        #CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "VALID")
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

@@ -255,8 +255,8 @@ void *Software_MaxPool(void *inputX, void *output, int index,
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  // Code for 4 tensors and kernel of 2x2 size and 2x2 strides
-  if (info->dims == 4 && info->kernelDims[0] == 2 && info->kernelDims[1] == 2) {
+  // Code for 4 tensors, we probably can make it more generic without a lot of changes.
+  if (info->dims == 4) {
     for (int a = 0; a < info->outputDims[0]; a++) {
       for (int b = 0; b < info->outputDims[1]; b++) {
         for (int c = 0; c < info->outputDims[2]; c++) {
@@ -271,76 +271,44 @@ void *Software_MaxPool(void *inputX, void *output, int index,
             int ob = info->outputDims[3] * info->outputDims[2];
             int oc = info->outputDims[3];
 
-            int input00 = a * ia + b * ib + (c * 2 + 0) * ic + (d * 2 + 0);
-            int input01 = a * ia + b * ib + (c * 2 + 0) * ic + (d * 2 + 1);
-            int input10 = a * ia + b * ib + (c * 2 + 1) * ic + (d * 2 + 0);
-            int input11 = a * ia + b * ib + (c * 2 + 1) * ic + (d * 2 + 1);
+            float max = 0.0f;
+            bool firstSet = false;
+            for(int y = 0; y < info->kernelDims[0]; y++){
+              for(int x = 0; x < info->kernelDims[1]; x++){
+                int trueY = (c * info->strideDims[0] + y);
+                int trueX = (d * info->strideDims[1] + x);
+
+                // Padding, we just skip ahead since we use a flag to indicate validity
+                if(trueY >= info->inputDims[2]){
+                  continue;
+                } else if(trueX >= info->inputDims[3]){
+                  continue;
+                }
+
+                int index = a * ia + b * ib + trueY * ic + trueX;
+
+                float val = view[index];
+
+                // NOTE: Padding should never affect the output value.
+                //       Because negative values exist, we cannot just use zero to represent a padded value.
+                //       We might get away with using -inf, but for now we just use an extra flag to check validity.
+                if(!firstSet){
+                  max = val;
+                  firstSet = true;
+                } else {
+                  max = MAX(max,val);
+                }
+              }
+            }
 
             int outputIndex = a * oa + b * ob + c * oc + d;
-
-            float v00 = view[input00];
-            float v01 = view[input01];
-            float v10 = view[input10];
-            float v11 = view[input11];
-
-            float val = MAX(v00, MAX(v01, MAX(v10, v11)));
-
-            out[outputIndex] = val;
-          }
-        }
-      }
-    } // Code for 4 tensors and kernel of 3x3 size and 3x3 strides
-  } else if (info->dims == 4 && info->kernelDims[0] == 3 &&
-             info->kernelDims[1] == 3) {
-    for (int a = 0; a < info->outputDims[0]; a++) {
-      for (int b = 0; b < info->outputDims[1]; b++) {
-        for (int c = 0; c < info->outputDims[2]; c++) {
-          for (int d = 0; d < info->outputDims[3]; d++) {
-            int ia =
-                info->inputDims[3] * info->inputDims[2] * info->inputDims[1];
-            int ib = info->inputDims[3] * info->inputDims[2];
-            int ic = info->inputDims[3];
-
-            int oa =
-                info->outputDims[3] * info->outputDims[2] * info->outputDims[1];
-            int ob = info->outputDims[3] * info->outputDims[2];
-            int oc = info->outputDims[3];
-
-            int input00 = a * ia + b * ib + (c * 3 + 0) * ic + (d * 3 + 0);
-            int input01 = a * ia + b * ib + (c * 3 + 0) * ic + (d * 3 + 1);
-            int input02 = a * ia + b * ib + (c * 3 + 0) * ic + (d * 3 + 2);
-            int input10 = a * ia + b * ib + (c * 3 + 1) * ic + (d * 3 + 0);
-            int input11 = a * ia + b * ib + (c * 3 + 1) * ic + (d * 3 + 1);
-            int input12 = a * ia + b * ib + (c * 3 + 1) * ic + (d * 3 + 2);
-            int input20 = a * ia + b * ib + (c * 3 + 2) * ic + (d * 3 + 0);
-            int input21 = a * ia + b * ib + (c * 3 + 2) * ic + (d * 3 + 1);
-            int input22 = a * ia + b * ib + (c * 3 + 2) * ic + (d * 3 + 2);
-
-            int outputIndex = a * oa + b * ob + c * oc + d;
-
-            float v00 = view[input00];
-            float v01 = view[input01];
-            float v02 = view[input02];
-            float v10 = view[input10];
-            float v11 = view[input11];
-            float v12 = view[input12];
-            float v20 = view[input20];
-            float v21 = view[input21];
-            float v22 = view[input22];
-
-            float val =
-                MAX(v00,
-                    MAX(v01,
-                        MAX(v02,
-                            MAX(v10,
-                                MAX(v11, MAX(v12, MAX(v20, MAX(v21, v22))))))));
-
-            out[outputIndex] = val;
+            out[outputIndex] = max;
           }
         }
       }
     }
   }
+
   return output;
 }
 
