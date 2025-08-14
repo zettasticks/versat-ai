@@ -41,6 +41,13 @@ typedef struct {
   int64_t *inputDims;
 } ReluInfo;
 
+typedef enum{
+  PaddingType_NOTSET,
+  PaddingType_SAME_UPPER,
+  PaddingType_SAME_LOWER,
+  PaddingType_VALID
+} PaddingType;
+
 typedef struct {
   int dims;
   int64_t *inputDims;
@@ -49,6 +56,7 @@ typedef struct {
   int *kernelDims;
   int strideSize;
   int *strideDims;
+  PaddingType padding;
 } MaxPoolInfo;
 
 typedef struct {
@@ -110,6 +118,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info);
 
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info);
+void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 

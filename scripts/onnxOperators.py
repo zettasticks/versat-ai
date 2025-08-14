@@ -127,16 +127,19 @@ def EmitMaxPool(emitter, op: Operation):
     kernel = attr["kernel_shape"].value
     kernelShape = emitter.EmitArray("int", kernel)
 
-    #dil = attr["dilations"].value
-    #dilShape = emitter.EmitArray("int", dil)
-
-    stride = attr['strides'].value
+    stride = attr["strides"].value
     strideShape = emitter.EmitArray("int", stride)
 
-    #print(attr)
-
-    return [dims, inputShape, outputShape, len(kernel), kernelShape, len(stride), strideShape]
-
+    return [
+        dims,
+        inputShape,
+        outputShape,
+        len(kernel),
+        kernelShape,
+        len(stride),
+        strideShape,
+        "PaddingType_" + attr["auto_pad"].value
+    ]
 
 def EmitConv(emitter, op: Operation):
     inputDim = len(op.inputDimensions[0])
@@ -207,11 +210,11 @@ maxPoolAttributes = {
     "auto_pad": MakeAttrBoundedString(
         ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
     ),
-    #"ceil_mode": MakeAttrInteger(0),
-    #"dilations": MakeAttrAxisList(1),
+    # "ceil_mode": MakeAttrInteger(0),
+    # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
     "pads": MakeAttrAxisPairList(0),
-    #"storage_order": MakeAttrBoundedInteger([0, 1], 0),
+    # "storage_order": MakeAttrBoundedInteger([0, 1], 0),
     "strides": MakeAttrAxisList(1),
 }
 
@@ -230,11 +233,7 @@ operatorNameToSpec["Conv"] = OnnxOperatorSpec(
 )
 operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False, [], True)
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
-    "MaxPool",
-    EmitMaxPool,
-    False,
-    False,
-    maxPoolAttributes,
+    "MaxPool", EmitMaxPool, False, False, maxPoolAttributes, True
 )
 operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
     "Reshape", EmitReshape, False, False, [], True

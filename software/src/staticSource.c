@@ -16,7 +16,13 @@ void clear_cache();
 typedef struct {
   int addressVars[16];
   int64_t iterationDims[16];
-  int64_t properDims[16];
+  int64_t properDims[16]; // TODO: This is kinda ugly. We use this to handle
+                          // broadcasting but we might solve the problem by
+                          // either creating a new address gen that is used for
+                          // broadcasting or by creating a function that takes
+                          // an address gen that does the full iteration and
+                          // returns an address gen that has been downsized to
+                          // the value expected by the broadcasting.
   int numberDims;
 } AddressGen;
 
@@ -92,7 +98,7 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
                         int numberDims) {
   AddressGen gen = {};
 
-  for(int i = 0; i < numberDims; i++){
+  for (int i = 0; i < numberDims; i++) {
     gen.iterationDims[i] = iterationDims[i];
     gen.properDims[i] = properDims[i];
   }
@@ -101,10 +107,10 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
   return gen;
 }
 
-AddressGen Address_Map(AddressGen* in,int64_t* biggerDim,int* stride) {
-  AddressGen gen = *in;  
+AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
+  AddressGen gen = *in;
 
-  for(int i = 0; i < in->numberDims; i++){
+  for (int i = 0; i < in->numberDims; i++) {
     gen.addressVars[i] *= stride[i];
     gen.iterationDims[i] = biggerDim[i];
     gen.properDims[i] = biggerDim[i];
@@ -123,25 +129,26 @@ typedef struct {
   int kernelVars[16]; // Current state
 
   // Kernel Info
-  AddressGen* address;
+  AddressGen *address;
   int kernelDims[16];
-  int kernelDilations[16]; // NOTE: Not properly tested, do not rely on dilations being correct
+  int kernelDilations[16]; // NOTE: Not properly tested, do not rely on
+                           // dilations being correct
   int numberDims;
 } KernelGen;
 
-KernelGen StartKernel(AddressGen* addresss,int* kernelDims,int numberDims){
+KernelGen StartKernel(AddressGen *addresss, int *kernelDims, int numberDims) {
   KernelGen gen = {};
   gen.address = addresss;
   gen.kernelDims[0] = 1;
   gen.kernelDims[1] = 1;
   gen.numberDims = numberDims + 2;
 
-  for(int i = 0; i < 16; i++){
+  for (int i = 0; i < 16; i++) {
     gen.kernelDilations[i] = 1;
   }
 
-  for(int i = 0; i < numberDims; i++){
-    gen.kernelDims[2+i] = kernelDims[i];
+  for (int i = 0; i < numberDims; i++) {
+    gen.kernelDims[2 + i] = kernelDims[i];
   }
 
   return gen;
@@ -168,8 +175,9 @@ void Kernel_Print(KernelGen *gen) {
 int Kernel_GetValue(KernelGen *gen) {
   int properVars[16];
 
-  for(int i = 0; i < gen->numberDims; i++){
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] + gen->address->addressVars[i];
+  for (int i = 0; i < gen->numberDims; i++) {
+    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
+                    gen->address->addressVars[i];
   }
 
   int address = 0;
@@ -189,7 +197,7 @@ int Kernel_GetValue(KernelGen *gen) {
   return address;
 }
 
-bool Kernel_IsValid(KernelGen *gen){
+bool Kernel_IsValid(KernelGen *gen) {
   // Is this the only thing that we need?
   if (gen->kernelVars[0] >= gen->kernelDims[0]) {
     return false;
@@ -205,22 +213,23 @@ bool Kernel_IsValid(KernelGen *gen){
   return false;
 }
 
-bool Kernel_IsInsidePad(KernelGen* gen){
+bool Kernel_IsInsidePad(KernelGen *gen) {
   int properVars[16];
 
-  for(int i = 0; i < gen->numberDims; i++){
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] + gen->address->addressVars[i];
+  for (int i = 0; i < gen->numberDims; i++) {
+    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
+                    gen->address->addressVars[i];
   }
 
-  for(int i = 0; i < gen->numberDims; i++){
-    if(properVars[i] >= gen->address->properDims[i]){
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (properVars[i] >= gen->address->properDims[i]) {
       return true;
     }
   }
 
   return false;
 }
-void Kernel_Advance(KernelGen* gen){
+void Kernel_Advance(KernelGen *gen) {
   if (gen->kernelVars[0] >= gen->kernelDims[0]) {
     return;
   }
@@ -344,6 +353,12 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
   float *viewB = (float *)inputB;
   float *out = (float *)output;
 
+  // TODO: Instead of stuffing addressGen with the broadcasting stuff, we could
+  // just iterate the broadcasted shape and call a function that would return
+  // the proper index for the non broadcasted shape.
+  //       Basically pull out all the properDim logic from address gen into a
+  //       extra function.
+
   AddressGen inA =
       StartAddress(info->broadCastedShape, info->firstInputDim, info->maxDims);
   AddressGen inB =
@@ -391,27 +406,29 @@ void *Software_MaxPool(void *inputX, void *output, int index,
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  AddressGen outGenInst = StartAddress(info->outputDims,info->outputDims,info->dims);
-  AddressGen* outGen = &outGenInst;
+  AddressGen outGenInst =
+      StartAddress(info->outputDims, info->outputDims, info->dims);
+  AddressGen *outGen = &outGenInst;
 
   // We probably want to move this to the array generated by python.
   // Emit the proper array directly
   int stride[16];
   stride[0] = 1;
   stride[1] = 1;
-  for(int i = 0; i < info->strideSize; i++){
-    stride[i+2] = info->strideDims[i];
+  for (int i = 0; i < info->strideSize; i++) {
+    stride[i + 2] = info->strideDims[i];
   }
 
-  for(;Address_IsValid(outGen); Address_Advance(outGen)){
+  for (; Address_IsValid(outGen); Address_Advance(outGen)) {
     float max = 0.0f;
     bool firstSet = false;
 
-    AddressGen inputPos = Address_Map(outGen,info->inputDims,stride);
-    KernelGen kernInst = StartKernel(&inputPos,info->kernelDims,info->kernelSize);
-    KernelGen* kern = &kernInst;
-    for(;Kernel_IsValid(kern);Kernel_Advance(kern)){
-      if(Kernel_IsInsidePad(kern)){
+    AddressGen inputPos = Address_Map(outGen, info->inputDims, stride);
+    KernelGen kernInst =
+        StartKernel(&inputPos, info->kernelDims, info->kernelSize);
+    KernelGen *kern = &kernInst;
+    for (; Kernel_IsValid(kern); Kernel_Advance(kern)) {
+      if (Kernel_IsInsidePad(kern)) {
         continue;
       }
       int index = Kernel_GetValue(kern);
@@ -419,13 +436,14 @@ void *Software_MaxPool(void *inputX, void *output, int index,
       float val = view[index];
 
       // NOTE: Padding should never affect the output value.
-      //       Because negative values exist, we cannot just use zero to represent a padded value.
-      //       We might get away with using -inf, but for now we just use an extra flag to check validity.
-      if(!firstSet){
+      //       Because negative values exist, we cannot just use zero to
+      //       represent a padded value. We might get away with using -inf, but
+      //       for now we just use an extra flag to check validity.
+      if (!firstSet) {
         max = val;
         firstSet = true;
       } else {
-        max = MAX(max,val);
+        max = MAX(max, val);
       }
     }
 
@@ -447,7 +465,8 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
       int indexOut = info->outputDims[0] * y + x;
 
       viewOut[indexOut] = 0.0f;
-      for (int c = 0; c < 256; c++) { // 256 is being hardcoded for the mnist example.
+      for (int c = 0; c < 256;
+           c++) { // 256 is being hardcoded for the mnist example.
         int indexA = info->inputADims[1] * y + c;
         int indexB = info->inputBDims[1] * c + x;
 
