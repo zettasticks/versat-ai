@@ -21,8 +21,7 @@ module iob_uut #(
    input  [ 4-1:0] iob_wstrb_i,
    output          iob_rvalid_o,
    output [32-1:0] iob_rdata_o,
-   output          iob_ready_o,
-   input           iob_rready_i
+   output          iob_ready_o
 );
 
    // rs232 bus
@@ -147,8 +146,7 @@ module iob_uut #(
       .iob_csrs_iob_wstrb_i (iob_wstrb_i),
       .iob_csrs_iob_rvalid_o(iob_rvalid_o),
       .iob_csrs_iob_rdata_o (iob_rdata_o),
-      .iob_csrs_iob_ready_o (iob_ready_o),
-      .iob_csrs_iob_rready_i(iob_rready_i)
+      .iob_csrs_iob_ready_o (iob_ready_o)
    );
 
    // External memory
