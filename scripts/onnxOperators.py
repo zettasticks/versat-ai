@@ -130,6 +130,9 @@ def EmitMaxPool(emitter, op: Operation):
     stride = attr["strides"].value
     strideShape = emitter.EmitArray("int", stride)
 
+    pads = attr['pads'].value
+    padsShape = emitter.EmitArray("int", pads)
+
     return [
         dims,
         inputShape,
@@ -138,7 +141,9 @@ def EmitMaxPool(emitter, op: Operation):
         kernelShape,
         len(stride),
         strideShape,
-        "PaddingType_" + attr["auto_pad"].value
+        "PaddingType_" + attr["auto_pad"].value,
+        len(pads),
+        padsShape
     ]
 
 def EmitConv(emitter, op: Operation):

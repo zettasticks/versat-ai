@@ -55,7 +55,7 @@ addressGen MaxPool2D(startX,startY,startOffset,kernelW,kernelH,imageWidth,sizeW,
    for x  0..sizeW
    for ky 0..kernelH
    for kx 0..kernelW
-   addr = startOffset + ((y + startY) * strideH + ky) * imageWidth + (x + startX) * strideW + kx;
+   addr = startOffset + (y * strideH + startY + ky) * imageWidth + x * strideW + startX + kx;
 }
 
 module Top_Maxpool(){

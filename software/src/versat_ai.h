@@ -57,6 +57,8 @@ typedef struct {
   int strideSize;
   int *strideDims;
   PaddingType padding;
+  int padsSize;
+  int *padsDims;
 } MaxPoolInfo;
 
 typedef struct {

@@ -129,6 +129,7 @@ static inline void MaxPool_ProcessWindow(Window outSpace,void* inputX,void* outp
 
   // TODO(perf): All of these calculations could be pushed outside the loop.
   //             For now, we care more about correctness than performance.
+  //             In fact, the vast majority of this code could be pushed to
   int strideW = info->strideDims[1];
   int strideH = info->strideDims[0];
 
@@ -139,26 +140,51 @@ static inline void MaxPool_ProcessWindow(Window outSpace,void* inputX,void* outp
   int inputImageH = info->inputDims[2];
   int channels = info->inputDims[1];
 
-  int outputImageH = inputImageH / strideH;
-  int outputImageW = inputImageW / strideW;
+  int padW = 0;
+  int padH = 0;
+  int outputImageH = 0;
+  int outputImageW = 0;
+  int leftPadW = 0;
+  int leftPadH = 0;
 
-  // Need to handle this special case for the notset where kernel is larger than the image size.
   if(info->padding == PaddingType_NOTSET){
-    if(kernelW > inputImageW){
-      outputImageW = 1;
-    }
-    if(kernelH > inputImageH){
-      outputImageH = 1;
+    // TODO: Need a better way of handling errors in this layer, I think.
+    if(info->padsSize != 4){
+      printf("ERROR, pads size is not expected");
+      return;
     }
 
-    kernelW = MIN(kernelW,inputImageW);
-    kernelH = MIN(kernelH,inputImageH);
+    leftPadW = info->padsDims[0];
+    leftPadH = info->padsDims[1];
 
-    strideW = MIN(strideW,inputImageW);
-    strideH = MIN(strideH,inputImageH);
-  } else {
+    padW = info->padsDims[0] + info->padsDims[2];
+    padH = info->padsDims[1] + info->padsDims[3];
+
+    outputImageW = (inputImageW + padW - kernelW) / strideW + 1;
+    outputImageH = (inputImageH + padH - kernelH) / strideH + 1;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+  } else if(info->padding == PaddingType_SAME_LOWER || info->padding == PaddingType_SAME_UPPER){
     outputImageH = (inputImageH + strideH - 1) / strideH;
     outputImageW = (inputImageW + strideW - 1) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+
+    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
+    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
+
+    if(info->padding == PaddingType_SAME_LOWER){
+      leftPadW = padW;
+      leftPadH = padH;
+    }
+  } else if(info->padding == PaddingType_VALID){
+    outputImageH = (inputImageH - kernelH + 1 + (strideH - 1)) / strideH;
+    outputImageW = (inputImageW - kernelW + 1 + (strideW - 1)) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
   }
 
   int totalSizePerChannelInput = inputImageH * inputImageW;
@@ -166,8 +192,26 @@ static inline void MaxPool_ProcessWindow(Window outSpace,void* inputX,void* outp
 
   Window inSpace = MaxPool_OutputToInput(outSpace,strideW,strideH,kernelW,kernelH);
 
-  int actualKernelW = MIN(kernelW,inputImageW - inSpace.x);
-  int actualKernelH = MIN(kernelH,inputImageH - inSpace.y);
+  inSpace.x -= leftPadW;
+  inSpace.y -= leftPadH;
+
+  int actualKernelW = kernelW;
+  int actualKernelH = kernelH;
+  if(inSpace.x < 0){
+    int offset = -inSpace.x;
+    inSpace.x += offset;
+    actualKernelW -= offset;
+  } else if(inSpace.x + inSpace.width > inputImageW){
+    actualKernelW = MIN(kernelW,inputImageW - inSpace.x);
+  }
+
+  if(inSpace.y < 0){
+    int offset = -inSpace.y;
+    inSpace.y += offset;
+    actualKernelH -= offset;
+  } else if(inSpace.y + inSpace.height > inputImageH){
+    actualKernelH = MIN(kernelH,inputImageH - inSpace.y);
+  }
 
   int inSizeW = inSpace.width;
   int inSizeH = inSpace.height;
@@ -178,7 +222,7 @@ static inline void MaxPool_ProcessWindow(Window outSpace,void* inputX,void* outp
   int stride = actualKernelH * actualKernelW;
 
   // NOTE: The reason that we use outSpace.x and .y is because the address gen already calculates the correct input position from an outputSpace POV.
-  MaxPool2D_VRead(&config->features, inputX, outSpace.x, outSpace.y, cInStart, actualKernelW,
+  MaxPool2D_VRead(&config->features, inputX, inSpace.x, inSpace.y, cInStart, actualKernelW,
                   actualKernelH, inputImageW, inSizeW, inSizeH, strideW, strideH);
   Linear2_VWrite(&config->output, output, outSpace.x,outSpace.y, cOutStart, outSizeW, outSizeH, outputImageW, stride);
 
@@ -204,28 +248,49 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   int inputImageH = info->inputDims[2];
   int channels = info->inputDims[1];
 
-  int outputImageH = inputImageH / strideH;
-  int outputImageW = inputImageW / strideW;
+  int padW = 0;
+  int padH = 0;
+  int outputImageH = 0;
+  int outputImageW = 0;
 
+  // TODO: This code is basically just a repeat of the above code.
+  //       With somethings removed that are not needed.
+  //       Vast majority of this code is duplicated when in reality it could just be calculated once in here and then passed as an argument to the proper function.
+  //       In reality, a lot of this code is also "bad" because we could just push this into the python generator code and avoid doing these calculations at runtime.
+  //       Remember, embedded is much slower and we do not want to spend time doing these operations.
   if(info->padding == PaddingType_NOTSET){
-    if(kernelW > inputImageW){
-      outputImageW = 1;
-    }
-    if(kernelH > inputImageH){
-      outputImageH = 1;
+    // TODO: Need a better way of handling errors in this layer, I think.
+    if(info->padsSize != 4){
+      printf("ERROR, pads size is not expected");
+      return output;
     }
 
-    kernelW = MIN(kernelW,inputImageW);
-    kernelH = MIN(kernelH,inputImageH);
+    padW = info->padsDims[0] + info->padsDims[2];
+    padH = info->padsDims[1] + info->padsDims[3];
 
-    strideW = MIN(strideW,inputImageW);
-    strideH = MIN(strideH,inputImageH);
-  } else {
+    outputImageW = (inputImageW + padW - kernelW) / strideW + 1;
+    outputImageH = (inputImageH + padH - kernelH) / strideH + 1;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+  } else if(info->padding == PaddingType_SAME_LOWER || info->padding == PaddingType_SAME_UPPER){
     outputImageH = (inputImageH + strideH - 1) / strideH;
     outputImageW = (inputImageW + strideW - 1) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+
+    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
+    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
+  } else if(info->padding == PaddingType_VALID){
+    outputImageH = (inputImageH - kernelH + 1 + (strideH - 1)) / strideH;
+    outputImageW = (inputImageW - kernelW + 1 + (strideW - 1)) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
   }
 
-  printf("OutputSize:%d %d\n",outputImageH,outputImageW);
+  //printf("OutputSize:%d %d\n",outputImageH,outputImageW);
 
   for(int c = 0; c < channels; c++){
     for(int y = 0; y < outputImageH; y++){

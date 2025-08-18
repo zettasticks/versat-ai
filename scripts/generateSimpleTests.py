@@ -112,7 +112,7 @@ def CreateUnaryOpTest(op, shape):
     tests.append(test)
 
 
-def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET"):
+def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
     global tests
     testIndex = len(tests)
 
@@ -126,6 +126,12 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET"):
     # Let onnx infer shape specifics
     outputShape = [None] * len(shape)
 
+    if(auto_pad == "NOTSET"):
+        assert(pads)
+
+    if(pads):
+        assert(auto_pad == "NOTSET")
+
     test.tensors = [tensor]
     test.outputTensor = make_tensor_value_info(
         GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
@@ -137,6 +143,7 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET"):
         kernel_shape=kernel,
         strides=strides,
         auto_pad=auto_pad,
+        pads=pads
     )
 
     randomArray = np.random.randn(*shape).astype(np.float32)
@@ -178,21 +185,25 @@ def CreateReshapeTest(shapeIn, shapeOut):
 
 
 if __name__ == "__main__":
+
+    # Add tests
     if False:
-        # Simplest tests, no broadcast or abusing dimensions
-        CreateBinaryOpTest("Add", [1], [1])
-        CreateBinaryOpTest("Add", [4], [4])
-        CreateBinaryOpTest("Add", [2, 4], [2, 4])
-        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+        if True:
+            # Simplest tests, no broadcast or abusing dimensions
+            CreateBinaryOpTest("Add", [1], [1])
+            CreateBinaryOpTest("Add", [4], [4])
+            CreateBinaryOpTest("Add", [2, 4], [2, 4])
+            CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+            CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-        # Broadcasting
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+            # Broadcasting
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+            CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+            CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
+    # Relu 
     if False:
         CreateUnaryOpTest("Relu", [1])
         CreateUnaryOpTest("Relu", [4])
@@ -200,6 +211,7 @@ if __name__ == "__main__":
         CreateUnaryOpTest("Relu", [2, 4, 6])
         CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
+    # Reshape
     if False:
         CreateReshapeTest([4, 2], [8])
         CreateReshapeTest([4, 2], [2, 4])
@@ -208,70 +220,76 @@ if __name__ == "__main__":
         CreateReshapeTest([24], [2, 3, 4])
         CreateReshapeTest([24], [4, 3, 2])
 
-    if False:
-        # Test different kernels, strides, no padding
-        CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
-        CreateMaxPool([1, 3, 9, 9], [3, 3], [3, 3])
-        CreateMaxPool([1, 3, 9, 8], [3, 2], [3, 2])
-        CreateMaxPool([1, 3, 8, 9], [2, 3], [2, 3])
-
-        # Simple padding example, kernel matches stride
+    # MaxPool
     if True:
-        # When in notset, we ignore values. (A [5,5] image with a [2,2] stride generates a [2,2] image)
-        # The exception appears to be a [1,1] image, where we produce a [1,1] output
-        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"NOTSET")
-        CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2],"NOTSET")
-        CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2],"NOTSET")
+        if True:
+            # Test different kernels, strides, no padding
+            CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2],"NOTSET",[0,0,0,0])
+            CreateMaxPool([1, 3, 9, 9], [3, 3], [3, 3],"NOTSET",[0,0,0,0])
+            CreateMaxPool([1, 3, 9, 8], [3, 2], [3, 2],"NOTSET",[0,0,0,0])
+            CreateMaxPool([1, 3, 8, 9], [2, 3], [2, 3],"NOTSET",[0,0,0,0])
 
-    if True:
-        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"SAME_UPPER")
-        CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2],"SAME_UPPER")
-        CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2],"SAME_UPPER")
+            # Simple padding example, kernel matches stride
+        if True:
+            # When in notset, we ignore values. (A [5,5] image with a [2,2] stride generates a [2,2] image)
+            # The exception appears to be a [1,1] image, where we produce a [1,1] output
+            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"NOTSET",[0,0,1,1])
+            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2],"NOTSET",[0,0,1,1])
+            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2],"NOTSET",[0,0,1,1])
 
+        if True:
+            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"SAME_UPPER")
+            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2],"SAME_UPPER")
+            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2],"SAME_UPPER")
+
+        if True:
+            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"SAME_LOWER")
+            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2],"SAME_LOWER")
+            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2],"SAME_LOWER")
+
+        if True:
+            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"NOTSET",[0,0,1,1]) # Should be the same as SAME_UPPER
+            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2],"NOTSET",[1,1,0,0]) # Should be the same as SAME_LOWER
+
+        if True:
+            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3],"SAME_UPPER")
+            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2],"SAME_UPPER")
+            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2],"SAME_UPPER")
+            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3],"SAME_UPPER")
+            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3],"SAME_LOWER")
+            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2],"SAME_LOWER")
+            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2],"SAME_LOWER")
+            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3],"SAME_LOWER")
+            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3],"VALID")
+            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2],"VALID")
+            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2],"VALID")
+            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3],"VALID")
+
+        if True:
+            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
+            CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
+            CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
+            CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
+            CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
+
+            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
+            CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
+            CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
+            CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
+            CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
+
+            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
+
+            # 3 D
+            # CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
+
+            # 4 D - Not supported by runtime, so cannot generate the test
+            # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
+
+    # Convolution
     if False:
-        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3])
-        CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2])
-        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2])
-        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3])
-
-        # Single cell
-        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2])
-        # CreateMaxPool([1, 3, 1, 1], [3, 2], [2, 3])
-        # CreateMaxPool([1, 3, 1, 1], [2, 3], [3, 2])
-        # CreateMaxPool([1, 3, 1, 1], [3, 3], [2, 2])
-        # CreateMaxPool([1, 3, 1, 1], [2, 2], [3, 3])
-
-        # Very low size
-        CreateMaxPool([1, 3, 2, 2], [2, 2], [2, 2])
-        CreateMaxPool([1, 3, 2, 2], [3, 2], [2, 3])
-        CreateMaxPool([1, 3, 2, 2], [2, 3], [3, 2])
-        CreateMaxPool([1, 3, 2, 2], [3, 3], [2, 2])
-        CreateMaxPool([1, 3, 2, 2], [2, 2], [3, 3])
-
-        # Testing auto pad
-        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
-        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
-        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
-        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
-        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
-
-        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
-        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
-        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
-        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
-        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
-
-        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
-        # CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "VALID")
-        # CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "VALID")
-        # CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "VALID")
-        # CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "VALID")
-
-        # 3 D
-        CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
-
-        # 4 D - Not supported by runtime, so cannot generate the test
-        # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
+        pass
+        # CreateConvolution()
 
     allInputNodesAndValuesInOrder = []
     for x in tests:
