@@ -62,23 +62,19 @@ typedef struct {
 } MaxPoolInfo;
 
 typedef struct {
-#if 0
-  // Attributes as described by onnx.
-  int auto_pad;
-  int* dilations;
-  int group;
-  int* kernel_shape;
-  int* pads;
-  int* strides;
-#endif
-
-  // Extra info to help
-  int numberInputDims;
+  int dims;
   int64_t *inputDims;
-  int numberKernelDims;
-  int64_t *kernelDims;
-  int numberOutDims;
-  int64_t *outDims;
+  int64_t *outputDims;
+  int featureMaps;
+  int kernelSize;
+  int *kernelDims;
+  int strideSize;
+  int *strideDims;
+  int dilationsSize;
+  int *dilationsDims;
+  PaddingType padding;
+  int padsSize;
+  int *padsDims;
 } ConvInfo;
 
 typedef struct {
@@ -121,6 +117,9 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info);
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info);
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
+
+void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
+                    ConvInfo *info);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 

@@ -254,7 +254,7 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   int outputImageW = 0;
 
   // TODO: This code is basically just a repeat of the above code.
-  //       With somethings removed that are not needed.
+  //       With some things removed that are not needed.
   //       Vast majority of this code is duplicated when in reality it could just be calculated once in here and then passed as an argument to the proper function.
   //       In reality, a lot of this code is also "bad" because we could just push this into the python generator code and avoid doing these calculations at runtime.
   //       Remember, embedded is much slower and we do not want to spend time doing these operations.
@@ -333,4 +333,71 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   RunAccelerator(2);
 
   return output;
+}
+
+void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
+                    ConvInfo *info){
+
+  return Software_Conv(inputX,inputW,output,index,info);
+
+  // TODO: We probably want to cleanup a bit the maxpool logic, maybe simplify some parts.
+  //       Before doing the same for convolutions.
+  //       The biggest thing to simplify is the way we go from the output window to the input window
+  //       while taking into account padding and all the different types of stride, kernel size, dilations
+  //       and so on.
+  //       Maxpool is not handling this stuff very cleanly, I think we can do better.
+
+#if 0
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
+
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  int inputImageW = info->inputDims[3];
+  int inputImageH = info->inputDims[2];
+  int channels = info->inputDims[1];
+
+  int padW = 0;
+  int padH = 0;
+  int outputImageH = 0;
+  int outputImageW = 0;
+
+  // TODO: This code is basically just a repeat of the above code.
+  //       With some things removed that are not needed.
+  //       Vast majority of this code is duplicated when in reality it could just be calculated once in here and then passed as an argument to the proper function.
+  //       In reality, a lot of this code is also "bad" because we could just push this into the python generator code and avoid doing these calculations at runtime.
+  //       Remember, embedded is much slower and we do not want to spend time doing these operations.
+  if(info->padding == PaddingType_NOTSET){
+    // TODO: Need a better way of handling errors in this layer, I think.
+    if(info->padsSize != 4){
+      printf("ERROR, pads size is not expected");
+      return output;
+    }
+
+    padW = info->padsDims[0] + info->padsDims[2];
+    padH = info->padsDims[1] + info->padsDims[3];
+
+    outputImageW = (inputImageW + padW - kernelW) / strideW + 1;
+    outputImageH = (inputImageH + padH - kernelH) / strideH + 1;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+  } else if(info->padding == PaddingType_SAME_LOWER || info->padding == PaddingType_SAME_UPPER){
+    outputImageH = (inputImageH + strideH - 1) / strideH;
+    outputImageW = (inputImageW + strideW - 1) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+
+    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
+    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
+  } else if(info->padding == PaddingType_VALID){
+    outputImageH = (inputImageH - kernelH + 1 + (strideH - 1)) / strideH;
+    outputImageW = (inputImageW - kernelW + 1 + (strideW - 1)) / strideW;
+
+    outputImageH = MAX(outputImageH,1);
+    outputImageW = MAX(outputImageW,1);
+  }
+#endif
 }

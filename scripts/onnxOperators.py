@@ -147,17 +147,40 @@ def EmitMaxPool(emitter, op: Operation):
     ]
 
 def EmitConv(emitter, op: Operation):
-    inputDim = len(op.inputDimensions[0])
+    dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-
-    kernelDim = len(op.inputDimensions[1])
-    kernelShape = emitter.EmitArray("int64_t", op.inputDimensions[1])
-
-    outDim = len(op.outputDimensions)
     outShape = emitter.EmitArray("int64_t", op.outputDimensions)
 
-    return [inputDim, inputShape, kernelDim, kernelShape, outDim, outShape]
+    attr = GetAttributesForOperator(op)
 
+    featureMaps = op.inputDimensions[1][0]
+
+    kernel = attr["kernel_shape"].value
+    kernelShape = emitter.EmitArray("int", kernel)
+
+    stride = attr["strides"].value
+    strideShape = emitter.EmitArray("int", stride)
+
+    dilations = attr["dilations"].value
+    dilationsShape = emitter.EmitArray("int", dilations)
+
+    pads = attr['pads'].value
+    padsShape = emitter.EmitArray("int", pads)
+
+    return [
+        dims, 
+        inputShape, 
+        outShape,
+        featureMaps,
+        len(kernel),
+        kernelShape,
+        len(stride),
+        strideShape,
+        len(dilations),
+        dilationsShape,
+        "PaddingType_" + attr["auto_pad"].value,
+        len(pads),
+        padsShape]
 
 def EmitReshape(emitter, op: Operation):
     op0 = op.inputDimensions[0]

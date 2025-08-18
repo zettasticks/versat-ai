@@ -151,6 +151,69 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     tests.append(test)
 
+def CreateConvolution(shape, features, kernel, strides, dilations, bias: bool, auto_pad="NOTSET", pads=None):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+    test.shapes = [shape]
+
+    inputTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    kernelShape = [features,shape[1],kernel[1],kernel[0]]
+    kernelTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 1), TensorProto.FLOAT, kernelShape
+    )
+
+    biasTensor = None
+    if(bias):
+        biasTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 2), TensorProto.FLOAT, [features]
+    )
+
+    # Let onnx infer shape specifics
+    outputShape = [None] * len(shape)
+
+    if(auto_pad == "NOTSET"):
+        assert(pads)
+
+    if(pads):
+        assert(auto_pad == "NOTSET")
+
+    test.tensors = [inputTensor,kernelTensor]
+    if(bias):
+        test.tensors.append(biasTensor)
+
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+    )
+    inputs = [GetInputTrueName(testIndex, 0),GetInputTrueName(testIndex, 1)]
+    if(bias):
+        inputs.append(GetInputTrueName(testIndex, 2))
+
+    test.node = make_node(
+        "Conv",
+        inputs,
+        [GetOutputTrueName(testIndex)],
+        auto_pad=auto_pad,
+        dilations=dilations,
+        kernel_shape=kernel,
+        pads=pads,
+        strides=strides
+    )
+
+    randomArray0 = np.random.randn(*shape).astype(np.float32)
+    randomArray1 = np.random.randn(*[features,shape[1],kernel[0],kernel[1]]).astype(np.float32)
+
+    test.randomArrays = [randomArray0,randomArray1]
+
+    if(bias):
+        randomBias =  np.random.randn(*[features]).astype(np.float32)
+        test.randomArrays.append(randomBias)
+
+    tests.append(test)
 
 def CreateReshapeTest(shapeIn, shapeOut):
     global tests
@@ -221,7 +284,7 @@ if __name__ == "__main__":
         CreateReshapeTest([24], [4, 3, 2])
 
     # MaxPool
-    if True:
+    if False:
         if True:
             # Test different kernels, strides, no padding
             CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2],"NOTSET",[0,0,0,0])
@@ -287,9 +350,9 @@ if __name__ == "__main__":
             # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
 
     # Convolution
-    if False:
-        pass
-        # CreateConvolution()
+    if True:
+        # Input shape, features, kernel, stride, dilations, bias
+        CreateConvolution([1,1,3,3],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

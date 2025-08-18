@@ -67,4 +67,20 @@ module Top_Maxpool(){
    accum -> output;
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool;
+module Top_Conv(){
+   using(Linear2) VRead features;
+   using(Linear2) VRead weights;
+   using(Linear2) VRead bias;
+   F_Mul muller;
+   F_Add addBias;
+   MyFloatAccum myAccum;
+   using(Linear2) VWrite output;
+#   
+   {weights,features} -> muller:0..1;
+   muller -> myAccum;
+   {myAccum,bias} -> addBias:0..1;
+
+   addBias -> output;
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv;

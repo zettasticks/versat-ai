@@ -249,17 +249,23 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info) {
   int batchSize = info->inputDims[0];
   int inChannels = info->inputDims[1];
-  int inH = info->inputDims[2];
   int inW = info->inputDims[3];
+  int inH = info->inputDims[2];
 
-  int featureMaps = info->kernelDims[0];
-  int outputChannelsPerGroup = info->kernelDims[1];
-  int kernelH = info->kernelDims[2];
-  int kernelW = info->kernelDims[3];
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
 
-  int outChannels = info->outDims[1]; // Should be equal to feature maps.
-  int outH = info->outDims[2];
-  int outW = info->outDims[3];
+  int featureMaps = info->featureMaps;
+
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  int outChannels = info->outputDims[1]; // Should be equal to feature maps.
+  int outW = info->outputDims[3];
+  int outH = info->outputDims[2];
+
+  //printf("%d %d %d %d\n",outChannels,outH,outW,inChannels);
+  //printf("%d %d\n",kernelH,kernelW);
 
   float *input = (float *)inputX;
   float *kernel = (float *)inputW;
@@ -277,10 +283,9 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
 
           for (int ky = 0; ky < kernelH; ky++) {
             for (int kx = 0; kx < kernelW; kx++) {
-              int deltaX = x + kx - (kernelH / 2);
-              int deltaY = y + ky - (kernelH / 2);
-              int inIndex = inC * info->inputDims[3] * info->inputDims[2] +
-                            deltaY * info->inputDims[3] + deltaX;
+              int deltaX = x + kx; // - (kernelW / 2);
+              int deltaY = y + ky; // - (kernelH / 2);
+              int inIndex = inC * inW * inH + deltaY * inW + deltaX;
               float inputVal;
 
               if (deltaX < 0 || deltaY < 0 || deltaX >= inW || deltaY >= inH) {
@@ -289,22 +294,21 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                 inputVal = input[inIndex];
               }
 
-              int inK = outC * info->kernelDims[3] * info->kernelDims[2] *
-                        info->kernelDims[1];
-              inK += inC * info->kernelDims[3] * info->kernelDims[2];
-              inK += ky * info->kernelDims[3];
+              int inK = outC * inChannels * kernelW * kernelH;
+              inK += inC * kernelW * kernelH;
+              inK += ky * kernelW;
               inK += kx;
 
               if (print)
-                printf("%d %f %d\n", inIndex, inputVal, inK);
+                printf("%d %f %d %f\n", inIndex, inputVal, inK, kernel[inK]);
 
               float kernelVal = kernel[inK];
               accum += inputVal * kernelVal;
             }
           }
         }
-        int outPos = outC * info->outDims[3] * info->outDims[2];
-        outPos += y * info->outDims[3];
+        int outPos = outC * outW * outH;
+        outPos += y * outW;
         outPos += x;
 
         outView[outPos] = accum;
