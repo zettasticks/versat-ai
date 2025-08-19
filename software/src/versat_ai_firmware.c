@@ -50,9 +50,8 @@ int main() {
   uart_puts("\n\n\nHello world from versat_ai!\n\n\n");
 
   uart_puts("\n\n\nGonna init versat!\n\n\n");
-  versat_init(VERSAT0_BASE);
-
   SetVersatDebugPrintfFunction(printf);
+  versat_init(VERSAT0_BASE);
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 

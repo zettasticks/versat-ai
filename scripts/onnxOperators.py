@@ -257,7 +257,7 @@ def GetOperatorSpec(opName):
 operatorNameToSpec = {}
 operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], True)
 operatorNameToSpec["Conv"] = OnnxOperatorSpec(
-    "Conv", EmitConv, False, False, convAttributes
+    "Conv", EmitConv, False, False, convAttributes, True
 )
 operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False, [], True)
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(

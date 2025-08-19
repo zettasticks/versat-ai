@@ -283,8 +283,8 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
 
           for (int ky = 0; ky < kernelH; ky++) {
             for (int kx = 0; kx < kernelW; kx++) {
-              int deltaX = x + kx; // - (kernelW / 2);
-              int deltaY = y + ky; // - (kernelH / 2);
+              int deltaX = x + kx;
+              int deltaY = y + ky;
               int inIndex = inC * inW * inH + deltaY * inW + deltaX;
               float inputVal;
 

@@ -67,6 +67,11 @@ sim-run: $(TEST)
 fast-versat:
 	python3 ./scripts/versatGenerate.py
 
+fast-pc-no-generate:
+	cp -r software ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
+	make -C ../versat_ai_V0.8/ pc-emul-run
+
 fast-pc-soft: fast-versat
 	cp -r software ../versat_ai_V0.8/
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/

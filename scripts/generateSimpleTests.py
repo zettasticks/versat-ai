@@ -162,7 +162,7 @@ def CreateConvolution(shape, features, kernel, strides, dilations, bias: bool, a
         GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
     )
 
-    kernelShape = [features,shape[1],kernel[1],kernel[0]]
+    kernelShape = [features,shape[1],kernel[0],kernel[1]]
     kernelTensor = make_tensor_value_info(
         GetInputTrueName(testIndex, 1), TensorProto.FLOAT, kernelShape
     )
@@ -351,8 +351,58 @@ if __name__ == "__main__":
 
     # Convolution
     if True:
-        # Input shape, features, kernel, stride, dilations, bias
-        CreateConvolution([1,1,3,3],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+        # No padding
+        # Different: Input shape, features, kernel, stride, dilations, bias
+
+        if True:
+            # First test, changing input channels and features
+            if True:
+                CreateConvolution([1,1,3,3],1,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,3,3],1,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,3,3],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,3,3],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+
+            # Same but in a 2x2 square
+            if True:
+                CreateConvolution([1,1,6,6],1,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,6,6],1,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,6,6],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,6,6],2,[3,3],[3,3],[1,1],False,"NOTSET",[0,0,0,0])
+
+            # Same but for a 5x5 kernel 
+            if True:
+                CreateConvolution([1,1,5,5],1,[5,5],[5,5],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,5,5],1,[5,5],[5,5],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,5,5],2,[5,5],[5,5],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,5,5],2,[5,5],[5,5],[1,1],False,"NOTSET",[0,0,0,0])
+
+            # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
+            if True:
+                CreateConvolution([1,1,4,4],1,[2,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,4,4],1,[2,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,4,4],2,[2,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,2,4,4],2,[2,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+
+            # Different sized kernels
+            if False:
+                CreateConvolution([1,1,2,3],1,[2,3],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,3,2],1,[3,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,4,9],1,[2,3],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+                CreateConvolution([1,1,9,4],1,[3,2],[1,1],[1,1],False,"NOTSET",[0,0,0,0])
+
+            # Bigger more realistic examples
+            if False:
+                CreateConvolution([1,3,16,16],16,[2,2],[2,2],[1,1],False,"NOTSET",[0,0,0,0])
+
+        # Left pad
+        if True:
+            CreateConvolution([1,1,2,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[1,1,0,0])
+            CreateConvolution([1,1,2,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[0,0,1,1])
+
+            #CreateConvolution([1,1,3,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[1,0,0,0])
+
+            #CreateConvolution([1,1,2,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[0,0,1,1])
+
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

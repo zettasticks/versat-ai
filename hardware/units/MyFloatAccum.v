@@ -18,7 +18,7 @@ module MyFloatAccum #(
 
    input [DATA_W-1:0] in0,
 
-   (* versat_latency = 3 *) output reg [31:0] out0,
+   (* versat_latency = 4 *) output reg [31:0] out0,
 
    input [DELAY_W-1:0] delay0
 );
@@ -56,14 +56,17 @@ module MyFloatAccum #(
       .out_o(in0_decoded)
    );
 
+   reg [DATA_W-1:0] in0_non_decoded_reg;
    reg [278:0] in0_decoded_reg;
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          doAccum_2 <= 0;
          in0_decoded_reg <= 0;
+         in0_non_decoded_reg <= 0;
       end else if (running) begin
          doAccum_2 <= doAccum;
          in0_decoded_reg <= in0_decoded;
+         in0_non_decoded_reg <= in0;
       end
    end
 
@@ -75,7 +78,7 @@ module MyFloatAccum #(
       end else begin
          if (doAccum_2) begin
             accum <= in0_decoded_reg;
-            valueUsedForAccumReset <= in0_decoded_reg; 
+            valueUsedForAccumReset <= in0_non_decoded_reg; 
          end else if (running) begin
             accum <= in0_decoded_reg + accum;
          end
