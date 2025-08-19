@@ -122,11 +122,14 @@ if __name__ == "__main__":
             ],
             "wires": [
                 {
-                    "name": "interface",
+                    "name": "csr_interface",
                     "descr": "",
                     "signals": [
-                        {"name": "interface_raddr_o", "width": 1},
-                        {"name": "interface_i", "width": 1},
+                        {"name": "interface_w_en_i", "width": 1},
+                        {"name": "interface_w_strb_i", "width": 1},
+                        {"name": "interface_w_addr_i", "width": 1},
+                        {"name": "interface_w_data_i", "width": 1},
+                        {"name": "interface_w_ready_o", "width": 1},
                     ],
                 }
             ],
@@ -138,8 +141,8 @@ if __name__ == "__main__":
                     "csr_if": "iob",
                     "csrs": [
                         {
-                            "name": "interface",
-                            "type": "R",
+                            "name": "csr_interface",
+                            "mode": "R",
                             "n_bits": 32,
                             "rst_val": 0,
                             "log2n_items": 10,
@@ -148,7 +151,7 @@ if __name__ == "__main__":
                     ],
                     "connect": {
                         "clk_en_rst_s": "clk_en_rst_s",
-                        "interface_io": "interface",
+                        "csr_interface_write_io": "interface",
                     },
                 }
             ],
