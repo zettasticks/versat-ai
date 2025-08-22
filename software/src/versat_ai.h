@@ -41,7 +41,7 @@ typedef struct {
   int64_t *inputDims;
 } ReluInfo;
 
-typedef enum{
+typedef enum {
   PaddingType_NOTSET,
   PaddingType_SAME_UPPER,
   PaddingType_SAME_LOWER,
@@ -119,7 +119,7 @@ void *Versat_Reshape(void *data, void *shape, void *output, int index,
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
 
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
-                    ConvInfo *info);
+                  ConvInfo *info);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 

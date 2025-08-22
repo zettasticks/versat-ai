@@ -173,7 +173,9 @@ def GenerateModelFromOnnxModel(onnxModel):
                     spec, [int(x) for x in attribute.ints]
                 )
             elif spec.attrType == OnnxAttributeType.BOUNDED_STRING:
-                parsedAttribute = InstantiatedAttribute(spec,attribute.s.decode('UTF-8'))
+                parsedAttribute = InstantiatedAttribute(
+                    spec, attribute.s.decode("UTF-8")
+                )
             else:
                 assert False
 

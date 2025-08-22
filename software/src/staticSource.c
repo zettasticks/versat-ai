@@ -264,8 +264,8 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
   int outW = info->outputDims[3];
   int outH = info->outputDims[2];
 
-  //printf("%d %d %d %d\n",outChannels,outH,outW,inChannels);
-  //printf("%d %d\n",kernelH,kernelW);
+  // printf("%d %d %d %d\n",outChannels,outH,outW,inChannels);
+  // printf("%d %d\n",kernelH,kernelW);
 
   float *input = (float *)inputX;
   float *kernel = (float *)inputW;

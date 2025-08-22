@@ -14,7 +14,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         "-s",
         f"-b{axi_data_w}",
         "-d",  # DMA
-        "-E",  # Extra stuff that is mostly hardcoded for this project
+        # "-E",  # Extra stuff that is mostly hardcoded for this project
         "-p",
         "iob_csrs_",
         "-t",
@@ -27,8 +27,8 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         ),  # Output hardware files
         "-O",
         os.path.realpath(os.path.join(build_dir, "software")),
-        "-g",os.path.realpath("../debug")
-        ,  # Output software files
+        "-g",
+        os.path.realpath("../debug"),  # Output software files
     ]
 
     if debug_path:

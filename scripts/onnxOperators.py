@@ -130,7 +130,7 @@ def EmitMaxPool(emitter, op: Operation):
     stride = attr["strides"].value
     strideShape = emitter.EmitArray("int", stride)
 
-    pads = attr['pads'].value
+    pads = attr["pads"].value
     padsShape = emitter.EmitArray("int", pads)
 
     return [
@@ -143,8 +143,9 @@ def EmitMaxPool(emitter, op: Operation):
         strideShape,
         "PaddingType_" + attr["auto_pad"].value,
         len(pads),
-        padsShape
+        padsShape,
     ]
+
 
 def EmitConv(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
@@ -164,12 +165,12 @@ def EmitConv(emitter, op: Operation):
     dilations = attr["dilations"].value
     dilationsShape = emitter.EmitArray("int", dilations)
 
-    pads = attr['pads'].value
+    pads = attr["pads"].value
     padsShape = emitter.EmitArray("int", pads)
 
     return [
-        dims, 
-        inputShape, 
+        dims,
+        inputShape,
         outShape,
         featureMaps,
         len(kernel),
@@ -180,7 +181,9 @@ def EmitConv(emitter, op: Operation):
         dilationsShape,
         "PaddingType_" + attr["auto_pad"].value,
         len(pads),
-        padsShape]
+        padsShape,
+    ]
+
 
 def EmitReshape(emitter, op: Operation):
     op0 = op.inputDimensions[0]
