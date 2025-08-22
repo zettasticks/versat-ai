@@ -114,9 +114,10 @@ python-cache-clean:
 	find . -name "*__pycache__" -exec rm -rf {} \; -prune
 
 VLINT_FLAGS += -d ./hardware/src
-VLINT_FLAGS += -c ./versat_lint/lint
-VLINT_FLAGS += -o ./versat_lint/lint.rpt
-vlint:
-	./scripts/verilog_linter.py $(VLINT_FLAGS)
+VLINT_FLAGS += -c ./hardware/lint
+VLINT_FLAGS += -o lint.rpt
+lint-all-fus:
+	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS)"
+	cat lint.rpt
 
 .PHONY: setup full-clean clean python-cache-clean
