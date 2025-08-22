@@ -228,7 +228,7 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         failed = 0
         total = 0
         for module in vlog_modules:
-            if module.result.returncode == 0:
+            if module.result and module.result.returncode == 0:
                 passed += 1
             else:
                 failed += 1
@@ -245,7 +245,7 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         f.write("Linted Modules List\n")
         f.write("===================\n")
         for module in vlog_modules:
-            if module.result.returncode == 0:
+            if module.result and module.result.returncode == 0:
                 f.write(f"{module.name} - PASSED\n")
             else:
                 f.write(f"{module.name} - FAILED\n")
@@ -255,7 +255,7 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         f.write("======================\n")
         # Detailed Lint Warnings
         for module in vlog_modules:
-            if module.result.returncode != 0:
+            if module.result and module.result.returncode != 0:
                 f.write(f"Module: {module.name}\n")
                 f.write(f"Lint command: {module.result.args}\n")
                 f.write(f"Warnings:\n{module.result.stderr}\n")
