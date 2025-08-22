@@ -35,6 +35,11 @@ def parse_arguments():
         default="verilog_lint.rpt",
         help="Output report file.",
     )
+    parser.add_argument(
+        "--gen-waiver",
+        action="store_true",
+        help="Generate [module]_waiver.vlt waiver file based on linter warnings.",
+    )
 
     args = parser.parse_args()
 
@@ -104,7 +109,9 @@ def set_verilator_configs(
             ]
 
 
-def lint_modules(vlog_modules: list[VerilogModule], dirs: list[str]) -> None:
+def lint_modules(
+    vlog_modules: list[VerilogModule], dirs: list[str], gen_waiver: bool
+) -> None:
     """Lint each Verilog module using verilator.
     Update VerilogModule with lint results.
     Args:
@@ -114,6 +121,9 @@ def lint_modules(vlog_modules: list[VerilogModule], dirs: list[str]) -> None:
     for module in vlog_modules:
         # run verilator lint command
         lint_cmd = "verilator --lint-only"
+        if gen_waiver:
+            waiver_name = f"{module.name}_waiver.vlt"
+            lint_cmd += f" --waiver-output {waiver_name}"
         lint_cmd += f" --top-module {module.name}"
         for cfg in module.configs:
             lint_cmd += f" {cfg}"
@@ -185,6 +195,6 @@ if __name__ == "__main__":
     # 2. Set verilator configs for each module
     set_verilator_configs(vlog_modules, args.config)
     # 3. Run verilator lint on each module
-    lint_modules(vlog_modules, args.dir)
+    lint_modules(vlog_modules, args.dir, args.gen_waiver)
     # 4. Process results into report file
     process_results(vlog_modules, args.output)
