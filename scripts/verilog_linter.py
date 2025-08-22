@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 import subprocess
@@ -54,9 +55,32 @@ def parse_arguments():
 class VerilogModule:
     """Represent a Verilog module to lint"""
 
-    name: str
+    name: str = ""
+    vfile: str = ""
+    module_tree: list[str] = field(default_factory=list)
     configs: list[str] = field(default_factory=list)
     result: subprocess.CompletedProcess | None = None
+
+
+def build_module_trees(vlog_modules: list[VerilogModule]) -> None:
+    """Build module trees for each Verilog module.
+    Read the module file and list the instantiated modules.
+    Args:
+        vlog_modules (list[VerilogModule]): List of Verilog modules.
+    """
+    for module in vlog_modules:
+        with open(module.vfile, "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if "#(" in line:
+                    if line.startswith("module "):
+                        # skip
+                        continue
+                    # line format:
+                    # module_name #( ....
+                    module.module_tree.append(line.split("#(")[0].strip())
+        # remove duplicates
+        module.module_tree = list(set(module.module_tree))
 
 
 def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
@@ -79,13 +103,65 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
         for m in matches.splitlines():
             # grep output format:
             # ./path/to/file.v:module [module_name] #(
-            name = m.split(":", 1)[1].split()[1]
+            vfile, m_str = m.split(":", 1)
+            name = m_str.split()[1]
             vlog_modules.append(
                 VerilogModule(
                     name=name,
+                    vfile=vfile,
                 )
             )
+
+    build_module_trees(vlog_modules)
+    for module in vlog_modules:
+        print(f"Found module: {module.name} in {module.vfile}")
+        print(module.module_tree)
+        print()
     return vlog_modules
+
+
+def dict_from_list(modules: list[VerilogModule]) -> dict[str, VerilogModule]:
+    """Convert a list of VerilogModule to a dictionary.
+    key = module name, value = VerilogModule object.
+    Args:
+        modules (list[VerilogModule]): List of Verilog modules.
+    Returns:
+    dict[str, VerilogModule]: Dictionary of Verilog modules.
+    """
+    d: dict = {}
+    for m in modules:
+        d[m.name] = m
+    return d
+
+
+def files_from_tree(top_module: VerilogModule, modules: dict[str, VerilogModule]) -> list[str]:
+    """Get all files from module tree.
+    Follows module tree from top_module and gets all files for submodules recursively.
+    Args:
+        top_module (VerilogModule): The Verilog module to get files from.
+        modules (dict[str, VerilogModule]): List of all Verilog modules.
+    Returns:
+        list[str]: List of Verilog files in the module tree.
+    """
+    files: list[str] = []
+    traverse = deque()
+    traverse.append(top_module.name)
+    while traverse:
+        # get next module name
+        m_name = traverse.popleft()
+        # get module from name
+        try:
+            module = modules[m_name]
+        except KeyError:
+            # if module not found, skip
+            continue
+        # add vfile to list:
+        files.append(module.vfile)
+        # add submodules to traverse queue
+        for submodule in module.module_tree:
+            traverse.append(submodule)
+    # remove duplicates
+    return list(set(files))
 
 
 def set_verilator_configs(
@@ -118,6 +194,7 @@ def lint_modules(
         vlog_modules (list[VerilogModule]): List of Verilog modules to lint.
         dirs (list[str]): List of directories to search for Verilog files.
     """
+    mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
     for module in vlog_modules:
         # run verilator lint command
         lint_cmd = "verilator --lint-only"
@@ -127,8 +204,10 @@ def lint_modules(
         lint_cmd += f" --top-module {module.name}"
         for cfg in module.configs:
             lint_cmd += f" {cfg}"
-        for src_dir in dirs:
-            lint_cmd += f" {src_dir}/*.v"
+        # add verilog source files
+        vfiles = files_from_tree(module, mod_dict)
+        for v in vfiles:
+            lint_cmd += f" {v}"
         print(f"Running lint command:\n\t{lint_cmd}\n\n")
         module.result = subprocess.run(
             lint_cmd,
