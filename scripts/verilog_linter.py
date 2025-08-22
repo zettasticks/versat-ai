@@ -48,6 +48,7 @@ def parse_arguments():
 @dataclass
 class VerilogModule:
     """Represent a Verilog module to lint"""
+
     name: str
     configs: list[str] = field(default_factory=list)
     result: subprocess.CompletedProcess | None = None
@@ -82,7 +83,9 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
     return vlog_modules
 
 
-def set_verilator_configs(vlog_modules: list[VerilogModule], cfg_dirs: list[str]) -> None:
+def set_verilator_configs(
+    vlog_modules: list[VerilogModule], cfg_dirs: list[str]
+) -> None:
     """Set verilator configs for each module.
     Update VerilogModules with respective configs.
     Args:
@@ -92,9 +95,13 @@ def set_verilator_configs(vlog_modules: list[VerilogModule], cfg_dirs: list[str]
     for module in vlog_modules:
         for cfg_dir in cfg_dirs:
             # Search for verilator_config.vlt
-            module.configs += [str(c) for c in list(Path(cfg_dir).glob("verilator_config.vlt"))]
+            module.configs += [
+                str(c) for c in list(Path(cfg_dir).glob("verilator_config.vlt"))
+            ]
             # Search for [module]_waiver.vlt configurations
-            module.configs += [str(c) for c in list(Path(cfg_dir).glob(f"{module.name}_waiver.vlt"))]
+            module.configs += [
+                str(c) for c in list(Path(cfg_dir).glob(f"{module.name}_waiver.vlt"))
+            ]
 
 
 def lint_modules(vlog_modules: list[VerilogModule], dirs: list[str]) -> None:
