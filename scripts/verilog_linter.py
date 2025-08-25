@@ -25,7 +25,7 @@ def parse_arguments():
         "-c",
         "--config",
         action="append",
-        default=None,
+        default=[],
         help="""Path to config files.
         Searches for verilator_config.vlt and [module]_waiver.vlt files.
         """,
@@ -48,7 +48,7 @@ def parse_arguments():
     if not args.dir:
         args.dir = ["."]
 
-    return parser.parse_args()
+    return args
 
 
 @dataclass
@@ -93,24 +93,28 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
     vlog_modules: list = []
     for dir in dirs:
         # search for verilog modules in all *.v files
-        matches = subprocess.run(
-            f'grep "^module " {dir}/*.v',
-            shell=True,
-            check=True,
+        v_files = list(Path(dir).glob("*.v"))
+        if not v_files:
+            continue
+        cmd = ["grep", "^module "]
+        cmd += [str(f) for f in v_files]
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
-        ).stdout
-        for m in matches.splitlines():
-            # grep output format:
-            # ./path/to/file.v:module [module_name] #(
-            vfile, m_str = m.split(":", 1)
-            name = m_str.split()[1]
-            vlog_modules.append(
-                VerilogModule(
-                    name=name,
-                    vfile=vfile,
+        )
+        if result.returncode == 0:
+            for m in result.stdout.splitlines():
+                # grep output format:
+                # ./path/to/file.v:module [module_name] #(
+                vfile, m_str = m.split(":", 1)
+                name = m_str.split()[1]
+                vlog_modules.append(
+                    VerilogModule(
+                        name=name,
+                        vfile=vfile,
+                    )
                 )
-            )
 
     build_module_trees(vlog_modules)
     for module in vlog_modules:
@@ -134,7 +138,9 @@ def dict_from_list(modules: list[VerilogModule]) -> dict[str, VerilogModule]:
     return d
 
 
-def files_from_tree(top_module: VerilogModule, modules: dict[str, VerilogModule]) -> list[str]:
+def files_from_tree(
+    top_module: VerilogModule, modules: dict[str, VerilogModule]
+) -> list[str]:
     """Get all files from module tree.
     Follows module tree from top_module and gets all files for submodules recursively.
     Args:
@@ -197,21 +203,19 @@ def lint_modules(
     mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
     for module in vlog_modules:
         # run verilator lint command
-        lint_cmd = "verilator --lint-only"
+        lint_cmd = ["verilator", "--lint-only"]
         if gen_waiver:
             waiver_name = f"{module.name}_waiver.vlt"
-            lint_cmd += f" --waiver-output {waiver_name}"
-        lint_cmd += f" --top-module {module.name}"
+            lint_cmd += ["--waiver-output", waiver_name]
+        lint_cmd += ["--top-module", module.name]
         for cfg in module.configs:
-            lint_cmd += f" {cfg}"
+            lint_cmd.append(cfg)
         # add verilog source files
         vfiles = files_from_tree(module, mod_dict)
-        for v in vfiles:
-            lint_cmd += f" {v}"
-        print(f"Running lint command:\n\t{lint_cmd}\n\n")
+        lint_cmd += vfiles
+        print(f"Running lint command:\n\t{' '.join(lint_cmd)}\n\n")
         module.result = subprocess.run(
             lint_cmd,
-            shell=True,
             capture_output=True,
             text=True,
         )
