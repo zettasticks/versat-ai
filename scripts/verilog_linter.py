@@ -4,6 +4,7 @@ import argparse
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -62,25 +63,64 @@ class VerilogModule:
     result: subprocess.CompletedProcess | None = None
 
 
-def build_module_trees(vlog_modules: list[VerilogModule]) -> None:
-    """Build module trees for each Verilog module.
-    Read the module file and list the instantiated modules.
+def build_module_tree(code: str, vlog_module: VerilogModule) -> None:
+    """Build module tree for a single Verilog module.
+    Read the module source code and list the instantiated modules.
+    NOTE: supports only named port connection syntax:
+        module_name instance_name ( .port1(a), .port2(b) );
+        module_name #(.PARAM1(P1), .PARAM2(P2) ) instance_name (.port1(a), .port2(b) );
     Args:
-        vlog_modules (list[VerilogModule]): List of Verilog modules.
+        code: str: Verilog module code as string.
+        vlog_module (VerilogModule): Verilog module.
     """
-    for module in vlog_modules:
-        with open(module.vfile, "r") as f:
-            lines = f.readlines()
-            for line in lines:
-                if "#(" in line:
-                    if line.startswith("module "):
-                        # skip
-                        continue
-                    # line format:
-                    # module_name #( ....
-                    module.module_tree.append(line.split("#(")[0].strip())
-        # remove duplicates
-        module.module_tree = list(set(module.module_tree))
+    # capture word starting with letter
+    word = r"([a-zA-Z_][a-zA-Z0-9_]*)"
+    # pattern: word + word + (
+    # example: "iob_adder adder ("
+    simple_module_pattern = r"\b" + word + r"\s+[a-zA-Z_][a-zA-Z0-9_]\s*\("
+    # pattern: word + #(
+    # example: "iob_adder adder ("
+    param_module_pattern = r"\b" + word + r"\s*#\("
+    matches = re.findall(simple_module_pattern, code)
+    matches += re.findall(param_module_pattern, code)
+    verilog_keywords = [
+        "always",
+        "assign",
+        "begin",
+        "case",
+        "default",
+        "defparam",
+        "else",
+        "end",
+        "endcase",
+        "endgenerate",
+        "endtask",
+        "for",
+        "function",
+        "generate",
+        "genvar",
+        "if",
+        "include",
+        "initial",
+        "inout",
+        "input",
+        "localparam",
+        "module",
+        "negedge",
+        "output",
+        "parameter",
+        "posedge",
+        "reg",
+        "signed",
+        "task",
+        "time",
+        "while",
+        "wire",
+    ]
+    for m in matches:
+        # filter out keywords and self reference matches
+        if m not in verilog_keywords and m != vlog_module.name:
+            vlog_module.module_tree.append(m)
 
 
 def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
@@ -94,29 +134,28 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
     for dir in dirs:
         # search for verilog modules in all *.v files
         v_files = list(Path(dir).glob("*.v"))
+
         if not v_files:
             continue
-        cmd = ["grep", "^module "]
-        cmd += [str(f) for f in v_files]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            for m in result.stdout.splitlines():
-                # grep output format:
-                # ./path/to/file.v:module [module_name] #(
-                vfile, m_str = m.split(":", 1)
-                name = m_str.split()[1]
-                vlog_modules.append(
-                    VerilogModule(
-                        name=name,
+
+        # regex: find all text between 'module' and 'endmodule'
+        # re.DOTALL makes '.' match newlines as well
+        pattern = r"\bmodule\b(.*?)\bendmodule\b"
+        for vfile in v_files:
+            modules = []
+            with open(vfile, "r") as file:
+                content = file.read()
+                modules = re.findall(pattern, content, re.DOTALL)
+                # breakpoint()
+                for m in modules:
+                    code = f"module {m}\nendmodule"
+                    vlog_module = VerilogModule(
+                        name=m.split()[0],
                         vfile=vfile,
                     )
-                )
+                    build_module_tree(code, vlog_module)
+                    vlog_modules.append(vlog_module)
 
-    build_module_trees(vlog_modules)
     for module in vlog_modules:
         print(f"Found module: {module.name} in {module.vfile}")
         print(module.module_tree)
@@ -166,8 +205,8 @@ def files_from_tree(
         # add submodules to traverse queue
         for submodule in module.module_tree:
             traverse.append(submodule)
-    # remove duplicates
-    return list(set(files))
+    # remove duplicates and covert Path() to str
+    return [str(p) for p in set(files)]
 
 
 def set_verilator_configs(
