@@ -32,6 +32,14 @@ def parse_arguments():
         """,
     )
     parser.add_argument(
+        "--fu",
+        action="append",
+        default=[],
+        help="""Funtions Unit
+        Lint only specified module(s).
+        """,
+    )
+    parser.add_argument(
         "-o",
         "--output",
         default="verilog_lint.rpt",
@@ -151,7 +159,7 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
                     code = f"module {m}\nendmodule"
                     vlog_module = VerilogModule(
                         name=m.split()[0],
-                        vfile=vfile,
+                        vfile=str(vfile),
                     )
                     build_module_tree(code, vlog_module)
                     vlog_modules.append(vlog_module)
@@ -189,7 +197,7 @@ def files_from_tree(
         list[str]: List of Verilog files in the module tree.
     """
     files: list[str] = []
-    traverse = deque()
+    traverse: deque = deque()
     traverse.append(top_module.name)
     while traverse:
         # get next module name
@@ -205,8 +213,8 @@ def files_from_tree(
         # add submodules to traverse queue
         for submodule in module.module_tree:
             traverse.append(submodule)
-    # remove duplicates and covert Path() to str
-    return [str(p) for p in set(files)]
+    # remove duplicates
+    return list(set(files))
 
 
 def set_verilator_configs(
@@ -231,16 +239,22 @@ def set_verilator_configs(
 
 
 def lint_modules(
-    vlog_modules: list[VerilogModule], dirs: list[str], gen_waiver: bool
+    vlog_modules: list[VerilogModule], dirs: list[str], gen_waiver: bool, fus: list[str]
 ) -> None:
     """Lint each Verilog module using verilator.
     Update VerilogModule with lint results.
     Args:
         vlog_modules (list[VerilogModule]): List of Verilog modules to lint.
         dirs (list[str]): List of directories to search for Verilog files.
+        gen_waiver (bool): Generate waiver file for each module.
+        fus (list[str]): List of function units (modules) to lint. If empty, lint all modules.
     """
     mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
     for module in vlog_modules:
+        if fus and module.name not in fus:
+            # skip if module not in fu list
+            # lint all modules if fus is empty
+            continue
         # run verilator lint command
         lint_cmd = ["verilator", "--lint-only"]
         if gen_waiver:
@@ -271,7 +285,10 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         failed = 0
         total = 0
         for module in vlog_modules:
-            if module.result and module.result.returncode == 0:
+            if not module.result:
+                # skip modules that were not linted
+                continue
+            if module.result.returncode == 0:
                 passed += 1
             else:
                 failed += 1
@@ -288,10 +305,13 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         f.write("Linted Modules List\n")
         f.write("===================\n")
         for module in vlog_modules:
-            if module.result and module.result.returncode == 0:
-                f.write(f"{module.name} - PASSED\n")
+            if not module.result:
+                # skip modules that were not linted
+                continue
+            elif module.result.returncode == 0:
+                f.write(f"{module.name}[{len(module.module_tree)+1}] - PASSED\n")
             else:
-                f.write(f"{module.name} - FAILED\n")
+                f.write(f"{module.name}[{len(module.module_tree)+1}] - FAILED\n")
 
         f.write("\n======================\n")
         f.write("Detailed Lint Warnings\n")
@@ -317,6 +337,6 @@ if __name__ == "__main__":
     # 2. Set verilator configs for each module
     set_verilator_configs(vlog_modules, args.config)
     # 3. Run verilator lint on each module
-    lint_modules(vlog_modules, args.dir, args.gen_waiver)
+    lint_modules(vlog_modules, args.dir, args.gen_waiver, args.fu)
     # 4. Process results into report file
     process_results(vlog_modules, args.output)

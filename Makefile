@@ -121,6 +121,11 @@ VLINT_FLAGS += -o lint.rpt
 VLINT_FLAGS += --gen-waiver
 lint-all-fus:
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS)"
-	cat lint.rpt
+	# cat lint.rpt
+
+FU?=iob_fp_clz
+lint-fus:
+	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS) --fu $(FU)"
+	# cat lint.rpt
 
 .PHONY: setup full-clean clean python-cache-clean
