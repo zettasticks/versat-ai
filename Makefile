@@ -124,7 +124,7 @@ lint-all-fus:
 	# cat lint.rpt
 
 FU?=iob_fp_clz
-lint-fus:
+lint-fu:
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS) --fu $(FU)"
 	# cat lint.rpt
 

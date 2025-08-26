@@ -250,6 +250,9 @@ def lint_modules(
         fus (list[str]): List of function units (modules) to lint. If empty, lint all modules.
     """
     mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
+    include_flags = []
+    for dir in dirs:
+        include_flags.append(f"-I{dir}")
     for module in vlog_modules:
         if fus and module.name not in fus:
             # skip if module not in fu list
@@ -257,6 +260,8 @@ def lint_modules(
             continue
         # run verilator lint command
         lint_cmd = ["verilator", "--lint-only"]
+        # add include dirs
+        lint_cmd += include_flags
         if gen_waiver:
             waiver_name = f"{module.name}_waiver.vlt"
             lint_cmd += ["--waiver-output", waiver_name]
