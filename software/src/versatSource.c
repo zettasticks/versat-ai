@@ -94,41 +94,6 @@ void *Versat_Reshape(void *data, void *shape, void *output, int index,
 }
 
 typedef struct {
-  int x, y, c, width, height;
-} Window;
-
-static inline Window MaxPool_OutputToInput(Window outputSpace, int strideW,
-                                           int strideH, int kernelW,
-                                           int kernelH) {
-  Window res = {};
-  res.c = outputSpace.c;
-  res.x = outputSpace.x * strideW;
-  res.y = outputSpace.y * strideH;
-  res.width = outputSpace.width * kernelW;
-  res.height = outputSpace.height * kernelH;
-
-  return res;
-}
-
-// Note: Only printing channel 0 and for input of the format NCHW
-void PrintWindowValues(Window w, float *input, int imageW, int imageH) {
-  printf("c-x,y:w,h = %d-%d,%d:%d,%d\n", w.c, w.x, w.y, w.width, w.height);
-
-  int channelSize = imageW * imageH;
-  for (int y = 0; y < w.height; y++) {
-    for (int x = 0; x < w.width; x++) {
-      int startY = y + w.y;
-      int startX = x + w.x;
-
-      int address = w.c * channelSize + startY * imageW + startX;
-
-      printf("%7.4f ", input[address]);
-    }
-    printf("\n");
-  }
-}
-
-typedef struct {
   int strideW;
   int strideH;
 
@@ -151,57 +116,6 @@ typedef struct {
   int padW;
   int padH;
 } ExtraInfo;
-
-ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
-  ExtraInfo res = {};
-
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
-
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
-
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
-
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
-
-  if (info->padding == PaddingType_NOTSET) {
-    // TODO: Need a better way of handling errors in this layer, I think.
-    if (info->padsSize != 4) {
-      printf("ERROR, pads size is not expected");
-      return;
-    }
-
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
-
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
-
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
-  } else if (info->padding == PaddingType_SAME_LOWER ||
-             info->padding == PaddingType_SAME_UPPER) {
-    res.padW =
-        (res.outputImageW - 1) * res.strideW + res.kernelW - res.inputImageW;
-    res.padH =
-        (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
-
-    if (info->padding == PaddingType_SAME_LOWER) {
-      res.leftPadW = res.padW;
-      res.leftPadH = res.padH;
-    } else {
-      res.rightPadW = res.padW;
-      res.rightPadH = res.padH;
-    }
-  }
-
-  return res;
-}
 
 typedef struct {
   ExtraInfo *info;
@@ -530,47 +444,22 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
-Window Conv_OutputToInput(Window outputSpace, int strideW, int strideH,
-                          int kernelW, int kernelH) {
-  Window res = {};
+ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
+  ExtraInfo res = {};
 
-  // TODO: Probably not working well
-  res.c = outputSpace.c;
-  res.x = outputSpace.x * strideW;
-  res.y = outputSpace.y * strideH;
-  res.width = outputSpace.width * kernelW;
-  res.height = outputSpace.height * kernelH;
+  res.strideW = info->strideDims[1];
+  res.strideH = info->strideDims[0];
 
-  return res;
-}
+  res.kernelW = info->kernelDims[1];
+  res.kernelH = info->kernelDims[0];
 
-void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
-                        void *output, ConvInfo *info) {
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
+  res.inputImageW = info->inputDims[3];
+  res.inputImageH = info->inputDims[2];
+  res.inputImageC = info->inputDims[1];
 
-  // TODO(perf): All of these calculations could be pushed outside the loop.
-  //             For now, we care more about correctness than performance.
-  //             In fact, the vast majority of this code could be pushed to
-  ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
-
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
-
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
-  int inputChannels = info->inputDims[1];
-
-  int outputChannels = info->outputDims[1];
-  int outputImageH = info->outputDims[2];
-  int outputImageW = info->outputDims[3];
-
-  int padW = 0;
-  int padH = 0;
-  int leftPadW = 0;
-  int leftPadH = 0;
+  res.outputImageC = info->outputDims[1];
+  res.outputImageH = info->outputDims[2];
+  res.outputImageW = info->outputDims[3];
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -579,81 +468,41 @@ void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
       return;
     }
 
-    leftPadW = info->padsDims[1];
-    leftPadH = info->padsDims[0];
+    res.leftPadW = info->padsDims[1];
+    res.leftPadH = info->padsDims[0];
 
-    padW = info->padsDims[1] + info->padsDims[3];
-    padH = info->padsDims[0] + info->padsDims[2];
+    res.rightPadW = info->padsDims[3];
+    res.rightPadH = info->padsDims[2];
+
+    res.padW = info->padsDims[1] + info->padsDims[3];
+    res.padH = info->padsDims[0] + info->padsDims[2];
   } else if (info->padding == PaddingType_SAME_LOWER ||
              info->padding == PaddingType_SAME_UPPER) {
-    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
-    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
+    res.padW =
+        (res.outputImageW - 1) * res.strideW + res.kernelW - res.inputImageW;
+    res.padH =
+        (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
 
     if (info->padding == PaddingType_SAME_LOWER) {
-      leftPadW = padW;
-      leftPadH = padH;
+      res.leftPadW = res.padW;
+      res.leftPadH = res.padH;
+    } else {
+      res.rightPadW = res.padW;
+      res.rightPadH = res.padH;
     }
   }
 
-  Window inSpace =
-      MaxPool_OutputToInput(outSpace, strideW, strideH, kernelW, kernelH);
-
-  inSpace.x -= leftPadW;
-  inSpace.y -= leftPadH;
-
-  int weightStartX = 0;
-  int weightStartY = 0;
-
-  int sizeW = kernelW;
-  int sizeH = kernelH;
-  if (inSpace.x < 0) {
-    int offset = -inSpace.x;
-    inSpace.x += offset;
-    weightStartX += offset;
-    sizeW -= offset;
-  } else if (inSpace.x + inSpace.width > inputImageW) {
-    sizeW = MIN(kernelW, inputImageW - inSpace.x);
-  }
-
-  if (inSpace.y < 0) {
-    int offset = -inSpace.y;
-    inSpace.y += offset;
-    weightStartY += offset;
-    sizeH -= offset;
-  } else if (inSpace.y + inSpace.height > inputImageH) {
-    sizeH = MIN(kernelH, inputImageH - inSpace.y);
-  }
-
-  int stride = sizeW * sizeH * inputChannels;
-
-  Conv2D_NHWC_VRead(&config->features, inputX, inSpace.x, inSpace.y, sizeW,
-                    sizeH, inputImageW, inputChannels, outputChannels);
-  Weight2D_VRead(&config->weights, inputW, weightStartX, weightStartY, sizeW,
-                 sizeH, kernelW, kernelH, inputChannels, outputChannels);
-  Linear2_NHWC_VWrite(&config->output, output, outSpace.x, outSpace.y,
-                      outSpace.height, outSpace.width, 0, outputChannels,
-                      outputImageW, stride);
-
-  config->myAccum.strideMinusOne = stride - 1;
-  EndAccelerator();
-  StartAccelerator();
+  return res;
 }
 
-void Conv_ProcessWindow2(AdvancedWindow w, void *inputX, void *inputW,
+void Conv_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
                         void *output, ConvInfo *info) {
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
-  // TODO(perf): All of these calculations could be pushed outside the loop.
-  //             For now, we care more about correctness than performance.
-  //             In fact, the vast majority of this code could be pushed to
-  ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
   int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
   int inputImageC = info->inputDims[1];
 
   int outputImageW = info->outputDims[3];
-  int outputImageH = info->outputDims[2];
   int outputImageC = info->outputDims[1];
 
   int kernelW = info->kernelDims[1];
@@ -661,18 +510,10 @@ void Conv_ProcessWindow2(AdvancedWindow w, void *inputX, void *inputW,
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
-
-  int sizeW = w.actualKernelW;
-  int sizeH = w.actualKernelH;
-
-  //Print_Conv2D_NHWC(w.inputX, w.inputY, sizeW,
-  //                  sizeH, inputImageW, inputImageC, outputImageC);
-  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY, sizeW,
-                    sizeH, inputImageW, inputImageC, outputImageC);
-  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH, sizeW,
-                 sizeH, kernelW, kernelH, inputImageC, outputImageC);
+  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY, w.actualKernelW,
+                    w.actualKernelH, inputImageW, inputImageC, outputImageC);
+  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH, w.actualKernelW,
+                 w.actualKernelH, kernelW, kernelH, inputImageC, outputImageC);
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY,
                       w.outputH, w.outputW, 0, outputImageC,
                       outputImageW, stride);
@@ -714,7 +555,6 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
 
-#if 1
   ExtraInfo extra = CalculateExtraInfo_Conv(info);
 
   WindowGen genInst = StartWindowGen(&extra,true,true);
@@ -722,30 +562,9 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
   for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
     AdvancedWindow w = WindowGen_Get(gen);
-    //AdvancedWindow_Print(w);
     
-    Conv_ProcessWindow2(w,tempInput,inputW,tempOutput,info);
-    //MaxPool_ProcessWindow(w, c, inputX, output, info);
+    Conv_ProcessWindow(w,tempInput,inputW,tempOutput,info);
   }
-#endif
-
-#if 0
-  for (int c = 0; c < outputChannels; c++) {
-    for (int y = 0; y < outputImageH; y++) {
-      for (int x = 0; x < outputImageW; x++) {
-        Window outSpace = {};
-
-        outSpace.x = x;
-        outSpace.y = y;
-        outSpace.c = c;
-        outSpace.width = 1;
-        outSpace.height = 1;
-
-        Conv_ProcessWindow(outSpace, tempInput, inputW, tempOutput, info);
-      }
-    }
-  }
-#endif
 
   // Flush the remaining data from the accelerator
   RunAccelerator(2);
