@@ -314,9 +314,9 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
                 # skip modules that were not linted
                 continue
             elif module.result.returncode == 0:
-                f.write(f"{module.name}[{len(module.module_tree)+1}] - PASSED\n")
+                f.write(f"[{len(module.module_tree)+1}]{module.name} - PASSED\n")
             else:
-                f.write(f"{module.name}[{len(module.module_tree)+1}] - FAILED\n")
+                f.write(f"[{len(module.module_tree)+1}]{module.name} - FAILED\n")
 
         f.write("\n======================\n")
         f.write("Detailed Lint Warnings\n")
