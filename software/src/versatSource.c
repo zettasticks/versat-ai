@@ -128,7 +128,7 @@ void PrintWindowValues(Window w, float *input, int imageW, int imageH) {
   }
 }
 
-typedef struct{
+typedef struct {
   int strideW;
   int strideH;
 
@@ -152,115 +152,22 @@ typedef struct{
   int padH;
 } ExtraInfo;
 
-/*
-How to divide the problem for larger dimensions?
+ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
+  ExtraInfo res = {};
 
-If we did not care about padding, the solution would be easy.
-Padding makes stuff more complex. 
-Either we insert the zeros in temp mem, using more memory and logic
-Or we divide the problem so that we configure the accelerator in different configurations to handle padding stuff.
+  res.strideW = info->strideDims[1];
+  res.strideH = info->strideDims[0];
 
-If we look at a single channel, we see that we need to handle 8 situations.
+  res.kernelW = info->kernelDims[1];
+  res.kernelH = info->kernelDims[0];
 
-Top left padding (A + D)
-Top padding only  B
-Top right padding (C + E)
-Left padding only D
-Right padding only E
-Bottom left padding (D + F)
-Bottom padding only G
-Right Bottom padding (E + H)
+  res.inputImageW = info->inputDims[3];
+  res.inputImageH = info->inputDims[2];
+  res.inputImageC = info->inputDims[1];
 
-     A | B | C
- D |___|___|___| E
- D |___|___|___| E
- D |___|___|___| E
-     F   G   H
-
-Can we configure an accelerator to handle all the padding types at the same time?
-
-At the same time, no. If we have a top left padding and a top padding only, the size of the kernel will differ.
-This implies a different value for stride, something that we need to differ betweeen accelerator runs.
-However, we can configure the accelerator to compute multiple values with the same padding type.
-
-We should be able to make an accelerator capable of handling all the different types by defining 9 different types.
-We also must make sure that the input window only spans values that belong to the same padding type.
-
-*/
-
-typedef struct {
-  ExtraInfo* info;
-  int currentX;
-  int currentY;
-} WindowGen;
-
-typedef enum{
-  PaddingRegion_TOP    = (1 << 1),
-  PaddingRegion_LEFT   = (1 << 2),
-  PaddingRegion_RIGHT  = (1 << 3),
-  PaddingRegion_BOTTOM = (1 << 4)
-} PaddingRegion;
-
-#define PaddingRegion_
-
-typedef struct{
-  int inputX;
-  int inputY;
-  int outputX;
-  int outputY;
-
-  int inputW;
-  int inputH;
-  int outputW;
-  int outputH;
-
-  PaddingRegion padding;
-} AdvancedWindow;
-
-WindowGen StartWindowGen(ExtraInfo* info){
-  WindowGen res = {};
-  res.info = info;
-  return res;
-}
-
-AdvancedWindow WindowGen_Get(WindowGen* gen){
-
-}
-
-void WindowGen_Advance(WindowGen* gen){
-  AdvancedWindow window = WindowGen_Get(gen);
-
-}
-
-bool WindowGen_Done(WindowGen* gen){
-  return true;
-}
-
-
-static inline void MaxPool_ProcessWindow(Window outSpace, void *inputX,
-                                         void *output, MaxPoolInfo *info) {
-  volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
-
-  // TODO(perf): All of these calculations could be pushed outside the loop.
-  //             For now, we care more about correctness than performance.
-  //             In fact, the vast majority of this code could be pushed to the
-  //             python code generation function
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
-
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
-
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
-  int channels = info->inputDims[1];
-
-  int padW = 0;
-  int padH = 0;
-  int outputImageH = 0;
-  int outputImageW = 0;
-  int leftPadW = 0;
-  int leftPadH = 0;
+  res.outputImageC = info->outputDims[1];
+  res.outputImageH = info->outputDims[2];
+  res.outputImageW = info->outputDims[3];
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -269,212 +176,250 @@ static inline void MaxPool_ProcessWindow(Window outSpace, void *inputX,
       return;
     }
 
-    leftPadW = info->padsDims[1];
-    leftPadH = info->padsDims[0];
+    res.leftPadW = info->padsDims[1];
+    res.leftPadH = info->padsDims[0];
 
-    padW = info->padsDims[1] + info->padsDims[3];
-    padH = info->padsDims[0] + info->padsDims[2];
+    res.rightPadW = info->padsDims[3];
+    res.rightPadH = info->padsDims[2];
 
-    outputImageW = (inputImageW + padW - kernelW) / strideW + 1;
-    outputImageH = (inputImageH + padH - kernelH) / strideH + 1;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
+    res.padW = info->padsDims[1] + info->padsDims[3];
+    res.padH = info->padsDims[0] + info->padsDims[2];
   } else if (info->padding == PaddingType_SAME_LOWER ||
              info->padding == PaddingType_SAME_UPPER) {
-    outputImageH = (inputImageH + strideH - 1) / strideH;
-    outputImageW = (inputImageW + strideW - 1) / strideW;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
-
-    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
-    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
+    res.padW =
+        (res.outputImageW - 1) * res.strideW + res.kernelW - res.inputImageW;
+    res.padH =
+        (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
 
     if (info->padding == PaddingType_SAME_LOWER) {
-      leftPadW = padW;
-      leftPadH = padH;
-    }
-  } else if (info->padding == PaddingType_VALID) {
-    outputImageH = (inputImageH - kernelH + 1 + (strideH - 1)) / strideH;
-    outputImageW = (inputImageW - kernelW + 1 + (strideW - 1)) / strideW;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
-  }
-
-  int totalSizePerChannelInput = inputImageH * inputImageW;
-  int totalSizePerChannelOutput = outputImageH * outputImageW;
-
-  Window inSpace = MaxPool_OutputToInput(outSpace, strideW, strideH, kernelW, kernelH);
-
-  inSpace.x -= leftPadW;
-  inSpace.y -= leftPadH;
-
-  int actualKernelW = kernelW;
-  int actualKernelH = kernelH;
-  if (inSpace.x < 0) {
-    int offset = -inSpace.x;
-    inSpace.x += offset;
-    actualKernelW -= offset;
-  } else if (inSpace.x + inSpace.width > inputImageW) {
-    actualKernelW = MIN(kernelW, inputImageW - inSpace.x);
-  }
-
-  if (inSpace.y < 0) {
-    int offset = -inSpace.y;
-    inSpace.y += offset;
-    actualKernelH -= offset;
-  } else if (inSpace.y + inSpace.height > inputImageH) {
-    actualKernelH = MIN(kernelH, inputImageH - inSpace.y);
-  }
-
-  int inSizeW = inSpace.width / kernelW;
-  int inSizeH = inSpace.height / kernelH;
-  int outSizeW = outSpace.width;
-  int outSizeH = outSpace.height;
-  int cInStart = outSpace.c * totalSizePerChannelInput;
-  int cOutStart = outSpace.c * totalSizePerChannelOutput;
-  int stride = actualKernelH * actualKernelW;
-
-  //Print_MaxPool2D(inSpace.x, inSpace.y, cInStart,
-  //                actualKernelW, actualKernelH, inputImageW, inSizeW, inSizeH,
-  //                strideW, strideH);
-  MaxPool2D_VRead(&config->features, inputX, inSpace.x, inSpace.y, cInStart,
-                  actualKernelW, actualKernelH, inputImageW, inSizeW, inSizeH,
-                  strideW, strideH);
-  Linear2_VWrite(&config->output, output, outSpace.x, outSpace.y, cOutStart,
-                 outSizeW, outSizeH, outputImageW, stride);
-
-  config->accum.strideMinusOne = stride - 1;
-  EndAccelerator();
-  StartAccelerator();
-}
-
-// Currently hardcoded for 2D kernels.
-void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
-  forceDoubleLoop = true;
-  volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
-  ActivateMergedAccelerator(MergeType_Top_Maxpool);
-
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
-
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
-
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
-  int channels = info->inputDims[1];
-
-  int padW = 0;
-  int padH = 0;
-  int outputImageH = 0;
-  int outputImageW = 0;
-
-  // TODO: This code is basically just a repeat of the above code.
-  //       With some things removed that are not needed.
-  //       Vast majority of this code is duplicated when in reality it could
-  //       just be calculated once in here and then passed as an argument to the
-  //       proper function. In reality, a lot of this code is also "bad" because
-  //       we could just push this into the python generator code and avoid
-  //       doing these calculations at runtime. Remember, embedded is much
-  //       slower and we do not want to spend time doing these operations.
-  if (info->padding == PaddingType_NOTSET) {
-    // TODO: Need a better way of handling errors in this layer, I think.
-    if (info->padsSize != 4) {
-      printf("ERROR, pads size is not expected");
-      return output;
-    }
-
-    padW = info->padsDims[1] + info->padsDims[3];
-    padH = info->padsDims[0] + info->padsDims[2];
-
-    outputImageW = (inputImageW + padW - kernelW) / strideW + 1;
-    outputImageH = (inputImageH + padH - kernelH) / strideH + 1;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
-  } else if (info->padding == PaddingType_SAME_LOWER ||
-             info->padding == PaddingType_SAME_UPPER) {
-    outputImageH = (inputImageH + strideH - 1) / strideH;
-    outputImageW = (inputImageW + strideW - 1) / strideW;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
-
-    padW = (outputImageW - 1) * strideW + kernelW - inputImageW;
-    padH = (outputImageH - 1) * strideH + kernelH - inputImageH;
-  } else if (info->padding == PaddingType_VALID) {
-    outputImageH = (inputImageH - kernelH + 1 + (strideH - 1)) / strideH;
-    outputImageW = (inputImageW - kernelW + 1 + (strideW - 1)) / strideW;
-
-    outputImageH = MAX(outputImageH, 1);
-    outputImageW = MAX(outputImageW, 1);
-  }
-
-  // printf("OutputSize:%d %d\n",outputImageH,outputImageW);
-
-#if 0
-  // Output window size
-  int windowSize = 2;
-
-  for (int c = 0; c < channels; c++) {
-    for (int y = 0; y < outputImageH; y += windowSize) {
-      for (int x = 0; x < outputImageW; x += windowSize) {
-        Window outSpace = {};
-
-        outSpace.x = x;
-        outSpace.y = y;
-        outSpace.c = c;
-        outSpace.width = windowSize;
-        outSpace.height = windowSize;
-
-        // Make sure that the window does not go outside the output size
-        outSpace.width = MAX(outSpace.width,outputImageW - outSpace.x);
-        outSpace.height = MAX(outSpace.height,outputImageH - outSpace.y);
-
-        MaxPool_ProcessWindow(outSpace, inputX, output, info);
-      }
+      res.leftPadW = res.padW;
+      res.leftPadH = res.padH;
+    } else {
+      res.rightPadW = res.padW;
+      res.rightPadH = res.padH;
     }
   }
-#else
-  Window outSpace = {};
-  outSpace.x = 0;
-  outSpace.y = 0;
-  outSpace.c = 0;
-  outSpace.width = 2;
-  outSpace.height = 2;
-
-  //printf("Image\n");
-  Window inSpace = MaxPool_OutputToInput(outSpace, strideW, strideH, kernelW, kernelH);
-
-  //PrintWindowValues(inSpace, inputX, inputImageW, inputImageH);
-
-  MaxPool_ProcessWindow(outSpace, inputX, output, info);
-#endif
-
-  // Flush the remaining data from the accelerator
-  RunAccelerator(2);
-
-  return output;
-}
-
-Window Conv_OutputToInput(Window outputSpace, int strideW, int strideH,
-                          int kernelW, int kernelH) {
-  Window res = {};
-
-  // TODO: Probably not working well
-  res.c = outputSpace.c;
-  res.x = outputSpace.x * strideW;
-  res.y = outputSpace.y * strideH;
-  res.width = outputSpace.width * kernelW;
-  res.height = outputSpace.height * kernelH;
 
   return res;
 }
 
-ExtraInfo CalculateExtraInfo(ConvInfo* info){
+typedef struct {
+  ExtraInfo *info;
+  int currentOutputC;
+  int currentOutputX;
+  int currentOutputY;
+  bool iterateC;
+  bool isNCHW; // Otherwise assume it is NHWC
+} WindowGen;
+
+typedef enum {
+  PaddingRegion_TOP = (1 << 1),
+  PaddingRegion_LEFT = (1 << 2),
+  PaddingRegion_RIGHT = (1 << 3),
+  PaddingRegion_BOTTOM = (1 << 4)
+} PaddingRegion;
+
+typedef struct {
+  int inputX;
+  int inputY;
+  int outputX;
+  int outputY;
+
+  int inputSizeC; // This is mostly the same as inputImageC since Conv cannot handle half sums. We must always process the entire input channels, we cannot handle half sums.
+
+  int outputC;
+  int outputSizeC;
+
+  int actualKernelW;
+  int actualKernelH;
+
+  int kernelStartW;
+  int kernelStartH;
+
+  int outputW;
+  int outputH;
+
+  PaddingRegion padding;
+} AdvancedWindow;
+
+WindowGen StartWindowGen(ExtraInfo *info,bool iterateC,bool isNCHW) {
+  WindowGen res = {};
+  res.info = info;
+  res.iterateC = iterateC;
+  res.isNCHW = isNCHW;
+  return res;
+}
+
+void AdvancedWindow_Print(AdvancedWindow window) {
+  bool printedOnce = false;
+  if (window.padding & PaddingRegion_TOP) {
+    printf("Pad_TOP");
+    printedOnce = true;
+  }
+  if (window.padding & PaddingRegion_BOTTOM) {
+    if (printedOnce) {
+      printf(" | ");
+    }
+    printf("Pad_BOTTOM");
+    printedOnce = true;
+  }
+  if (window.padding & PaddingRegion_LEFT) {
+    if (printedOnce) {
+      printf(" | ");
+    }
+    printf("Pad_LEFT");
+    printedOnce = true;
+  }
+  if (window.padding & PaddingRegion_RIGHT) {
+    if (printedOnce) {
+      printf(" | ");
+    }
+    printf("Pad_RIGHT");
+    printedOnce = true;
+  }
+
+  printf("\n");
+
+  printf("Output pos: %d:(%d,%d)\n", window.outputC, window.outputX, window.outputY);
+  printf("Input pos: (%d,%d)\n", window.inputX, window.inputY);
+  printf("WindowSize (Out view): %d %d %d\n",window.outputSizeC,window.outputH,window.outputW);
+  printf("KernelSizeAndOffset: %d:%d - %d:%d\n", window.actualKernelW,
+         window.kernelStartW, window.actualKernelH, window.kernelStartH);
+}
+
+AdvancedWindow WindowGen_Get(WindowGen *gen) {
+  AdvancedWindow res = {};
+
+  res.outputX = gen->currentOutputX;
+  res.outputY = gen->currentOutputY;
+  res.outputC = gen->currentOutputC;
+
+  res.inputX = gen->currentOutputX * gen->info->strideW;
+  res.inputY = gen->currentOutputY * gen->info->strideH;
+
+  // Currently we assume a window size of 1, although need to add the better
+  // logic to suport more windows and improve performance.
+
+  // The only thing that we need to care about is the windows that are near padding regions
+  // the fact that the accelerator must contain enough memory to support a window and
+  // that we must make sure that the height of the window is stable. ( So
+  // that we iterate over all the pixels correctly).
+  res.outputW = 1;
+  res.outputH = 1;
+
+  // For now, just like the rest of the window, we only advance a single output channel
+  res.outputSizeC = 1;
+
+  // By default, input equals kernel size
+  res.actualKernelW = gen->info->kernelW;
+  res.actualKernelH = gen->info->kernelH;
+
+  // TODO: For the cases without padding, we can support bigger
+  //       windows. We mainly want to center the logic around 
+  //       how much internal memory the accelerator supports (limiting factor
+  //       for window size) and of course the boundaries between padding, since
+  //       we cannot process different padding boundaries in the same run.
+
+  // NOTE: Any amount of padding basically shifts the kernel and changes the
+  // input window size.
+  //       Difference between left and right padding is wether we change the
+  //       start or not. The size of the kernel always changes.
+
+  // This logic only works if we make sure that we can have a one by one window
+  // size at the extreme points
+  if (gen->currentOutputX == 0 && gen->info->leftPadW) {
+    res.actualKernelW -= gen->info->leftPadW;
+    res.kernelStartW = gen->info->leftPadW;
+    res.padding |= PaddingRegion_LEFT;
+  }
+  if (gen->currentOutputX == gen->info->outputImageW - 1 &&
+      gen->info->rightPadW) {
+    res.actualKernelW -= gen->info->rightPadW;
+    res.padding |= PaddingRegion_RIGHT;
+  }
+
+  if (gen->currentOutputY == 0 && gen->info->leftPadH) {
+    res.actualKernelH -= gen->info->leftPadH;
+    res.kernelStartH = gen->info->leftPadH;
+    res.padding |= PaddingRegion_TOP;
+  }
+  if (gen->currentOutputY == gen->info->outputImageH - 1 &&
+      gen->info->rightPadH) {
+    res.actualKernelH -= gen->info->rightPadH;
+    res.padding |= PaddingRegion_BOTTOM;
+  }
+
+  // Need to offset the input window if left padding exists.
+  if (gen->currentOutputX > 0) {
+    res.inputX -= gen->info->leftPadW;
+  }
+  if (gen->currentOutputY > 0) {
+    res.inputY -= gen->info->leftPadH;
+  }
+
+  return res;
+}
+
+void WindowGen_Advance(WindowGen *gen) {
+  AdvancedWindow window = WindowGen_Get(gen);
+
+  if(gen->iterateC){
+    if(gen->isNCHW){
+      gen->currentOutputX += window.outputW;
+      if (gen->currentOutputX >= gen->info->outputImageW) {
+        gen->currentOutputX = 0;
+        gen->currentOutputY += window.outputH;
+      }
+
+      if (gen->currentOutputY >= gen->info->outputImageH) {
+        gen->currentOutputY = 0;
+        gen->currentOutputC += window.outputSizeC;
+      }
+
+      if (gen->currentOutputC >= gen->info->outputImageC) {
+        gen->currentOutputC = -1;
+        gen->currentOutputX = -1;
+        gen->currentOutputY = -1;
+      }
+    } else {
+      // NHWC
+      gen->currentOutputC += window.outputSizeC;
+      if (gen->currentOutputC >= gen->info->outputImageC) {
+        gen->currentOutputC = 0;
+        gen->currentOutputX += window.outputW;
+      }
+
+      if (gen->currentOutputX >= gen->info->outputImageW) {
+        gen->currentOutputX = 0;
+        gen->currentOutputY += window.outputH;
+      }
+
+      if (gen->currentOutputY >= gen->info->outputImageH) {
+        gen->currentOutputC = -1;
+        gen->currentOutputX = -1;
+        gen->currentOutputY = -1;
+      }
+    }
+  } else {
+    gen->currentOutputX += window.outputW;
+    if (gen->currentOutputX >= gen->info->outputImageW) {
+      gen->currentOutputX = 0;
+      gen->currentOutputY += window.outputH;
+    }
+
+    if (gen->currentOutputY >= gen->info->outputImageH) {
+      gen->currentOutputX = -1;
+      gen->currentOutputY = -1;
+    }
+  }
+}
+
+bool WindowGen_Valid(WindowGen *gen) {
+  bool res = (gen->currentOutputX != -1 && gen->currentOutputY != -1);
+  return res;
+}
+
+ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
   ExtraInfo res = {};
 
   res.strideW = info->strideDims[1];
@@ -523,6 +468,82 @@ ExtraInfo CalculateExtraInfo(ConvInfo* info){
   return res;
 }
 
+static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
+                                         void *input, void *output,
+                                         MaxPoolInfo *info) {
+  volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
+
+  int inputImageW = info->inputDims[3];
+  int inputImageH = info->inputDims[2];
+
+  int outputImageW = info->outputDims[3];
+  int outputImageH = info->outputDims[2];
+
+  int cInStart = channel * inputImageH * inputImageW;
+  int cOutStart = channel * outputImageH * outputImageW;
+
+  int stride = w.actualKernelW * w.actualKernelH;
+
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
+
+  MaxPool2D_VRead(&config->features, input, w.inputX, w.inputY, cInStart, w.actualKernelW,
+                  w.actualKernelH, inputImageW, w.outputW, w.outputH, strideW,
+                  strideH);
+  Linear2_VWrite(&config->output, output, w.outputX, w.outputY, cOutStart, w.outputW,
+                 w.outputH, outputImageW, stride);
+
+  config->accum.strideMinusOne = stride - 1;
+  EndAccelerator();
+  StartAccelerator();
+}
+
+// Currently hardcoded for 2D kernels.
+void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
+  forceDoubleLoop = true;
+  volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
+  ActivateMergedAccelerator(MergeType_Top_Maxpool);
+
+  int channels = info->inputDims[1];
+
+  ExtraInfo extra = CalculateExtraInfo_MaxPool(info);
+
+  // MaxPool is currently using NCHW. We iterate by channels since there is no gain 
+  // in passing a window that spans channels.
+
+  // For MaxPool using NHWC the approach might be different. 
+  // We might want to use windows that span channels 
+  for (int c = 0; c < channels; c++) {
+    WindowGen genInst = StartWindowGen(&extra,false,false);
+    WindowGen *gen = &genInst;
+
+    for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+      AdvancedWindow w = WindowGen_Get(gen);
+      //AdvancedWindow_Print(w);
+      MaxPool_ProcessWindow(w, c, inputX, output, info);
+    }
+  }
+
+  // Flush the remaining data from the accelerator
+  RunAccelerator(2);
+
+  return output;
+}
+
+Window Conv_OutputToInput(Window outputSpace, int strideW, int strideH,
+                          int kernelW, int kernelH) {
+  Window res = {};
+
+  // TODO: Probably not working well
+  res.c = outputSpace.c;
+  res.x = outputSpace.x * strideW;
+  res.y = outputSpace.y * strideH;
+  res.width = outputSpace.width * kernelW;
+  res.height = outputSpace.height * kernelH;
+
+  return res;
+}
+
 void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
                         void *output, ConvInfo *info) {
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
@@ -530,7 +551,7 @@ void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
   // TODO(perf): All of these calculations could be pushed outside the loop.
   //             For now, we care more about correctness than performance.
   //             In fact, the vast majority of this code could be pushed to
-  ExtraInfo extra = CalculateExtraInfo(info);
+  ExtraInfo extra = CalculateExtraInfo_Conv(info);
 
   int strideW = info->strideDims[1];
   int strideH = info->strideDims[0];
@@ -574,7 +595,8 @@ void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
     }
   }
 
-  Window inSpace = MaxPool_OutputToInput(outSpace, strideW, strideH, kernelW, kernelH);
+  Window inSpace =
+      MaxPool_OutputToInput(outSpace, strideW, strideH, kernelW, kernelH);
 
   inSpace.x -= leftPadW;
   inSpace.y -= leftPadH;
@@ -617,6 +639,49 @@ void Conv_ProcessWindow(Window outSpace, void *inputX, void *inputW,
   StartAccelerator();
 }
 
+void Conv_ProcessWindow2(AdvancedWindow w, void *inputX, void *inputW,
+                        void *output, ConvInfo *info) {
+  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
+
+  // TODO(perf): All of these calculations could be pushed outside the loop.
+  //             For now, we care more about correctness than performance.
+  //             In fact, the vast majority of this code could be pushed to
+  ExtraInfo extra = CalculateExtraInfo_Conv(info);
+
+  int inputImageW = info->inputDims[3];
+  int inputImageH = info->inputDims[2];
+  int inputImageC = info->inputDims[1];
+
+  int outputImageW = info->outputDims[3];
+  int outputImageH = info->outputDims[2];
+  int outputImageC = info->outputDims[1];
+
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
+
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
+
+  int sizeW = w.actualKernelW;
+  int sizeH = w.actualKernelH;
+
+  //Print_Conv2D_NHWC(w.inputX, w.inputY, sizeW,
+  //                  sizeH, inputImageW, inputImageC, outputImageC);
+  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY, sizeW,
+                    sizeH, inputImageW, inputImageC, outputImageC);
+  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH, sizeW,
+                 sizeH, kernelW, kernelH, inputImageC, outputImageC);
+  Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY,
+                      w.outputH, w.outputW, 0, outputImageC,
+                      outputImageW, stride);
+
+  config->myAccum.strideMinusOne = stride - 1;
+  EndAccelerator();
+  StartAccelerator();
+}
+
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info) {
   forceDoubleLoop = true;
@@ -640,29 +705,31 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
     for (int x = 0; x < inputImageW; x++) {
       for (int c = 0; c < inputChannels; c++) {
         int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
-        int NHWC_Index =
-            y * (inputImageW * inputChannels) + x * inputChannels + c;
+        int NHWC_Index = y * (inputImageW * inputChannels) + x * inputChannels + c;
 
         tempInput[NHWC_Index] = inputView[NCHW_Index];
       }
     }
   }
 
-#if 0
-  printf("Features\n");
-  for(int i = 0; i < 4; i++){
-    printf("%5.2f\n",inputView[i]);
-  }
-  printf("\n");
-  printf("Weights\n");
-  float* weights = (float*) inputW;
-  for(int i = 0; i < 9; i++){
-    printf("%5.2f\n",weights[i]);
+  ActivateMergedAccelerator(MergeType_Top_Conv);
+
+#if 1
+  ExtraInfo extra = CalculateExtraInfo_Conv(info);
+
+  WindowGen genInst = StartWindowGen(&extra,true,true);
+  WindowGen *gen = &genInst;
+
+  for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+    AdvancedWindow w = WindowGen_Get(gen);
+    //AdvancedWindow_Print(w);
+    
+    Conv_ProcessWindow2(w,tempInput,inputW,tempOutput,info);
+    //MaxPool_ProcessWindow(w, c, inputX, output, info);
   }
 #endif
 
-  ActivateMergedAccelerator(MergeType_Top_Conv);
-
+#if 0
   for (int c = 0; c < outputChannels; c++) {
     for (int y = 0; y < outputImageH; y++) {
       for (int x = 0; x < outputImageW; x++) {
@@ -678,6 +745,7 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
       }
     }
   }
+#endif
 
   // Flush the remaining data from the accelerator
   RunAccelerator(2);
