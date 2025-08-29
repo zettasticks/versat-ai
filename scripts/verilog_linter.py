@@ -32,11 +32,19 @@ def parse_arguments():
         """,
     )
     parser.add_argument(
+        "--fu-dirs",
+        action="append",
+        default=[],
+        help="""Funtions Unit
+        Search directory for function units to lint.
+        """,
+    )
+    parser.add_argument(
         "--fu",
         action="append",
         default=[],
         help="""Funtions Unit
-        Lint only specified module(s).
+        Lint only specified module(s). Overwrites --fu-dirs if set.
         """,
     )
     parser.add_argument(
@@ -131,6 +139,37 @@ def build_module_tree(code: str, vlog_module: VerilogModule) -> None:
             vlog_module.module_tree.append(m)
 
 
+def modules_from_dict(fu_dirs: list[str]) -> list[str]:
+    """Get all verilog modules in directories.
+    Args:
+        dirs (list[str]): List of directories to search for Verilog files.
+        fu_dirs (list[str]): List of directories to search for function units.
+    Returns:
+        list[VerilogModule]: List of Verilog module names.
+    """
+    fus_to_lint: list[str] = []
+    for dir in fu_dirs:
+        # search for verilog modules in all *.v files
+        v_files = list(Path(dir).glob("*.v"))
+
+        if not v_files:
+            continue
+
+        # regex: find all text between 'module' and 'endmodule'
+        # re.DOTALL makes '.' match newlines as well
+        pattern = r"\bmodule\b(.*?)\bendmodule\b"
+        for vfile in v_files:
+            modules = []
+            with open(vfile, "r") as file:
+                content = file.read()
+                modules = re.findall(pattern, content, re.DOTALL)
+                for m in modules:
+                    fus_to_lint.append(m.split()[0])
+
+    breakpoint()
+    return fus_to_lint
+
+
 def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
     """Get all verilog modules in directories.
     Args:
@@ -183,6 +222,38 @@ def dict_from_list(modules: list[VerilogModule]) -> dict[str, VerilogModule]:
     for m in modules:
         d[m.name] = m
     return d
+
+
+def configs_from_tree(
+    top_module: VerilogModule, modules: dict[str, VerilogModule]
+) -> list[str]:
+    """Get all configs from module tree.
+    Follows module tree from top_module and gets all configs for submodules recursively.
+    Args:
+        top_module (VerilogModule): The Verilog module to get files from.
+        modules (dict[str, VerilogModule]): List of all Verilog modules.
+    Returns:
+        list[str]: List of Verilog config files in the module tree.
+    """
+    files: list[str] = []
+    traverse: deque = deque()
+    traverse.append(top_module.name)
+    while traverse:
+        # get next module name
+        m_name = traverse.popleft()
+        # get module from name
+        try:
+            module = modules[m_name]
+        except KeyError:
+            # if module not found, skip
+            continue
+        # add vfile to list:
+        files += module.configs
+        # add submodules to traverse queue
+        for submodule in module.module_tree:
+            traverse.append(submodule)
+    # remove duplicates, keep order of appearance
+    return list(dict.fromkeys(files))
 
 
 def files_from_tree(
@@ -239,7 +310,11 @@ def set_verilator_configs(
 
 
 def lint_modules(
-    vlog_modules: list[VerilogModule], dirs: list[str], gen_waiver: bool, fus: list[str]
+    vlog_modules: list[VerilogModule],
+    dirs: list[str],
+    gen_waiver: bool,
+    fus: list[str],
+    fu_dirs: list[str],
 ) -> None:
     """Lint each Verilog module using verilator.
     Update VerilogModule with lint results.
@@ -248,15 +323,23 @@ def lint_modules(
         dirs (list[str]): List of directories to search for Verilog files.
         gen_waiver (bool): Generate waiver file for each module.
         fus (list[str]): List of function units (modules) to lint. If empty, lint all modules.
+        fu_dirs (list[str]): List of directories to search for function units.
     """
     mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
     include_flags = []
+
+    fus_to_lint: list[str] | None = None
+    if fus:
+        fus_to_lint = fus
+    elif fu_dirs:
+        fus_to_lint = modules_from_dict(fu_dirs)
+
     for dir in dirs:
         include_flags.append(f"-I{dir}")
     for module in vlog_modules:
-        if fus and module.name not in fus:
+        if fus_to_lint and module.name not in fus_to_lint:
             # skip if module not in fu list
-            # lint all modules if fus is empty
+            # lint all modules if list is empty
             continue
         # run verilator lint command
         lint_cmd = ["verilator", "--lint-only"]
@@ -266,11 +349,10 @@ def lint_modules(
             waiver_name = f"{module.name}_waiver.vlt"
             lint_cmd += ["--waiver-output", waiver_name]
         lint_cmd += ["--top-module", module.name]
-        for cfg in module.configs:
-            lint_cmd.append(cfg)
+        # waiver files
+        lint_cmd += configs_from_tree(module, mod_dict)
         # add verilog source files
-        vfiles = files_from_tree(module, mod_dict)
-        lint_cmd += vfiles
+        lint_cmd += files_from_tree(module, mod_dict)
         print(f"Running lint command:\n\t{' '.join(lint_cmd)}\n\n")
         module.result = subprocess.run(
             lint_cmd,
@@ -342,6 +424,6 @@ if __name__ == "__main__":
     # 2. Set verilator configs for each module
     set_verilator_configs(vlog_modules, args.config)
     # 3. Run verilator lint on each module
-    lint_modules(vlog_modules, args.dir, args.gen_waiver, args.fu)
+    lint_modules(vlog_modules, args.dir, args.gen_waiver, args.fu, args.fu_dirs)
     # 4. Process results into report file
     process_results(vlog_modules, args.output)
