@@ -166,7 +166,6 @@ def modules_from_dict(fu_dirs: list[str]) -> list[str]:
                 for m in modules:
                     fus_to_lint.append(m.split()[0])
 
-    breakpoint()
     return fus_to_lint
 
 
@@ -193,7 +192,6 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
             with open(vfile, "r") as file:
                 content = file.read()
                 modules = re.findall(pattern, content, re.DOTALL)
-                # breakpoint()
                 for m in modules:
                     code = f"module {m}\nendmodule"
                     vlog_module = VerilogModule(
