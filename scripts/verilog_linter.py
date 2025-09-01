@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import re
 import subprocess
+from typing import Callable
 
 
 def parse_arguments():
@@ -58,13 +59,10 @@ def parse_arguments():
         action="store_true",
         help="Generate [module]_waiver.vlt waiver file based on linter warnings.",
     )
-
     args = parser.parse_args()
-
-    # post process
+    # post process - use current dir if no dir specified
     if not args.dir:
         args.dir = ["."]
-
     return args
 
 
@@ -151,7 +149,6 @@ def modules_from_dict(fu_dirs: list[str]) -> list[str]:
     for dir in fu_dirs:
         # search for verilog modules in all *.v files
         v_files = list(Path(dir).glob("*.v"))
-
         if not v_files:
             continue
 
@@ -180,7 +177,6 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
     for dir in dirs:
         # search for verilog modules in all *.v files
         v_files = list(Path(dir).glob("*.v"))
-
         if not v_files:
             continue
 
@@ -201,57 +197,40 @@ def get_verilog_modules(dirs: list[str]) -> list[VerilogModule]:
                     build_module_tree(code, vlog_module)
                     vlog_modules.append(vlog_module)
 
-    for module in vlog_modules:
-        print(f"Found module: {module.name} in {module.vfile}")
-        print(module.module_tree)
-        print()
     return vlog_modules
 
 
-def dict_from_list(modules: list[VerilogModule]) -> dict[str, VerilogModule]:
-    """Convert a list of VerilogModule to a dictionary.
-    key = module name, value = VerilogModule object.
-    Args:
-        modules (list[VerilogModule]): List of Verilog modules.
-    Returns:
-    dict[str, VerilogModule]: Dictionary of Verilog modules.
-    """
-    d: dict = {}
-    for m in modules:
-        d[m.name] = m
-    return d
-
-
-def configs_from_tree(
-    top_module: VerilogModule, modules: dict[str, VerilogModule]
+def traverse_module_tree(
+    top_module: VerilogModule,
+    modules: dict[str, VerilogModule],
+    process: Callable[[list[str], VerilogModule], None],
 ) -> list[str]:
-    """Get all configs from module tree.
-    Follows module tree from top_module and gets all configs for submodules recursively.
+    """Process module tree.
+    Follows module tree from top_module and gets all files for submodules recursively.
     Args:
         top_module (VerilogModule): The Verilog module to get files from.
         modules (dict[str, VerilogModule]): List of all Verilog modules.
+        process (Callable[[list[str], VerilogModule], None]):
+            Function to process each module.
     Returns:
-        list[str]: List of Verilog config files in the module tree.
+        list[str]: List of Verilog files in the module tree.
     """
-    files: list[str] = []
+    traverse_list: list[str] = []
     traverse: deque = deque()
     traverse.append(top_module.name)
     while traverse:
         # get next module name
         m_name = traverse.popleft()
-        # get module from name
-        try:
-            module = modules[m_name]
-        except KeyError:
-            # if module not found, skip
-            continue
-        # add vfile to list:
-        files += module.configs
+        if m_name in modules:
+            module = modules[m_name]  # get module from name
+        else:
+            continue  # skip if module not found
+        process(traverse_list, module)
         # add submodules to traverse queue
         for submodule in module.module_tree:
             traverse.append(submodule)
     # remove duplicates, keep order of appearance
-    return list(dict.fromkeys(files))
+    return list(dict.fromkeys(traverse_list))
 
 
 def files_from_tree(
@@ -265,25 +244,29 @@ def files_from_tree(
     Returns:
         list[str]: List of Verilog files in the module tree.
     """
-    files: list[str] = []
-    traverse: deque = deque()
-    traverse.append(top_module.name)
-    while traverse:
-        # get next module name
-        m_name = traverse.popleft()
-        # get module from name
-        try:
-            module = modules[m_name]
-        except KeyError:
-            # if module not found, skip
-            continue
-        # add vfile to list:
-        files.append(module.vfile)
-        # add submodules to traverse queue
-        for submodule in module.module_tree:
-            traverse.append(submodule)
-    # remove duplicates
-    return list(set(files))
+
+    def append_vfile(t_list: list[str], m: VerilogModule):
+        t_list.append(m.vfile)
+
+    return traverse_module_tree(top_module, modules, append_vfile)
+
+
+def configs_from_tree(
+    top_module: VerilogModule, modules: dict[str, VerilogModule]
+) -> list[str]:
+    """Get all configs from module tree.
+    Follows module tree from top_module and gets all configs for submodules recursively.
+    Args:
+        top_module (VerilogModule): The Verilog module to get files from.
+        modules (dict[str, VerilogModule]): List of all Verilog modules.
+    Returns:
+        list[str]: List of Verilog config files in the module tree.
+    """
+
+    def append_configs(t_list: list[str], m: VerilogModule):
+        t_list += m.configs
+
+    return traverse_module_tree(top_module, modules, append_configs)
 
 
 def set_verilator_configs(
@@ -320,10 +303,13 @@ def lint_modules(
         vlog_modules (list[VerilogModule]): List of Verilog modules to lint.
         dirs (list[str]): List of directories to search for Verilog files.
         gen_waiver (bool): Generate waiver file for each module.
-        fus (list[str]): List of function units (modules) to lint. If empty, lint all modules.
+        fus (list[str]): List of function units (modules) to lint.
+            If empty, lint all modules.
         fu_dirs (list[str]): List of directories to search for function units.
     """
-    mod_dict: dict[str, VerilogModule] = dict_from_list(vlog_modules)
+    mod_dict: dict[str, VerilogModule] = {}
+    for m in vlog_modules:
+        mod_dict[m.name] = m  # convert module list to dict
     include_flags = []
 
     fus_to_lint: list[str] | None = None
@@ -369,14 +355,21 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         passed = 0
         failed = 0
         total = 0
+        linted_fus = ""
+        detailed_warnings = ""
         for module in vlog_modules:
             if not module.result:
-                # skip modules that were not linted
-                continue
+                continue  # skip modules that were not linted
             if module.result.returncode == 0:
                 passed += 1
+                linted_fus += f"[{len(module.module_tree)+1}]{module.name} - PASSED\n"
             else:
                 failed += 1
+                linted_fus += f"[{len(module.module_tree)+1}]{module.name} - FAILED\n"
+                detailed_warnings += f"Module: {module.name}\n"
+                detailed_warnings += f"Lint command: {module.result.args}\n"
+                detailed_warnings += f"Warnings:\n{module.result.stderr}\n"
+                detailed_warnings += "\n=================================\n\n"
             total += 1
         f.write("// Report Generated by verilog_linter.py\n\n")
         f.write("====================\n")
@@ -389,25 +382,12 @@ def process_results(vlog_modules: list[VerilogModule], output: str) -> None:
         f.write("===================\n")
         f.write("Linted Modules List\n")
         f.write("===================\n")
-        for module in vlog_modules:
-            if not module.result:
-                # skip modules that were not linted
-                continue
-            elif module.result.returncode == 0:
-                f.write(f"[{len(module.module_tree)+1}]{module.name} - PASSED\n")
-            else:
-                f.write(f"[{len(module.module_tree)+1}]{module.name} - FAILED\n")
+        f.write(linted_fus)
 
         f.write("\n======================\n")
         f.write("Detailed Lint Warnings\n")
         f.write("======================\n")
-        # Detailed Lint Warnings
-        for module in vlog_modules:
-            if module.result and module.result.returncode != 0:
-                f.write(f"Module: {module.name}\n")
-                f.write(f"Lint command: {module.result.args}\n")
-                f.write(f"Warnings:\n{module.result.stderr}\n")
-                f.write("\n=================================\n\n")
+        f.write(detailed_warnings)
 
 
 if __name__ == "__main__":

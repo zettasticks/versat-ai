@@ -104,6 +104,7 @@ clean:
 	@rm -rf ./software/*.bin
 	@rm -f  ./software/src/code.c ./software/src/modelInfo.h
 	@rm -rf ../*.summary ../*.rpt
+	@rm -rf ./*.rpt
 	@find . -name \*~ -delete
 
 full-clean: clean
@@ -121,8 +122,7 @@ VLINT_FLAGS += -d ../versat_ai_V0.8/hardware/src
 VLINT_FLAGS += -c ./hardware/lint
 VLINT_FLAGS += -c ./submodules/VERSAT/hardware/lint
 VLINT_FLAGS += -o lint.rpt
-# VLINT_FLAGS += --gen-waiver
-lint-all-fus: $(TEST)
+lint-all-fus: clean $(TEST)
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS)"
 	cat lint.rpt
 
