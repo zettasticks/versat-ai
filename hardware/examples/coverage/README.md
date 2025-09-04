@@ -2,16 +2,21 @@
 Standalone example for FU Coverage
 
 ## Contents:
-.
-└── coverage
-    ├── Makefile
-    └── src
-        ├── relu_tb.cpp: verilator testbench
-        └── Relu.v: example FU to cover
+hardware/examples/coverage/
+├── Makefile
+├── README.md
+├── scripts
+│   └── coverage_analyze.py
+└── src
+    ├── relu_tb.v
+    └── Relu.v
 
 ### Run example:
 ```bash
-make coverage
+# coverage with verilog only testbench
+make cov-verilog-only
+# optional lcov report
+make gen-lcov-report
 ```
 
 ### Check results:
@@ -23,6 +28,10 @@ Total coverage (12/12) 100.00%
 - manual check results in `cov_annotated/` directory
 - more info about annotated results
   [here](https://verilator.org/guide/latest/exe_verilator_coverage.html)
+
+## Optional Verilog Annotation Script
+`coverage_analyze.py`: custom script that analyzes verilator coverage annotations.
+- check results in `coverage.rpt`
 
 ## Optional graphical report:
 - `cov-lcov` makefile target
