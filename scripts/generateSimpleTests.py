@@ -151,6 +151,44 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     tests.append(test)
 
+def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+    test.shapes = [shape]
+
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    # Let onnx infer shape specifics
+    outputShape = [None] * len(shape)
+
+    if auto_pad == "NOTSET":
+        assert pads
+
+    if pads:
+        assert auto_pad == "NOTSET"
+
+    test.tensors = [tensor]
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+    )
+    test.node = make_node(
+        "AveragePool",
+        [GetInputTrueName(testIndex, 0)],
+        [GetOutputTrueName(testIndex)],
+        kernel_shape=kernel,
+        strides=strides,
+        auto_pad=auto_pad,
+        pads=pads,
+    )
+
+    randomArray = np.random.randn(*shape).astype(np.float32)
+    test.randomArrays = [randomArray]
+
+    tests.append(test)
 
 def CreateConvolution(
     shape,
@@ -302,7 +340,7 @@ if __name__ == "__main__":
     # Test padding rewrite
     # All these tests need to output a 2x2 result.
 
-    if False:
+    if True:
         # All padding posibilities, mostly to test the window generation
         if True:
             # No padding                                           T  L  B  R
@@ -427,8 +465,134 @@ if __name__ == "__main__":
             # 4 D - Not supported by runtime, so cannot generate the test
             # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
 
+    #CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+    if False:
+        # All padding posibilities, mostly to test the window generation
+        if True:
+            # No padding                                           T  L  B  R
+            CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+
+            # Only top
+            CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
+
+            # Only left
+            CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+
+            # Only bottom
+            CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 0])
+
+            # Only right
+            CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 1])
+
+            # Top left
+            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0])
+
+            # Top bottom
+            CreateAveragePool([1, 1, 2, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 0])
+
+            # Top right
+            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 1])
+
+            # Bottom left
+            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 0])
+
+            # Left right
+            CreateAveragePool([1, 1, 4, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 1])
+
+            # Bottom right
+            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+
+            # Top and Bottom left
+            CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 0])
+
+            # Top left and right
+            CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 1])
+
+            # Top and Bottom right
+            CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 1])
+
+            # Bottom left and right
+            CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
+
+            # All directions
+            CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+
+            # All directions at the same time
+            CreateAveragePool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
+
+            # Padding all directions and big internal
+            CreateAveragePool([1, 1, 10, 10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+
+        if True:
+            # Test different kernels, strides, no padding
+            CreateAveragePool([1, 3, 8, 8], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+            CreateAveragePool([1, 3, 9, 9], [3, 3], [3, 3], "NOTSET", [0, 0, 0, 0])
+            CreateAveragePool([1, 3, 9, 8], [3, 2], [3, 2], "NOTSET", [0, 0, 0, 0])
+            CreateAveragePool([1, 3, 8, 9], [2, 3], [2, 3], "NOTSET", [0, 0, 0, 0])
+
+            # Simple padding example, kernel matches stride
+        if True:
+            # When in notset, we ignore values. (A [5,5] image with a [2,2] stride generates a [2,2] image)
+            # The exception appears to be a [1,1] image, where we produce a [1,1] output
+            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+
+        if True:
+            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_UPPER")
+            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_UPPER")
+            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_UPPER")
+
+        if True:
+            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_LOWER")
+            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_LOWER")
+            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_LOWER")
+
+        if True:
+            CreateAveragePool(
+                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1]
+            )  # Should be the same as SAME_UPPER
+            CreateAveragePool(
+                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0]
+            )  # Should be the same as SAME_LOWER
+
+        if True:
+            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_UPPER")
+            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_UPPER")
+            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_UPPER")
+            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_UPPER")
+            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_LOWER")
+            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_LOWER")
+            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_LOWER")
+            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_LOWER")
+            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "VALID")
+            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "VALID")
+            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "VALID")
+            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "VALID")
+
+        if False:
+            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
+            CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
+            CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
+            CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
+            CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
+
+            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
+            CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
+            CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
+            CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
+            CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
+
+            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
+
+            # 3 D
+            # CreateAveragePool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
+
+            # 4 D - Not supported by runtime, so cannot generate the test
+            # CreateAveragePool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
+
     # Convolution
-    if True:
+    if False:
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
         c = 3

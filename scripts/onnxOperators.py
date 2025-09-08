@@ -8,6 +8,7 @@ from versatDefs import (
     OnnxAttribute,
     OnnxAttributeType,
     OnnxOperatorSpec,
+    BroadcastType
 )
 from enum import Enum, auto
 
@@ -146,7 +147,6 @@ def EmitMaxPool(emitter, op: Operation):
         padsShape,
     ]
 
-
 def EmitConv(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
@@ -249,6 +249,17 @@ maxPoolAttributes = {
     "strides": MakeAttrAxisList(1),
 }
 
+averagePoolAttributes = {
+    "auto_pad": MakeAttrBoundedString(
+        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
+    ),
+    # "ceil_mode": MakeAttrInteger(0),
+    # "dilations": MakeAttrAxisList(1),
+    "kernel_shape": MakeAttrIntegerList(None),
+    "pads": MakeAttrAxisPairList(0),
+    # "storage_order": MakeAttrBoundedInteger([0, 1], 0),
+    "strides": MakeAttrAxisList(1),
+}
 
 def GetOperatorSpec(opName):
     global operatorNameToSpec
@@ -258,15 +269,10 @@ def GetOperatorSpec(opName):
 # Register new operators here
 # Remember, currently we only care about supporting up to version 7 operators.
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, True, False, [], True)
-operatorNameToSpec["Conv"] = OnnxOperatorSpec(
-    "Conv", EmitConv, False, False, convAttributes, True
-)
-operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, False, False, [], True)
-operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
-    "MaxPool", EmitMaxPool, False, False, maxPoolAttributes, True
-)
-operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
-    "Reshape", EmitReshape, False, False, [], True
-)
-operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul ", EmitMatMul, False, False)
+operatorNameToSpec["Add"] = OnnxOperatorSpec("Add",EmitAdd,[],True,BroadcastType.UNIDIRECTIONAL)
+operatorNameToSpec["Conv"] = OnnxOperatorSpec("Conv", EmitConv,convAttributes, True)
+operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu,[], True)
+operatorNameToSpec["MaxPool"] = OnnxOperatorSpec("MaxPool", EmitMaxPool, maxPoolAttributes, False)
+operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape,[], True)
+operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul,[], False)
+operatorNameToSpec["AveragePool"] = OnnxOperatorSpec("AveragePool", EmitMaxPool,averagePoolAttributes,True)

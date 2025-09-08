@@ -85,16 +85,18 @@ class Operation:
         None  # Address at runtime. We precalculate it, we do not allocate memory at runtime.
     )
 
+class BroadcastType(Enum):
+    NO_BROADCAST = auto()
+    UNIDIRECTIONAL = auto()
+    MULTIDIRECTIONAL = auto()
 
 @dataclass
 class OnnxOperatorSpec:
     name: str
     emitFunction: Callable
-    supportsMultidirectionalBroadcasting: bool
-    supportsUnidirectionalBroadcasting: bool
     attributesDict: dict[str, OnnxAttribute] = field(default_factory=dict)
     generateVersatCode: bool = False
-
+    broadcastType: BroadcastType = BroadcastType.NO_BROADCAST
 
 @dataclass
 class Port:

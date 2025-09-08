@@ -444,6 +444,115 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
+#if 0
+ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
+  ExtraInfo res = {};
+
+  res.strideW = info->strideDims[1];
+  res.strideH = info->strideDims[0];
+
+  res.kernelW = info->kernelDims[1];
+  res.kernelH = info->kernelDims[0];
+
+  res.inputImageW = info->inputDims[3];
+  res.inputImageH = info->inputDims[2];
+  res.inputImageC = info->inputDims[1];
+
+  res.outputImageC = info->outputDims[1];
+  res.outputImageH = info->outputDims[2];
+  res.outputImageW = info->outputDims[3];
+
+  if (info->padding == PaddingType_NOTSET) {
+    // TODO: Need a better way of handling errors in this layer, I think.
+    if (info->padsSize != 4) {
+      printf("ERROR, pads size is not expected");
+      return;
+    }
+
+    res.leftPadW = info->padsDims[1];
+    res.leftPadH = info->padsDims[0];
+
+    res.rightPadW = info->padsDims[3];
+    res.rightPadH = info->padsDims[2];
+
+    res.padW = info->padsDims[1] + info->padsDims[3];
+    res.padH = info->padsDims[0] + info->padsDims[2];
+  } else if (info->padding == PaddingType_SAME_LOWER ||
+             info->padding == PaddingType_SAME_UPPER) {
+    res.padW = (res.outputImageW - 1) * res.strideW + res.kernelW - res.inputImageW;
+    res.padH = (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
+
+    if (info->padding == PaddingType_SAME_LOWER) {
+      res.leftPadW = res.padW;
+      res.leftPadH = res.padH;
+    } else {
+      res.rightPadW = res.padW;
+      res.rightPadH = res.padH;
+    }
+  }
+
+  return res;
+}
+
+static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
+                                         void *input, void *output,
+                                         AveragePoolInfo *info) {
+  volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
+
+  int inputImageW = info->inputDims[3];
+  int inputImageH = info->inputDims[2];
+
+  int outputImageW = info->outputDims[3];
+  int outputImageH = info->outputDims[2];
+
+  int cInStart = channel * inputImageH * inputImageW;
+  int cOutStart = channel * outputImageH * outputImageW;
+
+  int stride = w.actualKernelW * w.actualKernelH;
+
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
+
+  MaxPool2D_VRead(&config->features, input, w.inputX, w.inputY, cInStart, w.actualKernelW,
+                  w.actualKernelH, inputImageW, w.outputW, w.outputH, strideW,
+                  strideH);
+  Linear2_VWrite(&config->output, output, w.outputX, w.outputY, cOutStart, w.outputW,
+                 w.outputH, outputImageW, stride);
+
+  config->accum.strideMinusOne = stride - 1;
+  EndAccelerator();
+  StartAccelerator();
+}
+
+// Currently hardcoded for 2D kernels.
+void *Versat_AveragePool(void *inputX, void *output, int index, AveragePoolInfo *info) {
+  forceDoubleLoop = true;
+  volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
+  ActivateMergedAccelerator(MergeType_Top_AveragePool);
+
+  int channels = info->inputDims[1];
+
+  ExtraInfo extra = CalculateExtraInfo_AveragePool(info);
+
+  // Using NHWC
+  for (int c = 0; c < channels; c++) {
+    WindowGen genInst = StartWindowGen(&extra,false,false);
+    WindowGen *gen = &genInst;
+
+    for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+      AdvancedWindow w = WindowGen_Get(gen);
+      //AdvancedWindow_Print(w);
+      AveragePool_ProcessWindow(w, c, inputX, output, info);
+    }
+  }
+
+  // Flush the remaining data from the accelerator
+  RunAccelerator(2);
+
+  return output;
+}
+#endif
+
 ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
   ExtraInfo res = {};
 
