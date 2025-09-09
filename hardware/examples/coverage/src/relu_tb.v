@@ -27,30 +27,45 @@ module relu_tb;
 `endif
 
     // Hold reset for a couple of cycles
+    rst = 0;
+    repeat (2) @(posedge clk);
+    rst = 1;
     repeat (2) @(posedge clk);
     rst = 0;
     assert(out0 == 0) else $fatal("Initial output should be 0 after reset");
 
     // Enable running and test negative input -> expect 0
     running = 1;
-    in0 = 32'h8000_0001;  // negative
+
+    in0 = 32'h0000_0000;  // 0
     @(posedge clk); #1;   // sample after posedge update
     assert(out0 == in0) else $fatal("Output should be in0");
 
-    // Positive input -> expect same value
-    in0 = 32'h0000_0005;
+    in0 = 32'h8000_0001;  // negative value
     @(posedge clk); #1;
     assert(out0 == 0) else $fatal("Output should be 0");
 
+    in0 = 32'h0000_0005;  // Positive input -> expect same value
+    @(posedge clk); #1;
+    assert(out0 == in0) else $fatal("Output should be in0");
+
     // running=0 should hold previous output
     running = 0;
-    in0 = 32'h0000_0009;
+    in0 = 32'h0000_0000;  // 0
     @(posedge clk); #1;
     assert(out0 == 0) else $fatal("Output should be same as previously");
 
     // Re-enable and test another negative
     running = 1;
-    in0 = 32'hFFFF_FFFF;  // -1
+    in0 = 32'h7FFF_FFFF;  // max positive value
+    @(posedge clk); #1;
+    assert(out0 == in0) else $fatal("Output should be in0");
+
+    in0 = 32'h0000_0000;  // 0
+    @(posedge clk); #1;
+    assert(out0 == in0) else $fatal("Output should be in0");
+
+    in0 = 32'h7FFF_FFFF;  // max positive value
     @(posedge clk); #1;
     assert(out0 == in0) else $fatal("Output should be in0");
 

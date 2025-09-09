@@ -2,6 +2,7 @@
 # COVERAGE
 #
 
+VCD?=0
 SRC_DIR=src
 VSRC=$(wildcard ./$(SRC_DIR)/*.v)
 VERILATED_PATH=./obj_dir
@@ -16,6 +17,9 @@ COV_FLAGS= -Wall -cc
 COV_FLAGS+= --binary
 COV_FLAGS+= --trace
 COV_FLAGS+= --coverage
+ifeq ($(VCD),1)
+COV_FLAGS+=--trace -DVCD
+endif
 COV_FLAGS+= --top-module relu_tb
 COV_RPT=custom_coverage.rpt
 
@@ -47,7 +51,7 @@ gen-lcov-report: merged.dat
 	genhtml coverage.info -o coverage_html
 
 clean cov-clean:
-	rm -rf $(VERILATED_PATH)
+	rm -rf $(VERILATED_PATH) uut.vcd
 	rm -rf $(COV_LOGS) $(COV_RPT) merged.dat cov_annotated \
 		coverage.info coverage_html
 	rm -rf $(COV_RPT)
