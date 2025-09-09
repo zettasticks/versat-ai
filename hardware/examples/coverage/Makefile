@@ -17,7 +17,10 @@ COV_FLAGS+= --binary
 COV_FLAGS+= --trace
 COV_FLAGS+= --coverage
 COV_FLAGS+= --top-module relu_tb
-COV_RPT=coverage.rpt
+COV_RPT=custom_coverage.rpt
+
+# Custom coverage file
+SIM_EXE+=+verilator+coverage+file+$(COV_RPT)
 
 cov-verilog-only merged.dat: clean
 	# verilate design and testbench
@@ -25,7 +28,7 @@ cov-verilog-only merged.dat: clean
 	# run simulation
 	$(SIM_EXE)
 	# merge coverage
-	verilator_coverage --write merged.dat ./coverage.dat
+	verilator_coverage --write merged.dat $(COV_RPT)
 	# annotate coverage
 	# --annotate <dir>: create coverage annotations in <dir>.
 	#  					Note: only shows modules with missing coverage
@@ -45,6 +48,6 @@ gen-lcov-report: merged.dat
 
 clean cov-clean:
 	rm -rf $(VERILATED_PATH)
-	rm -rf $(COV_LOGS) coverage.dat merged.dat cov_annotated \
+	rm -rf $(COV_LOGS) $(COV_RPT) merged.dat cov_annotated \
 		coverage.info coverage_html
 	rm -rf $(COV_RPT)
