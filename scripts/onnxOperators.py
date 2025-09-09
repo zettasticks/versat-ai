@@ -8,7 +8,7 @@ from versatDefs import (
     OnnxAttribute,
     OnnxAttributeType,
     OnnxOperatorSpec,
-    BroadcastType
+    BroadcastType,
 )
 from enum import Enum, auto
 
@@ -147,6 +147,7 @@ def EmitMaxPool(emitter, op: Operation):
         padsShape,
     ]
 
+
 def EmitConv(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
@@ -261,6 +262,7 @@ averagePoolAttributes = {
     "strides": MakeAttrAxisList(1),
 }
 
+
 def GetOperatorSpec(opName):
     global operatorNameToSpec
     return operatorNameToSpec[opName]
@@ -269,10 +271,16 @@ def GetOperatorSpec(opName):
 # Register new operators here
 # Remember, currently we only care about supporting up to version 7 operators.
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add",EmitAdd,[],True,BroadcastType.UNIDIRECTIONAL)
-operatorNameToSpec["Conv"] = OnnxOperatorSpec("Conv", EmitConv,convAttributes, True)
-operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu,[], True)
-operatorNameToSpec["MaxPool"] = OnnxOperatorSpec("MaxPool", EmitMaxPool, maxPoolAttributes, False)
-operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape,[], True)
-operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul,[], False)
-operatorNameToSpec["AveragePool"] = OnnxOperatorSpec("AveragePool", EmitMaxPool,averagePoolAttributes,True)
+operatorNameToSpec["Add"] = OnnxOperatorSpec(
+    "Add", EmitAdd, [], True, BroadcastType.UNIDIRECTIONAL
+)
+operatorNameToSpec["Conv"] = OnnxOperatorSpec("Conv", EmitConv, convAttributes, True)
+operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, [], True)
+operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
+    "MaxPool", EmitMaxPool, maxPoolAttributes, True
+)
+operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape, [], True)
+operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul, [], False)
+operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
+    "AveragePool", EmitMaxPool, averagePoolAttributes, True
+)

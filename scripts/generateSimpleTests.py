@@ -151,6 +151,7 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     tests.append(test)
 
+
 def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
     global tests
     testIndex = len(tests)
@@ -189,6 +190,7 @@ def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
     test.randomArrays = [randomArray]
 
     tests.append(test)
+
 
 def CreateConvolution(
     shape,
@@ -340,7 +342,7 @@ if __name__ == "__main__":
     # Test padding rewrite
     # All these tests need to output a 2x2 result.
 
-    if True:
+    if False:
         # All padding posibilities, mostly to test the window generation
         if True:
             # No padding                                           T  L  B  R
@@ -466,7 +468,7 @@ if __name__ == "__main__":
             # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
 
     #CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-    if False:
+    if True:
         # All padding posibilities, mostly to test the window generation
         if True:
             # No padding                                           T  L  B  R
@@ -598,65 +600,104 @@ if __name__ == "__main__":
         c = 3
         f = 16
 
-        CreateConvolution([1, c, 3, 3],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 0, 0])
-        CreateConvolution([1, c, 6, 6],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 0, 0])
+        CreateConvolution(
+            [1, c, 3, 3], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
+        )
+        CreateConvolution(
+            [1, c, 6, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
+        )
 
         if True:
 
             # No padding                                                          T  L  B  R
-            CreateConvolution([1, c, 6, 6],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 0, 0])
+            CreateConvolution(
+                [1, c, 6, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
+            )
 
             # Only top
-            CreateConvolution([1, c, 5, 6],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 0, 0, 0])
+            CreateConvolution(
+                [1, c, 5, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 0, 0]
+            )
 
             # Only left
-            CreateConvolution([1, c, 6, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 1, 0, 0])
+            CreateConvolution(
+                [1, c, 6, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 0, 0]
+            )
 
             # Only bottom
-            CreateConvolution([1, c, 5, 6],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 1, 0])
+            CreateConvolution(
+                [1, c, 5, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 1, 0]
+            )
 
             # Only right
-            CreateConvolution([1, c, 6, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 0, 1])
+            CreateConvolution(
+                [1, c, 6, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 1]
+            )
 
             # Top left
-            CreateConvolution([1, c, 5, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 0, 0])
+            CreateConvolution(
+                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 0, 0]
+            )
 
             # Top bottom
-            CreateConvolution([1, c, 4, 6],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 0, 1, 0])
+            CreateConvolution(
+                [1, c, 4, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 1, 0]
+            )
 
             # Top right
-            CreateConvolution([1, c, 5, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 0, 0, 1])
+            CreateConvolution(
+                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 0, 1]
+            )
 
             # Bottom left
-            CreateConvolution([1, c, 5, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 1, 1, 0])
+            CreateConvolution(
+                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 1, 0]
+            )
 
             # Left right
-            CreateConvolution([1, c, 6, 4],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 1, 0, 1])
+            CreateConvolution(
+                [1, c, 6, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 0, 1]
+            )
 
             # Bottom right
-            CreateConvolution([1, c, 5, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 0, 1, 1])
+            CreateConvolution(
+                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 1, 1]
+            )
 
             # Top and Bottom left
-            CreateConvolution([1, c, 4, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 1, 0])
+            CreateConvolution(
+                [1, c, 4, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 0]
+            )
 
             # Top left and right
-            CreateConvolution([1, c, 5, 4],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 0, 1])
+            CreateConvolution(
+                [1, c, 5, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 0, 1]
+            )
 
             # Top and Bottom right
-            CreateConvolution([1, c, 4, 5],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 0, 1, 1])
+            CreateConvolution(
+                [1, c, 4, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 1, 1]
+            )
 
             # Bottom left and right
-            CreateConvolution([1, c, 5, 4],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[0, 1, 1, 1])
+            CreateConvolution(
+                [1, c, 5, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 1, 1]
+            )
 
             # All directions
-            CreateConvolution([1, c, 4, 4],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 1, 1])
+            CreateConvolution(
+                [1, c, 4, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
+            )
 
             # All directions at the same time
-            CreateConvolution([1, c, 1, 1],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 1, 1])
+            CreateConvolution(
+                [1, c, 1, 1], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
+            )
 
             # Padding all directions and big internal
-            CreateConvolution([1, c, 10, 10],f,[3, 3],[3, 3],[1, 1],False,"NOTSET",[1, 1, 1, 1])
-
+            CreateConvolution(
+                [1, c, 10, 10], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
+            )
 
         # No padding
         # Different: Input shape, features, kernel, stride, dilations, bias

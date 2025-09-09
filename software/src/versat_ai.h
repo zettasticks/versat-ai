@@ -119,7 +119,7 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info);
 void *Software_MaxPool(void *inputX, void *output, int index,
                        MaxPoolInfo *info);
 void *Software_AveragePool(void *inputX, void *output, int index,
-                       AveragePoolInfo *info);
+                           AveragePoolInfo *info);
 void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
                       MatMulInfo *info);
 
@@ -132,12 +132,11 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info);
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info);
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
-void *Versat_AveragePool(void *inputX, void *output, int index, AveragePoolInfo *info);
+void *Versat_AveragePool(void *inputX, void *output, int index,
+                         AveragePoolInfo *info);
 
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info);
-
-
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 

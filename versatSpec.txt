@@ -69,13 +69,13 @@ module Top_Maxpool(){
 
 module Top_AveragePool(){
    using(MaxPool2D) VRead features;
-   MyFloatAccum accum;
+   MyFloatAccum averagePool_accum;
    F_Mul inversedDiv; // Because divisor comes from an input, easier to multiple by 1/divisor then bringing an division unit
    Const invertedDivisor;
    using(Linear2) VWrite output;
 #   
-   features -> accum;
-   {accum,invertedDivisor} -> inversedDiv:0..1;
+   features -> averagePool_accum;
+   {averagePool_accum,invertedDivisor} -> inversedDiv:0..1;
    inversedDiv -> output;
 }
 
@@ -120,5 +120,4 @@ module Top_Conv(){
    //addBias -> output;
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv;
-//merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool;
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool;
