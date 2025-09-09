@@ -120,4 +120,21 @@ module Top_Conv(){
    //addBias -> output;
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool;
+addressGen LinearStrided(size,stride){
+   for x 0..size
+   addr = x / stride;
+}
+
+module Top_MatMul(){
+   using(Linear) VRead leftRow;
+   using(Linear) VRead rightRow;
+   F_Mul mat_muller;
+   MyFloatAccum myAccum;
+   using(LinearStrided) VWrite output;
+#
+   {leftRow,rightRow} -> mat_muller:0..1;
+   mat_muller -> myAccum;
+   myAccum -> output;
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul;

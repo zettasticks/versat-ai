@@ -53,10 +53,13 @@ def CreateBinaryOpTest(op, leftShape, rightShape):
 
     maxDims = max(len(leftShape), len(rightShape))
 
-    op0 = ExtendShape(leftShape, maxDims)
-    op1 = ExtendShape(rightShape, maxDims)
+    #op0 = ExtendShape(leftShape, maxDims)
+    #op1 = ExtendShape(rightShape, maxDims)
 
-    broadCastedShape = BroadCastShape(op0, op1)
+    #broadCastedShape = BroadCastShape(op0, op1)
+
+    # Let onnx infer shape specifics
+    outputShape = [None] * maxDims
 
     testIndex = len(tests)
 
@@ -72,7 +75,7 @@ def CreateBinaryOpTest(op, leftShape, rightShape):
 
     test.tensors = [leftTensor, rightTensor]
     test.outputTensor = make_tensor_value_info(
-        GetOutputTrueName(testIndex), TensorProto.FLOAT, broadCastedShape
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
     )
     test.node = make_node(
         op,
@@ -299,41 +302,55 @@ def CreateReshapeTest(shapeIn, shapeOut):
 
     tests.append(test)
 
+testAdd         = False
+testRelu        = False
+testReshape     = False
+testMatMul      = True
+testMaxPool     = False
+testConv        = False
+testAveragePool = False
 
 if __name__ == "__main__":
-    # Add tests
-    if False:
-        if True:
-            # Simplest tests, no broadcast or abusing dimensions
-            CreateBinaryOpTest("Add", [1], [1])
-            CreateBinaryOpTest("Add", [4], [4])
-            CreateBinaryOpTest("Add", [2, 4], [2, 4])
-            CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-            CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+    if testAdd:
+        # Simplest tests, no broadcast or abusing dimensions
+        CreateBinaryOpTest("Add", [1], [1])
+        CreateBinaryOpTest("Add", [4], [4])
+        CreateBinaryOpTest("Add", [2, 4], [2, 4])
+        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-            # Broadcasting
-            CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-            CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-            CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-            CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+        # Broadcasting
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
-    # Relu
-    if False:
+    if testRelu:
         CreateUnaryOpTest("Relu", [1])
         CreateUnaryOpTest("Relu", [4])
         CreateUnaryOpTest("Relu", [2, 4])
         CreateUnaryOpTest("Relu", [2, 4, 6])
         CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
-    # Reshape
-    if False:
+    if testReshape:
         CreateReshapeTest([4, 2], [8])
         CreateReshapeTest([4, 2], [2, 4])
         CreateReshapeTest([1, 8], [8])
         CreateReshapeTest([2, 3, 4], [24])
         CreateReshapeTest([24], [2, 3, 4])
         CreateReshapeTest([24], [4, 3, 2])
+
+    if testMatMul:
+        CreateBinaryOpTest("MatMul",[1,1],[1,1])
+        CreateBinaryOpTest("MatMul",[1,2],[2,1])
+        CreateBinaryOpTest("MatMul",[2,1],[1,2])
+        CreateBinaryOpTest("MatMul",[2,2],[2,2])
+        CreateBinaryOpTest("MatMul",[2,3],[3,2])
+        CreateBinaryOpTest("MatMul",[3,2],[2,3])
+        CreateBinaryOpTest("MatMul",[2,4],[4,8])
+        CreateBinaryOpTest("MatMul",[8,4],[4,2])
+        CreateBinaryOpTest("MatMul",[10,11],[11,20])
 
     # MaxPool
     # CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
@@ -342,7 +359,7 @@ if __name__ == "__main__":
     # Test padding rewrite
     # All these tests need to output a 2x2 result.
 
-    if False:
+    if testMaxPool:
         # All padding posibilities, mostly to test the window generation
         if True:
             # No padding                                           T  L  B  R
@@ -467,8 +484,7 @@ if __name__ == "__main__":
             # 4 D - Not supported by runtime, so cannot generate the test
             # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
 
-    #CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-    if True:
+    if testAveragePool:
         # All padding posibilities, mostly to test the window generation
         if True:
             # No padding                                           T  L  B  R
@@ -594,7 +610,7 @@ if __name__ == "__main__":
             # CreateAveragePool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
 
     # Convolution
-    if False:
+    if testConv:
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
         c = 3

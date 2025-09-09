@@ -280,7 +280,7 @@ operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
     "MaxPool", EmitMaxPool, maxPoolAttributes, True
 )
 operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape, [], True)
-operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul, [], False)
+operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul, [], True)
 operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
     "AveragePool", EmitMaxPool, averagePoolAttributes, True
 )

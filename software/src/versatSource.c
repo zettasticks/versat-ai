@@ -722,3 +722,63 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
   return output;
 }
+
+void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
+                      MatMulInfo *info){
+
+  ActivateMergedAccelerator(MergeType_Top_MatMul);
+  volatile Top_MatMulConfig *config = &accelConfig->Top_MatMul;
+
+  int totalBSize = info->inputBDims[0] * info->inputBDims[1];
+
+  float* tempB = malloc(sizeof(float) * totalBSize);
+
+  float *viewA = (float *)inputA;
+  float *viewB = (float *)inputB;
+  float *viewOut = (float *)output;
+
+  int AH = info->inputADims[0];
+  int AW = info->inputADims[1];
+
+  int BH = info->inputBDims[0];
+  int BW = info->inputBDims[1];
+
+  int OH = info->outputDims[0];
+  int OW = info->outputDims[1];
+
+  if(AW != BH){
+    printf("Something very wrong is happening in MatMul\n");
+  }
+
+  // After transpose, matrix goes from size BH,BW to BW,BH
+  for (int y = 0; y < BH; y++) {
+    for (int x = 0; x < BW; x++) {
+      // Transposing B
+      tempB[x * BH + y] = viewB[y * BW + x];
+    }
+  }
+
+  for (int y = 0; y < OH; y++) {
+    for (int x = 0; x < OW; x++) {
+      float* lineAStart = &viewA[y * AW];
+      float* lineBStart = &tempB[x * AW];
+
+      float* out = &viewOut[y * OW + x];
+
+      Linear_VRead(&config->leftRow,lineAStart,AW);
+      Linear_VRead(&config->rightRow,lineBStart,BH);
+      LinearStrided_VWrite(&config->output,out,1,AW);
+
+      config->myAccum.strideMinusOne = AW - 1;
+
+      EndAccelerator();
+      StartAccelerator();
+    }
+  }
+
+  RunAccelerator(2);
+
+  free(tempB);
+
+  return output;
+}

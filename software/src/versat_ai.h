@@ -138,6 +138,9 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info);
 
+void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
+                      MatMulInfo *info);
+
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 
 int64_t CalculateSizeOfDim(int64_t *dim, int dims);
