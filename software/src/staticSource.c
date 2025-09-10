@@ -1,7 +1,8 @@
 #include "versat_ai.h"
 
-#include "stdbool.h"
-#include "stdint.h"
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "iob_printf.h"
 
@@ -63,9 +64,11 @@ int Address_GetValue(AddressGen *gen) {
 }
 
 bool Address_IsValid(AddressGen *gen) {
-  // Is this the only thing that we need?
-  if (gen->addressVars[0] >= gen->iterationDims[0]) {
-    return false;
+  // Because we allow out of order advances, we need to check every 
+  for(int i = 0; i < gen->numberDims; i++){
+    if (gen->addressVars[i] >= gen->iterationDims[i]) {
+      return false;
+    }
   }
 
   for (int i = 0; i < gen->numberDims; i++) {
@@ -92,6 +95,14 @@ void Address_Advance(AddressGen *gen) {
       return;
     }
   }
+}
+
+void Address_AdvanceAxis(AddressGen* gen,int axisToAdvance){
+  if (gen->addressVars[axisToAdvance] >= gen->iterationDims[axisToAdvance]) {
+    return;
+  }
+
+  gen->addressVars[axisToAdvance] += 1;
 }
 
 AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
@@ -525,6 +536,85 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
         float valB = viewB[indexB];
 
         viewOut[indexOut] += valA * valB;
+      }
+    }
+  }
+
+  return output;
+}
+
+void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
+  float sum = 0.0f;
+
+  float* view = (float*) input;
+  float* out = (float*) output;
+
+  int axis = info->axis;
+
+  if(axis == 0 || axis == -info->numberInputDims || info->numberInputDims == 1){
+    AddressGen inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+    AddressGen* inputGen = &inputGenInst;
+    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
+      int index = Address_GetValue(inputGen);
+      sum += exp(view[index]);
+    }
+    inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
+      int index = Address_GetValue(inputGen);
+      out[index] = exp(view[index]) / sum;
+    }
+  } else if(info->numberInputDims == 2){
+    int yDim = info->inputDims[0];
+    int xDim = info->inputDims[1];
+
+    for(int y = 0; y < yDim; y++){
+      float sum = 0.0f;
+      for(int x = 0; x < xDim; x++){
+        int index = y * xDim + x;
+        sum += exp(view[index]);
+      }
+
+      for(int x = 0; x < xDim; x++){
+        int index = y * xDim + x;
+        out[index] = exp(view[index]) / sum;
+      }
+    }
+  } else if(info->numberInputDims == 3){
+    int zDim = info->inputDims[0];
+    int yDim = info->inputDims[1];
+    int xDim = info->inputDims[2];
+
+    if(axis == 1 || axis == -2){
+      for(int z = 0; z < zDim; z++){
+        float sum = 0.0f;
+        for(int y = 0; y < yDim; y++){
+          for(int x = 0; x < xDim; x++){
+            int index = z * yDim * xDim + y * xDim + x;
+            sum += exp(view[index]);
+          }
+        }
+
+        for(int y = 0; y < yDim; y++){
+          for(int x = 0; x < xDim; x++){
+            int index = z * yDim * xDim + y * xDim + x;
+            out[index] = exp(view[index]) / sum;
+          }
+        }
+      }
+    } else if(axis == -1 || axis == 2) {
+      for(int z = 0; z < zDim; z++){
+        for(int y = 0; y < yDim; y++){
+          float sum = 0.0f;
+          for(int x = 0; x < xDim; x++){
+            int index = z * yDim * xDim + y * xDim + x;
+            sum += exp(view[index]);
+          }
+
+          for(int x = 0; x < xDim; x++){
+            int index = z * yDim * xDim + y * xDim + x;
+            out[index] = exp(view[index]) / sum;
+          }
+        }
       }
     }
   }

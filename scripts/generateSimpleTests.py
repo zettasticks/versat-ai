@@ -130,7 +130,8 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
     outputShape = [None] * len(shape)
 
     if auto_pad == "NOTSET":
-        assert pads
+        if pads == None:
+            pads = [0,0,0,0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -170,7 +171,8 @@ def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
     outputShape = [None] * len(shape)
 
     if auto_pad == "NOTSET":
-        assert pads
+        if pads == None:
+            pads = [0,0,0,0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -201,7 +203,7 @@ def CreateConvolution(
     kernel,
     strides,
     dilations,
-    bias: bool,
+    bias: bool = False,
     auto_pad="NOTSET",
     pads=None,
 ):
@@ -230,7 +232,8 @@ def CreateConvolution(
     outputShape = [None] * len(shape)
 
     if auto_pad == "NOTSET":
-        assert pads
+        if pads == None:
+            pads = [0,0,0,0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -271,7 +274,7 @@ def CreateConvolution(
     tests.append(test)
 
 
-def CreateReshapeTest(shapeIn, shapeOut):
+def CreateReshape(shapeIn, shapeOut):
     global tests
     testIndex = len(tests)
 
@@ -302,15 +305,79 @@ def CreateReshapeTest(shapeIn, shapeOut):
 
     tests.append(test)
 
+def CreateSoftmax(shape,axis = -1):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+
+    test.shapes = [shape]
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+    test.tensors = [tensor]
+
+    shapeOut = [None] * len(shape)
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, shapeOut
+    )
+    test.node = make_node(
+        "Softmax",
+        [GetInputTrueName(testIndex, 0)],
+        [GetOutputTrueName(testIndex)],
+        axis=axis
+    )
+
+    randomArray = np.random.randn(*shape).astype(np.float32)
+    test.randomArrays = [randomArray]
+
+    tests.append(test)
+
 testAdd         = False
 testRelu        = False
 testReshape     = False
-testMatMul      = True
+testMatMul      = False
 testMaxPool     = False
 testConv        = False
 testAveragePool = False
+testSoftmax     = True
 
 if __name__ == "__main__":
+    if testSoftmax:
+        #CreateSoftmax([1],0)
+        #CreateSoftmax([2],0)
+        #CreateSoftmax([10],0)
+
+        z = 2
+        y = 3
+        x = 4
+
+        # Softmax axis come in pairs.
+        # If the dim is N, then the pairs are X and X - N.
+        # For dim=2, pairs are 0,-2 and 1,-1
+        # For dim=3, pairs are 0,-3 , 1,-2 and 2,-1
+        # Softmax sums everything to the "right" (and including) of the axis used.
+        # For the 2D example, 0 is everything to the right of the y dim (which means everything)
+        # While 1 is everything to the right of the x dim (which means that we iterate the y dim).
+
+        # For the 3D example, 0 is everything right of Z (which is everything).
+        #                     1 is everything right of Y (iterate Z).
+        #                     2 is everything right of X (iterate Z and Y).
+
+        if True:
+            CreateSoftmax([y,x],-2) # A
+            CreateSoftmax([y,x],-1) # B
+            CreateSoftmax([y,x],0) # A
+            CreateSoftmax([y,x],1) # B
+
+        if True:
+            CreateSoftmax([z,y,x],-3) # A
+            CreateSoftmax([z,y,x],-2) # B
+            CreateSoftmax([z,y,x],-1) # C
+            CreateSoftmax([z,y,x],0) # A
+            CreateSoftmax([z,y,x],1) # B
+            CreateSoftmax([z,y,x],2) # C
+
     if testAdd:
         # Simplest tests, no broadcast or abusing dimensions
         CreateBinaryOpTest("Add", [1], [1])
@@ -334,12 +401,12 @@ if __name__ == "__main__":
         CreateUnaryOpTest("Relu", [2, 4, 6, 8])
 
     if testReshape:
-        CreateReshapeTest([4, 2], [8])
-        CreateReshapeTest([4, 2], [2, 4])
-        CreateReshapeTest([1, 8], [8])
-        CreateReshapeTest([2, 3, 4], [24])
-        CreateReshapeTest([24], [2, 3, 4])
-        CreateReshapeTest([24], [4, 3, 2])
+        CreateReshape([4, 2], [8])
+        CreateReshape([4, 2], [2, 4])
+        CreateReshape([1, 8], [8])
+        CreateReshape([2, 3, 4], [24])
+        CreateReshape([24], [2, 3, 4])
+        CreateReshape([24], [4, 3, 2])
 
     if testMatMul:
         CreateBinaryOpTest("MatMul",[1,1],[1,1])
@@ -352,611 +419,218 @@ if __name__ == "__main__":
         CreateBinaryOpTest("MatMul",[8,4],[4,2])
         CreateBinaryOpTest("MatMul",[10,11],[11,20])
 
-    # MaxPool
-    # CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-    # CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-
-    # Test padding rewrite
-    # All these tests need to output a 2x2 result.
-
     if testMaxPool:
         # All padding posibilities, mostly to test the window generation
-        if True:
-            # No padding                                           T  L  B  R
-            CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        # No padding                                           T  L  B  R
+        CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        CreateMaxPool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
+        CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+        CreateMaxPool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 0])
+        CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 1])
+        CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0])
+        CreateMaxPool([1, 1, 2, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 0])
+        CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 1])
+        CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 0])
+        CreateMaxPool([1, 1, 4, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 1])
+        CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+        CreateMaxPool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 0])
+        CreateMaxPool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 1])
+        CreateMaxPool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 1])
+        CreateMaxPool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
+        CreateMaxPool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+        CreateMaxPool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
+        CreateMaxPool([1, 1,10,10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
 
-            # Only top
-            CreateMaxPool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
+        # Test different kernels, strides, no padding
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
+        CreateMaxPool([1, 3, 9, 9], [3, 3], [3, 3])
+        CreateMaxPool([1, 3, 9, 8], [3, 2], [3, 2])
+        CreateMaxPool([1, 3, 8, 9], [2, 3], [2, 3])
 
-            # Only left
-            CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+        # Different auto pad, minimal size
+        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_UPPER")
+        CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_UPPER")
 
-            # Only bottom
-            CreateMaxPool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 0])
+        CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_LOWER")
+        CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_LOWER")
 
-            # Only right
-            CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 1])
+        # Different auto pad, larger size
+        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_UPPER")
+        CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_UPPER")
+        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_UPPER")
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_UPPER")
+        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_LOWER")
+        CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_LOWER")
+        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_LOWER")
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_LOWER")
+        CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "VALID")
+        CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "VALID")
+        CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "VALID")
+        CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "VALID")
 
-            # Top left
-            CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0])
+        # Larger example and larger kernel
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
 
-            # Top bottom
-            CreateMaxPool([1, 1, 2, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 0])
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
+        CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
 
-            # Top right
-            CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 1])
+        # Common example
+        CreateMaxPool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
 
-            # Bottom left
-            CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 0])
+        # 3 D
+        # CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
 
-            # Left right
-            CreateMaxPool([1, 1, 4, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 1])
-
-            # Bottom right
-            CreateMaxPool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-
-            # Top and Bottom left
-            CreateMaxPool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 0])
-
-            # Top left and right
-            CreateMaxPool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 1])
-
-            # Top and Bottom right
-            CreateMaxPool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 1])
-
-            # Bottom left and right
-            CreateMaxPool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
-
-            # All directions
-            CreateMaxPool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
-
-            # All directions at the same time
-            CreateMaxPool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
-
-            # Padding all directions and big internal
-            CreateMaxPool([1, 1, 10, 10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
-
-        if True:
-            # Test different kernels, strides, no padding
-            CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-            CreateMaxPool([1, 3, 9, 9], [3, 3], [3, 3], "NOTSET", [0, 0, 0, 0])
-            CreateMaxPool([1, 3, 9, 8], [3, 2], [3, 2], "NOTSET", [0, 0, 0, 0])
-            CreateMaxPool([1, 3, 8, 9], [2, 3], [2, 3], "NOTSET", [0, 0, 0, 0])
-
-            # Simple padding example, kernel matches stride
-        if True:
-            # When in notset, we ignore values. (A [5,5] image with a [2,2] stride generates a [2,2] image)
-            # The exception appears to be a [1,1] image, where we produce a [1,1] output
-            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-
-        if True:
-            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_UPPER")
-            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_UPPER")
-            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_UPPER")
-
-        if True:
-            CreateMaxPool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_LOWER")
-            CreateMaxPool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_LOWER")
-            CreateMaxPool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_LOWER")
-
-        if True:
-            CreateMaxPool(
-                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1]
-            )  # Should be the same as SAME_UPPER
-            CreateMaxPool(
-                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0]
-            )  # Should be the same as SAME_LOWER
-
-        if True:
-            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_UPPER")
-            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_UPPER")
-            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_UPPER")
-            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_UPPER")
-            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_LOWER")
-            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_LOWER")
-            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_LOWER")
-            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_LOWER")
-            CreateMaxPool([1, 3, 8, 8], [3, 2], [2, 3], "VALID")
-            CreateMaxPool([1, 3, 8, 8], [2, 3], [3, 2], "VALID")
-            CreateMaxPool([1, 3, 8, 8], [3, 3], [2, 2], "VALID")
-            CreateMaxPool([1, 3, 8, 8], [2, 2], [3, 3], "VALID")
-
-        if False:
-            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
-            CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
-            CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
-            CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
-            CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
-
-            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
-            CreateMaxPool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
-            CreateMaxPool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
-            CreateMaxPool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
-            CreateMaxPool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
-
-            CreateMaxPool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
-
-            # 3 D
-            # CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
-
-            # 4 D - Not supported by runtime, so cannot generate the test
-            # CreateMaxPool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
+        # 4 D - Not supported by runtime so cannot generate test
 
     if testAveragePool:
         # All padding posibilities, mostly to test the window generation
-        if True:
-            # No padding                                           T  L  B  R
-            CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        # No padding                                               T  L  B  R
+        CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
+        CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+        CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 0])
+        CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 1])
+        CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0])
+        CreateAveragePool([1, 1, 2, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 0])
+        CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 1])
+        CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 0])
+        CreateAveragePool([1, 1, 4, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 1])
+        CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
+        CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 0])
+        CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 1])
+        CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 1])
+        CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
+        CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+        CreateAveragePool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
+        CreateAveragePool([1, 1,10,10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
 
-            # Only top
-            CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
+        # Test different kernels, strides, no padding
+        CreateAveragePool([1, 3, 8, 8], [2, 2], [2, 2])
+        CreateAveragePool([1, 3, 9, 9], [3, 3], [3, 3])
+        CreateAveragePool([1, 3, 9, 8], [3, 2], [3, 2])
+        CreateAveragePool([1, 3, 8, 9], [2, 3], [2, 3])
 
-            # Only left
-            CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+        # Simple padding example, kernel matches stride
+        CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_UPPER")
+        CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_UPPER")
+        CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_UPPER")
 
-            # Only bottom
-            CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 0])
+        CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_LOWER")
+        CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_LOWER")
+        CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_LOWER")
 
-            # Only right
-            CreateAveragePool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 1])
+        # Larger size
+        CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_UPPER")
+        CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_UPPER")
+        CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_UPPER")
+        CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_UPPER")
+        CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_LOWER")
+        CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_LOWER")
+        CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_LOWER")
+        CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_LOWER")
+        CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "VALID")
+        CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "VALID")
+        CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "VALID")
+        CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "VALID")
 
-            # Top left
-            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0])
+        CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
+        CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
+        CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
+        CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
+        CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
 
-            # Top bottom
-            CreateAveragePool([1, 1, 2, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 0])
+        CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
+        CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
+        CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
+        CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
+        CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
 
-            # Top right
-            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 1])
+        # Common example
+        CreateAveragePool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
 
-            # Bottom left
-            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 0])
+        # 3 D
+        # CreateAveragePool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
 
-            # Left right
-            CreateAveragePool([1, 1, 4, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 1])
-
-            # Bottom right
-            CreateAveragePool([1, 1, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-
-            # Top and Bottom left
-            CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 0])
-
-            # Top left and right
-            CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 1])
-
-            # Top and Bottom right
-            CreateAveragePool([1, 1, 2, 3], [2, 2], [2, 2], "NOTSET", [1, 0, 1, 1])
-
-            # Bottom left and right
-            CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
-
-            # All directions
-            CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
-
-            # All directions at the same time
-            CreateAveragePool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
-
-            # Padding all directions and big internal
-            CreateAveragePool([1, 1, 10, 10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
-
-        if True:
-            # Test different kernels, strides, no padding
-            CreateAveragePool([1, 3, 8, 8], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-            CreateAveragePool([1, 3, 9, 9], [3, 3], [3, 3], "NOTSET", [0, 0, 0, 0])
-            CreateAveragePool([1, 3, 9, 8], [3, 2], [3, 2], "NOTSET", [0, 0, 0, 0])
-            CreateAveragePool([1, 3, 8, 9], [2, 3], [2, 3], "NOTSET", [0, 0, 0, 0])
-
-            # Simple padding example, kernel matches stride
-        if True:
-            # When in notset, we ignore values. (A [5,5] image with a [2,2] stride generates a [2,2] image)
-            # The exception appears to be a [1,1] image, where we produce a [1,1] output
-            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1])
-
-        if True:
-            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_UPPER")
-            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_UPPER")
-            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_UPPER")
-
-        if True:
-            CreateAveragePool([1, 3, 1, 1], [2, 2], [2, 2], "SAME_LOWER")
-            CreateAveragePool([1, 3, 3, 3], [2, 2], [2, 2], "SAME_LOWER")
-            CreateAveragePool([1, 3, 5, 5], [2, 2], [2, 2], "SAME_LOWER")
-
-        if True:
-            CreateAveragePool(
-                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [0, 0, 1, 1]
-            )  # Should be the same as SAME_UPPER
-            CreateAveragePool(
-                [1, 3, 1, 1], [2, 2], [2, 2], "NOTSET", [1, 1, 0, 0]
-            )  # Should be the same as SAME_LOWER
-
-        if True:
-            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_UPPER")
-            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_UPPER")
-            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_UPPER")
-            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_UPPER")
-            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "SAME_LOWER")
-            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "SAME_LOWER")
-            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "SAME_LOWER")
-            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "SAME_LOWER")
-            CreateAveragePool([1, 3, 8, 8], [3, 2], [2, 3], "VALID")
-            CreateAveragePool([1, 3, 8, 8], [2, 3], [3, 2], "VALID")
-            CreateAveragePool([1, 3, 8, 8], [3, 3], [2, 2], "VALID")
-            CreateAveragePool([1, 3, 8, 8], [2, 2], [3, 3], "VALID")
-
-        if False:
-            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_UPPER")
-            CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_UPPER")
-            CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_UPPER")
-            CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_UPPER")
-            CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_UPPER")
-
-            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "SAME_LOWER")
-            CreateAveragePool([1, 3, 5, 5], [30, 20], [20, 30], "SAME_LOWER")
-            CreateAveragePool([1, 3, 5, 5], [20, 30], [30, 20], "SAME_LOWER")
-            CreateAveragePool([1, 3, 5, 5], [30, 30], [20, 20], "SAME_LOWER")
-            CreateAveragePool([1, 3, 5, 5], [20, 20], [30, 30], "SAME_LOWER")
-
-            CreateAveragePool([1, 3, 5, 5], [20, 20], [20, 20], "VALID")
-
-            # 3 D
-            # CreateAveragePool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
-
-            # 4 D - Not supported by runtime, so cannot generate the test
-            # CreateAveragePool([1, 3, 8, 8, 8, 8], [2, 2, 2, 2], [2, 2, 2, 2])
+        # 4 D - Not supported by runtime, so cannot generate the test
 
     # Convolution
     if testConv:
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
+        n = 1
         c = 3
         f = 16
 
-        CreateConvolution(
-            [1, c, 3, 3], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
-        )
-        CreateConvolution(
-            [1, c, 6, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
-        )
+        k = [3,3]
+        s = [3,3]
+        d = [1,1]
+        b = False
+        p = "NOTSET"
 
-        if True:
-
-            # No padding                                                          T  L  B  R
-            CreateConvolution(
-                [1, c, 6, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 0]
-            )
-
-            # Only top
-            CreateConvolution(
-                [1, c, 5, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 0, 0]
-            )
-
-            # Only left
-            CreateConvolution(
-                [1, c, 6, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 0, 0]
-            )
-
-            # Only bottom
-            CreateConvolution(
-                [1, c, 5, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 1, 0]
-            )
-
-            # Only right
-            CreateConvolution(
-                [1, c, 6, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 0, 1]
-            )
-
-            # Top left
-            CreateConvolution(
-                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 0, 0]
-            )
-
-            # Top bottom
-            CreateConvolution(
-                [1, c, 4, 6], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 1, 0]
-            )
-
-            # Top right
-            CreateConvolution(
-                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 0, 1]
-            )
-
-            # Bottom left
-            CreateConvolution(
-                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 1, 0]
-            )
-
-            # Left right
-            CreateConvolution(
-                [1, c, 6, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 0, 1]
-            )
-
-            # Bottom right
-            CreateConvolution(
-                [1, c, 5, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 0, 1, 1]
-            )
-
-            # Top and Bottom left
-            CreateConvolution(
-                [1, c, 4, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 0]
-            )
-
-            # Top left and right
-            CreateConvolution(
-                [1, c, 5, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 0, 1]
-            )
-
-            # Top and Bottom right
-            CreateConvolution(
-                [1, c, 4, 5], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 0, 1, 1]
-            )
-
-            # Bottom left and right
-            CreateConvolution(
-                [1, c, 5, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [0, 1, 1, 1]
-            )
-
-            # All directions
-            CreateConvolution(
-                [1, c, 4, 4], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
-            )
-
-            # All directions at the same time
-            CreateConvolution(
-                [1, c, 1, 1], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
-            )
-
-            # Padding all directions and big internal
-            CreateConvolution(
-                [1, c, 10, 10], f, [3, 3], [3, 3], [1, 1], False, "NOTSET", [1, 1, 1, 1]
-            )
+        # No padding                                       T  L  B  R
+        CreateConvolution([n, c, 6, 6], f, k, s, d, b, p, [0, 0, 0, 0])
+        CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [1, 0, 0, 0])
+        CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 1, 0, 0])
+        CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [0, 0, 1, 0])
+        CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 0, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 1, 0, 0])
+        CreateConvolution([n, c, 4, 6], f, k, s, d, b, p, [1, 0, 1, 0])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 0, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 1, 1, 0])
+        CreateConvolution([n, c, 6, 4], f, k, s, d, b, p, [0, 1, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 0, 1, 1])
+        CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 1, 1, 0])
+        CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [1, 1, 0, 1])
+        CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 0, 1, 1])
+        CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [0, 1, 1, 1])
+        CreateConvolution([n, c, 4, 4], f, k, s, d, b, p, [1, 1, 1, 1])
+        CreateConvolution([n, c, 1, 1], f, k, s, d, b, p, [1, 1, 1, 1])
+        CreateConvolution([n, c, 10, 10], f, k, s, d, b, p, [1, 1, 1, 1])
 
         # No padding
         # Different: Input shape, features, kernel, stride, dilations, bias
+        CreateConvolution([1, 1, 3, 3],1,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 2, 3, 3],1,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 1, 3, 3],2,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 2, 3, 3],2,[3, 3],[3, 3],[1, 1])
 
-        if False:
-            # First test, changing input channels and features
-            if True:
-                CreateConvolution(
-                    [1, 1, 3, 3],
-                    1,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 3, 3],
-                    1,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 3, 3],
-                    2,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 3, 3],
-                    2,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
+        # Same but in a 2x2 square
+        CreateConvolution([1, 1, 6, 6],1,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 2, 6, 6],1,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 1, 6, 6],2,[3, 3],[3, 3],[1, 1])
+        CreateConvolution([1, 2, 6, 6],2,[3, 3],[3, 3],[1, 1])
 
-            # Same but in a 2x2 square
-            if True:
-                CreateConvolution(
-                    [1, 1, 6, 6],
-                    1,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 6, 6],
-                    1,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 6, 6],
-                    2,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 6, 6],
-                    2,
-                    [3, 3],
-                    [3, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
+        # Same but for a 5x5 kernel
+        CreateConvolution([1, 1, 5, 5],1,[5, 5],[5, 5],[1, 1])
+        CreateConvolution([1, 2, 5, 5],1,[5, 5],[5, 5],[1, 1])
+        CreateConvolution([1, 1, 5, 5],2,[5, 5],[5, 5],[1, 1])
+        CreateConvolution([1, 2, 5, 5],2,[5, 5],[5, 5],[1, 1])
 
-            # Same but for a 5x5 kernel
-            if True:
-                CreateConvolution(
-                    [1, 1, 5, 5],
-                    1,
-                    [5, 5],
-                    [5, 5],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 5, 5],
-                    1,
-                    [5, 5],
-                    [5, 5],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 5, 5],
-                    2,
-                    [5, 5],
-                    [5, 5],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 5, 5],
-                    2,
-                    [5, 5],
-                    [5, 5],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
+        # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
+        CreateConvolution([1, 1, 4, 4],1,[2, 2],[1, 1],[1, 1])
+        CreateConvolution([1, 2, 4, 4],1,[2, 2],[1, 1],[1, 1])
+        CreateConvolution([1, 1, 4, 4],2,[2, 2],[1, 1],[1, 1])
+        CreateConvolution([1, 2, 4, 4],2,[2, 2],[1, 1],[1, 1])
 
-            # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
-            if True:
-                CreateConvolution(
-                    [1, 1, 4, 4],
-                    1,
-                    [2, 2],
-                    [1, 1],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 4, 4],
-                    1,
-                    [2, 2],
-                    [1, 1],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 4, 4],
-                    2,
-                    [2, 2],
-                    [1, 1],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 2, 4, 4],
-                    2,
-                    [2, 2],
-                    [1, 1],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
+        # Different sized kernels
+        CreateConvolution([1, 1, 2, 3],1,[2, 3],[2, 3],[1, 1])
+        CreateConvolution([1, 1, 3, 2],1,[3, 2],[3, 2],[1, 1])
+        CreateConvolution([1, 1, 4, 9],1,[2, 3],[2, 3],[1, 1])
+        CreateConvolution([1, 1, 9, 4],1,[3, 2],[3, 2],[1, 1])
 
-            # Different sized kernels
-            if False:
-                CreateConvolution(
-                    [1, 1, 2, 3],
-                    1,
-                    [2, 3],
-                    [2, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 3, 2],
-                    1,
-                    [3, 2],
-                    [3, 2],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 4, 9],
-                    1,
-                    [2, 3],
-                    [2, 3],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-                CreateConvolution(
-                    [1, 1, 9, 4],
-                    1,
-                    [3, 2],
-                    [3, 2],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
+        # Bigger more realistic examples
+        CreateConvolution([1, 3, 16, 16],16,[2, 2],[2, 2],[1, 1])
 
-            # Bigger more realistic examples
-            if False:
-                CreateConvolution(
-                    [1, 3, 16, 16],
-                    16,
-                    [2, 2],
-                    [2, 2],
-                    [1, 1],
-                    False,
-                    "NOTSET",
-                    [0, 0, 0, 0],
-                )
-
-        # Left pad
-        if False:
-            CreateConvolution(
-                [1, 1, 2, 2], 1, [3, 3], [1, 1], [1, 1], False, "NOTSET", [1, 1, 0, 0]
-            )
-            CreateConvolution(
-                [1, 1, 2, 2], 1, [3, 3], [1, 1], [1, 1], False, "NOTSET", [0, 0, 1, 1]
-            )
-            # CreateConvolution([1,1,3,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[1,0,0,0])
-            # CreateConvolution([1,1,2,2],1,[3,3],[1,1],[1,1],False,"NOTSET",[0,0,1,1])
+        # TODO: Missing bias 
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

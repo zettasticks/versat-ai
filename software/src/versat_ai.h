@@ -105,6 +105,12 @@ typedef struct {
   int numberOutputDims;
 } MatMulInfo;
 
+typedef struct{
+  int64_t* inputDims;
+  int numberInputDims;
+  int axis;
+} SoftmaxInfo;
+
 extern LayerInfo layers[];
 extern int numberLayers;
 
@@ -122,6 +128,7 @@ void *Software_AveragePool(void *inputX, void *output, int index,
                            AveragePoolInfo *info);
 void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
                       MatMulInfo *info);
+void *Software_Softmax(void* inputA,void* output,int index,SoftmaxInfo* info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,

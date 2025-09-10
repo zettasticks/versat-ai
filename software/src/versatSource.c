@@ -667,10 +667,11 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
   int outputImageH = info->outputDims[2];
   int outputImageW = info->outputDims[3];
 
-  float *tempInput = (float *)malloc(sizeof(float) * inputImageW * inputImageH *
-                                     inputChannels);
-  float *tempOutput = (float *)malloc(sizeof(float) * outputImageW *
-                                      outputImageH * outputChannels);
+  int inputSize = inputImageW * inputImageH * inputChannels;
+  int outputSize = outputImageW * outputImageH * outputChannels;
+
+  float *tempInput = (float *) malloc(sizeof(float) * inputSize);
+  float *tempOutput = (float *) malloc(sizeof(float) * outputSize);
 
   float *inputView = (float *)inputX;
   // Convert NCHW to NHWC
