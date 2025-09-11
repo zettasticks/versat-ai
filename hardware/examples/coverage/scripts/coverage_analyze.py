@@ -19,6 +19,13 @@ def parse_arguments():
     )
     # TODO: include / exclude options?
     parser.add_argument(
+        "-E",
+        "--exclude",
+        default=[],
+        action="append",
+        help="List of files to exclude from coverage.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         default="coverage.rpt",
@@ -52,16 +59,19 @@ class CovFile:
             return (self.covered_lines / self.total_lines) * 100
 
 
-def get_annotated_files(path: str) -> list[CovFile]:
+def get_annotated_files(path: str, exclude: list[str]) -> list[CovFile]:
     """Get all verilog coverage annotation file in path.
     Args:
         path str: Path to search for coverage annotation files.
+        exclude list[str]: List of files to exclude from coverage.
     Returns:
         list[CovFile]: List of Coverage Files.
     """
     files = list(Path(path).rglob("*.v"))
     cov_files: list[CovFile] = []
     for f in files:
+        if str(f.name) in exclude:
+            continue  # skip excluded files
         cov_files.append(
             CovFile(
                 path=str(f),
@@ -126,7 +136,8 @@ def report_results(files: list[CovFile], output: str) -> None:
         rpt.write("File Name\t|\t[Covered/Total lines]\t|\tCoverage (%)\n")
         for f in files:
             rpt.write(
-                f"{f.path}\t|\t[{f.covered_lines}/{f.total_lines}]\t|\t{f.coverage_level:.2f}%\n"
+                f"{f.path}\t|\t[{f.covered_lines}/{f.total_lines}]\t|\t"
+                f"{f.coverage_level:.2f}%\n"
             )
 
 
@@ -138,7 +149,7 @@ if __name__ == "__main__":
     args = parse_arguments()
 
     # 1. Read annotation files
-    cov_files = get_annotated_files(args.annotations)
+    cov_files = get_annotated_files(args.annotations, args.exclude)
     # 2. Process annotation files
     process_annotated_files(cov_files)
     # 3. Report Results

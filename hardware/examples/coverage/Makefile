@@ -40,7 +40,7 @@ cov-verilog-only merged.dat: clean
 	# --annotate-all: write annotations for all modules, even if 100% covered
 	# more info: https://verilator.org/guide/latest/exe_verilator_coverage.html
 	verilator_coverage --annotate cov_annotated --annotate-min 2 --annotate-all merged.dat
-	./scripts/coverage_analyze.py ./cov_annotated -o $(COV_RPT)
+	./scripts/coverage_analyze.py ./cov_annotated -o $(COV_RPT) -E relu_tb.v
 	cat $(COV_RPT)
 
 gen-lcov-report: merged.dat

@@ -1,6 +1,5 @@
 `timescale 1ns/1ps
 
-// verilator coverage_off
 module relu_tb;
   reg         clk     = 0;
   reg         rst     = 1;
@@ -73,4 +72,3 @@ module relu_tb;
     $finish;
   end
 endmodule
-// verilator coverage_on
