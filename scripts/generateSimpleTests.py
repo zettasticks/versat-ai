@@ -344,40 +344,47 @@ testSoftmax     = True
 
 if __name__ == "__main__":
     if testSoftmax:
-        z = 2
+        w = 5
+        z = 4
         y = 3
-        x = 4
+        x = 2
 
         # Softmax axis come in pairs.
         # If the dim is N, then the pairs are X and X - N.
         # For dim=2, pairs are 0,-2 and 1,-1
         # For dim=3, pairs are 0,-3 , 1,-2 and 2,-1
-        # Softmax sums everything to the "right" (and including) of the axis used.
-        # For the 2D example, 0 is everything to the right of the y dim (which means everything)
-        # While 1 is everything to the right of the x dim (which means that we iterate the y dim).
+        # Softmax sums everything to the "right" of (and including) the axis used.
+        # For the 2D example, 0 is everything 
+        # While 1 is everything to the right of the y dim (which means that we iterate the y dim).
 
-        # For the 3D example, 0 is everything right of Z (which is everything).
-        #                     1 is everything right of Y (iterate Z).
-        #                     2 is everything right of X (iterate Z and Y).
+        # For the 3D example, 0 is everything 
+        #                     1 is everything right of Z (iterate Z).
+        #                     2 is everything right of Y (iterate Z and Y).
 
-        if True:
-            CreateSoftmax([1],0)
-            CreateSoftmax([2],0)
-            CreateSoftmax([10],0)
+        CreateSoftmax([1],0)
+        CreateSoftmax([2],0)
+        CreateSoftmax([10],0)
 
-        if True:
-            CreateSoftmax([y,x],-2) # A
-            CreateSoftmax([y,x],-1) # B
-            CreateSoftmax([y,x],0) # A
-            CreateSoftmax([y,x],1) # B
+        CreateSoftmax([y,x],-2) # A
+        CreateSoftmax([y,x],-1) # B
+        CreateSoftmax([y,x],0) # A
+        CreateSoftmax([y,x],1) # B
 
-        if True:
-            #CreateSoftmax([z,y,x],-3) # A
-            #CreateSoftmax([z,y,x],-2) # B
-            #CreateSoftmax([z,y,x],-1) # C
-            CreateSoftmax([z,y,x],0) # A
-            CreateSoftmax([z,y,x],1) # B
-            CreateSoftmax([z,y,x],2) # C
+        CreateSoftmax([z,y,x],-3) # A
+        CreateSoftmax([z,y,x],-2) # B
+        CreateSoftmax([z,y,x],-1) # C
+        CreateSoftmax([z,y,x],0) # A
+        CreateSoftmax([z,y,x],1) # B
+        CreateSoftmax([z,y,x],2) # C
+
+        CreateSoftmax([w,z,y,x],-4) # A
+        CreateSoftmax([w,z,y,x],-3) # B
+        CreateSoftmax([w,z,y,x],-2) # C
+        CreateSoftmax([w,z,y,x],-1) # D
+        CreateSoftmax([w,z,y,x],0) # A
+        CreateSoftmax([w,z,y,x],1) # B
+        CreateSoftmax([w,z,y,x],2) # C
+        CreateSoftmax([w,z,y,x],3) # D
 
     if testAdd:
         # Simplest tests, no broadcast or abusing dimensions

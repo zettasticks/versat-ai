@@ -609,120 +609,34 @@ void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
     And so on.
   */
 
-  if(false && (axis == 0 || info->numberInputDims == 1))  {
-    AddressGen inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
-    AddressGen* inputGen = &inputGenInst;
-    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
-      int index = Address_GetValue(inputGen);
+  AddressGen testInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+  AddressGen* test = &testInst;
+  
+  int kernelSize = info->numberInputDims - axis;
+
+  for (; Address_IsValid(test); Address_AdvanceAxis(test,axis - 1)) {
+    int kernelDims[16] = {};
+    for(int i = 0; i < kernelSize; i++){
+      kernelDims[i] = info->inputDims[i + axis];
+    }
+
+    float sum = 0.0f;
+
+    KernelGen genInst = StartKernel(test,kernelDims,kernelSize);
+    KernelGen* gen = &genInst;
+    for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
+      int index = Kernel_GetValue(gen);
+      
       sum += exp(view[index]);
     }
-    inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
-    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
-      int index = Address_GetValue(inputGen);
+
+    genInst = StartKernel(test,kernelDims,kernelSize);
+    for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
+      int index = Kernel_GetValue(gen);
+      
       out[index] = exp(view[index]) / sum;
-    }
-  } else {
-    AddressGen testInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
-    AddressGen* test = &testInst;
-    
-    int kernelSize = info->numberInputDims - axis;
-
-    for (; Address_IsValid(test); Address_AdvanceAxis(test,axis - 1)) {
-      int kernelDims[16] = {};
-      for(int i = 0; i < kernelSize; i++){
-        kernelDims[i] = info->inputDims[i + axis];
-      }
-
-      float sum = 0.0f;
-
-      KernelGen genInst = StartKernel(test,kernelDims,kernelSize);
-      KernelGen* gen = &genInst;
-      for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
-        int index = Kernel_GetValue(gen);
-        
-        sum += exp(view[index]);
-      }
-
-      genInst = StartKernel(test,kernelDims,kernelSize);
-      for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
-        int index = Kernel_GetValue(gen);
-        
-        out[index] = exp(view[index]) / sum;
-      }      
-    }
+    }      
   }
-
-  return output;
-
-#if 0
-  if(axis == 0 || info->numberInputDims == 1){
-    AddressGen inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
-    AddressGen* inputGen = &inputGenInst;
-    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
-      int index = Address_GetValue(inputGen);
-      sum += exp(view[index]);
-    }
-    inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
-    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
-      int index = Address_GetValue(inputGen);
-      out[index] = exp(view[index]) / sum;
-    }
-  } else if(info->numberInputDims == 2){
-    int yDim = info->inputDims[0];
-    int xDim = info->inputDims[1];
-
-    for(int y = 0; y < yDim; y++){
-      float sum = 0.0f;
-      for(int x = 0; x < xDim; x++){
-        int index = y * xDim + x;
-        sum += exp(view[index]);
-      }
-
-      for(int x = 0; x < xDim; x++){
-        int index = y * xDim + x;
-        out[index] = exp(view[index]) / sum;
-      }
-    }
-  } else if(info->numberInputDims == 3){
-    int zDim = info->inputDims[0];
-    int yDim = info->inputDims[1];
-    int xDim = info->inputDims[2];
-
-    if(axis == 1){
-      for(int z = 0; z < zDim; z++){
-        float sum = 0.0f;
-        for(int y = 0; y < yDim; y++){
-          for(int x = 0; x < xDim; x++){
-            int index = z * yDim * xDim + y * xDim + x;
-            sum += exp(view[index]);
-          }
-        }
-
-        for(int y = 0; y < yDim; y++){
-          for(int x = 0; x < xDim; x++){
-            int index = z * yDim * xDim + y * xDim + x;
-            out[index] = exp(view[index]) / sum;
-          }
-        }
-      }
-    } else if(axis == 2) {
-      for(int z = 0; z < zDim; z++){
-        for(int y = 0; y < yDim; y++){
-          float sum = 0.0f;
-          for(int x = 0; x < xDim; x++){
-            int index = z * yDim * xDim + y * xDim + x;
-            sum += exp(view[index]);
-          }
-
-          for(int x = 0; x < xDim; x++){
-            int index = z * yDim * xDim + y * xDim + x;
-            out[index] = exp(view[index]) / sum;
-          }
-        }
-      }
-    }
-  }
-#endif
 
   return output;
 }
