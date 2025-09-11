@@ -207,12 +207,14 @@ def EmitMatMul(emitter, op: Operation):
 
     return [aux_0, len(op0), aux_1, len(op1), aux_2, len(res)]
 
+
 def EmitSoftmax(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
 
-    return [inputShape,dims,attr["axis"]]
+    return [inputShape, dims, attr["axis"]]
+
 
 def IsOperatorRegistered(opName: str):
     return opName in operatorNameToSpec
@@ -268,9 +270,8 @@ averagePoolAttributes = {
     "strides": MakeAttrAxisList(1),
 }
 
-softmaxAttributes = {
-    "axis" : MakeAttrInteger(-1)
-}
+softmaxAttributes = {"axis": MakeAttrInteger(-1)}
+
 
 def GetOperatorSpec(opName):
     global operatorNameToSpec
@@ -280,11 +281,19 @@ def GetOperatorSpec(opName):
 # Register new operators here
 # Remember, currently we only care about supporting up to version 7 operators.
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", EmitAdd, [], True, BroadcastType.UNIDIRECTIONAL)
+operatorNameToSpec["Add"] = OnnxOperatorSpec(
+    "Add", EmitAdd, [], True, BroadcastType.UNIDIRECTIONAL
+)
 operatorNameToSpec["Conv"] = OnnxOperatorSpec("Conv", EmitConv, convAttributes, True)
 operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, [], True)
-operatorNameToSpec["MaxPool"] = OnnxOperatorSpec("MaxPool", EmitMaxPool, maxPoolAttributes, True)
+operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
+    "MaxPool", EmitMaxPool, maxPoolAttributes, True
+)
 operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape, [], True)
 operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul, [], True)
-operatorNameToSpec["AveragePool"] = OnnxOperatorSpec("AveragePool", EmitMaxPool, averagePoolAttributes, True)
-operatorNameToSpec["Softmax"] = OnnxOperatorSpec("Softmax", EmitSoftmax, softmaxAttributes, False)
+operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
+    "AveragePool", EmitMaxPool, averagePoolAttributes, True
+)
+operatorNameToSpec["Softmax"] = OnnxOperatorSpec(
+    "Softmax", EmitSoftmax, softmaxAttributes, False
+)

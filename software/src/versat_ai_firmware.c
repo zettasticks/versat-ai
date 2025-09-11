@@ -53,6 +53,8 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
+  ConfigCreateVCD(false);
+
   printf("Versat base: %x\n", VERSAT0_BASE);
 
   void *output = malloc(VERSAT_AI_OUTPUT_SIZE);

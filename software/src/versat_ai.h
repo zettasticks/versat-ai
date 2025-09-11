@@ -105,8 +105,8 @@ typedef struct {
   int numberOutputDims;
 } MatMulInfo;
 
-typedef struct{
-  int64_t* inputDims;
+typedef struct {
+  int64_t *inputDims;
   int numberInputDims;
   int axis;
 } SoftmaxInfo;
@@ -117,6 +117,8 @@ extern int numberLayers;
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info);
+void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
+                            void *output, int index, ConvInfo *info);
 void *Software_Reshape(void *data, void *shape, void *output, int index,
                        ReshapeInfo *info);
 void *Software_Add(void *inputA, void *inputB, void *output, int index,
@@ -128,7 +130,8 @@ void *Software_AveragePool(void *inputX, void *output, int index,
                            AveragePoolInfo *info);
 void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
                       MatMulInfo *info);
-void *Software_Softmax(void* inputA,void* output,int index,SoftmaxInfo* info);
+void *Software_Softmax(void *inputA, void *output, int index,
+                       SoftmaxInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
@@ -141,12 +144,13 @@ void *Versat_Reshape(void *data, void *shape, void *output, int index,
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info);
 void *Versat_AveragePool(void *inputX, void *output, int index,
                          AveragePoolInfo *info);
-
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info);
-
+void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
+                          void *output, int index, ConvInfo *info);
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
-                      MatMulInfo *info);
+                    MatMulInfo *info);
+void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index);
 

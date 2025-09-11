@@ -102,27 +102,28 @@ addressGen Linear2_NHWC(startX,startY,height,width,startC,outputChannels,outputW
    addr = ((y + startY) * outputWidth * outputChannels + (x + startX) * outputChannels + startC + c) / stride;
 }
 
+addressGen LinearStrided(size,stride){
+   for x 0..size
+   addr = x / stride;
+}
+
 module Top_Conv(){
    using(Conv2D_NHWC) VRead features;
    using(Weight2D) VRead weights;
-   // using(Linear2) VRead bias;
+   using(LinearStrided) VRead bias;
+   //Const bias;
    F_Mul muller;
-   // F_Add addBias;
+   F_Add addBias;
    MyFloatAccum myAccum;
    using(Linear2_NHWC) VWrite output;
 #   
    {weights,features} -> muller:0..1;
    muller -> myAccum;
       
-   myAccum -> output;
+   //myAccum -> output;
 
-   //{myAccum,bias} -> addBias:0..1;
-   //addBias -> output;
-}
-
-addressGen LinearStrided(size,stride){
-   for x 0..size
-   addr = x / stride;
+   {myAccum,bias} -> addBias:0..1;
+   addBias -> output;
 }
 
 module Top_MatMul(){

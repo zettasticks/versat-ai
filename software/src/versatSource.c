@@ -73,7 +73,11 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                     GetDim(o, d, 2), GetDim(o, d, 3), GetDim(o, d, 4),
                     GetDim(o, d, 5));
 
-  RunAccelerator(3);
+  RunAccelerator(1);
+  config->inputs_0.enabled = 0;
+  config->inputs_1.enabled = 0;
+  config->output.enabled = 0;
+  RunAccelerator(2);
 
   return output;
 }
@@ -92,7 +96,11 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   Linear_VRead(&config->input, inputA, totalSize);
   Linear_VWrite(&config->output, output, totalSize);
 
-  RunAccelerator(3);
+  RunAccelerator(1);
+
+  config->input.enabled = 0;
+  config->output.enabled = 0;
+  RunAccelerator(2);
 
   return output;
 }
@@ -244,6 +252,9 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
   res.actualKernelW = gen->info->kernelW;
   res.actualKernelH = gen->info->kernelH;
 
+  res.inputX -= gen->info->leftPadW;
+  res.inputY -= gen->info->leftPadH;
+
   // TODO: For the cases without padding, we can support bigger
   //       windows. We mainly want to center the logic around
   //       how much internal memory the accelerator supports (limiting factor
@@ -257,34 +268,30 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
 
   // This logic only works if we make sure that we can have a one by one window
   // size at the extreme points
-  if (gen->currentOutputX == 0 && gen->info->leftPadW) {
-    res.actualKernelW -= gen->info->leftPadW;
-    res.kernelStartW = gen->info->leftPadW;
+  if (res.inputX < 0) {
+    int offset = -res.inputX;
+    res.actualKernelW -= offset;
+    res.kernelStartW = offset;
     res.padding |= PaddingRegion_LEFT;
+    res.inputX = 0;
   }
-  if (gen->currentOutputX == gen->info->outputImageW - 1 &&
-      gen->info->rightPadW) {
-    res.actualKernelW -= gen->info->rightPadW;
+  if (res.inputX + res.actualKernelW > gen->info->inputImageW) {
+    int offset = (res.inputX + res.actualKernelW) - gen->info->outputImageW;
+    res.actualKernelW -= offset;
     res.padding |= PaddingRegion_RIGHT;
   }
 
-  if (gen->currentOutputY == 0 && gen->info->leftPadH) {
-    res.actualKernelH -= gen->info->leftPadH;
-    res.kernelStartH = gen->info->leftPadH;
+  if (res.inputY < 0) {
+    int offset = -res.inputY;
+    res.actualKernelH -= offset;
+    res.kernelStartH = offset;
     res.padding |= PaddingRegion_TOP;
+    res.inputY = 0;
   }
-  if (gen->currentOutputY == gen->info->outputImageH - 1 &&
-      gen->info->rightPadH) {
-    res.actualKernelH -= gen->info->rightPadH;
+  if (res.inputY + res.actualKernelH > gen->info->inputImageH) {
+    int offset = (res.inputY + res.actualKernelH) - gen->info->outputImageH;
+    res.actualKernelH -= offset;
     res.padding |= PaddingRegion_BOTTOM;
-  }
-
-  // Need to offset the input window if left padding exists.
-  if (gen->currentOutputX > 0) {
-    res.inputX -= gen->info->leftPadW;
-  }
-  if (gen->currentOutputY > 0) {
-    res.inputY -= gen->info->leftPadH;
   }
 
   return res;
@@ -388,12 +395,28 @@ ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
     res.padH =
         (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
 
-    if (info->padding == PaddingType_SAME_LOWER) {
-      res.leftPadW = res.padW;
-      res.leftPadH = res.padH;
-    } else {
-      res.rightPadW = res.padW;
-      res.rightPadH = res.padH;
+    int halfW = res.padW / 2;
+    int halfH = res.padH / 2;
+
+    res.leftPadW = halfW;
+    res.rightPadW = halfW;
+    res.leftPadH = halfH;
+    res.rightPadH = halfH;
+
+    if (res.padW % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadW += 1;
+      } else {
+        res.rightPadW += 1;
+      }
+    }
+
+    if (res.padH % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadH += 1;
+      } else {
+        res.rightPadH += 1;
+      }
     }
   }
 
@@ -451,12 +474,13 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
 
     for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
       AdvancedWindow w = WindowGen_Get(gen);
-      // AdvancedWindow_Print(w);
       MaxPool_ProcessWindow(w, c, inputX, output, info);
     }
   }
 
   // Flush the remaining data from the accelerator
+  config->features.enabled = 0;
+  config->output.enabled = 0;
   RunAccelerator(2);
 
   return output;
@@ -502,12 +526,28 @@ ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
     res.padH =
         (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
 
-    if (info->padding == PaddingType_SAME_LOWER) {
-      res.leftPadW = res.padW;
-      res.leftPadH = res.padH;
-    } else {
-      res.rightPadW = res.padW;
-      res.rightPadH = res.padH;
+    int halfW = res.padW / 2;
+    int halfH = res.padH / 2;
+
+    res.leftPadW = halfW;
+    res.rightPadW = halfW;
+    res.leftPadH = halfH;
+    res.rightPadH = halfH;
+
+    if (res.padW % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadW += 1;
+      } else {
+        res.rightPadW += 1;
+      }
+    }
+
+    if (res.padH % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadH += 1;
+      } else {
+        res.rightPadH += 1;
+      }
     }
   }
 
@@ -563,12 +603,13 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 
     for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
       AdvancedWindow w = WindowGen_Get(gen);
-      // AdvancedWindow_Print(w);
       AveragePool_ProcessWindow(w, c, inputX, output, info);
     }
   }
 
   // Flush the remaining data from the accelerator
+  config->features.enabled = 0;
+  config->output.enabled = 0;
   RunAccelerator(2);
 
   return output;
@@ -614,12 +655,28 @@ ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
     res.padH =
         (res.outputImageH - 1) * res.strideH + res.kernelH - res.inputImageH;
 
-    if (info->padding == PaddingType_SAME_LOWER) {
-      res.leftPadW = res.padW;
-      res.leftPadH = res.padH;
-    } else {
-      res.rightPadW = res.padW;
-      res.rightPadH = res.padH;
+    int halfW = res.padW / 2;
+    int halfH = res.padH / 2;
+
+    res.leftPadW = halfW;
+    res.rightPadW = halfW;
+    res.leftPadH = halfH;
+    res.rightPadH = halfH;
+
+    if (res.padW % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadW += 1;
+      } else {
+        res.rightPadW += 1;
+      }
+    }
+
+    if (res.padH % 2 == 1) {
+      if (info->padding == PaddingType_SAME_LOWER) {
+        res.leftPadH += 1;
+      } else {
+        res.rightPadH += 1;
+      }
     }
   }
 
@@ -650,7 +707,11 @@ void Conv_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
                       w.outputW, 0, outputImageC, outputImageW, stride);
 
+  float bias = 0.0f;
+  LinearStrided_VRead(&config->bias, &bias, 1, 1);
+
   config->myAccum.strideMinusOne = stride - 1;
+
   EndAccelerator();
   StartAccelerator();
 }
@@ -658,6 +719,8 @@ void Conv_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info) {
   forceDoubleLoop = true;
+
+  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
   int inputChannels = info->inputDims[1];
   int inputImageW = info->inputDims[3];
@@ -670,8 +733,8 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
   int inputSize = inputImageW * inputImageH * inputChannels;
   int outputSize = outputImageW * outputImageH * outputChannels;
 
-  float *tempInput = (float *) malloc(sizeof(float) * inputSize);
-  float *tempOutput = (float *) malloc(sizeof(float) * outputSize);
+  float *tempInput = (float *)malloc(sizeof(float) * inputSize);
+  float *tempOutput = (float *)malloc(sizeof(float) * outputSize);
 
   float *inputView = (float *)inputX;
   // Convert NCHW to NHWC
@@ -696,11 +759,124 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
   for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
     AdvancedWindow w = WindowGen_Get(gen);
-
     Conv_ProcessWindow(w, tempInput, inputW, tempOutput, info);
   }
 
   // Flush the remaining data from the accelerator
+  config->features.enabled = 0;
+  config->weights.enabled = 0;
+  config->output.enabled = 0;
+  config->bias.enabled = 0;
+  RunAccelerator(2);
+
+  float *outputView = (float *)output;
+  // Convert NHWC to NCHW
+  for (int c = 0; c < outputChannels; c++) {
+    for (int y = 0; y < outputImageH; y++) {
+      for (int x = 0; x < outputImageW; x++) {
+        int NCHW_Index =
+            c * (outputImageH * outputImageW) + y * outputImageW + x;
+        int NHWC_Index =
+            y * (outputImageW * outputChannels) + x * outputChannels + c;
+
+        outputView[NCHW_Index] = tempOutput[NHWC_Index];
+      }
+    }
+  }
+
+  free(tempInput);
+  free(tempOutput);
+
+  return output;
+}
+
+void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
+                                void *output, float *bias, ConvInfo *info) {
+  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
+
+  int inputImageW = info->inputDims[3];
+  int inputImageC = info->inputDims[1];
+
+  int outputImageW = info->outputDims[3];
+  int outputImageC = info->outputDims[1];
+
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
+
+  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
+                    w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
+                    outputImageC);
+  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
+                 w.actualKernelW, w.actualKernelH, kernelW, kernelH,
+                 inputImageC, outputImageC);
+  Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
+                      w.outputW, 0, outputImageC, outputImageW, stride);
+
+  LinearStrided_VRead(&config->bias, bias, outputImageC, stride);
+
+  config->myAccum.strideMinusOne = stride - 1;
+
+  EndAccelerator();
+  StartAccelerator();
+}
+
+void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
+                          void *output, int index, ConvInfo *info) {
+  forceDoubleLoop = true;
+
+  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
+
+  int inputChannels = info->inputDims[1];
+  int inputImageW = info->inputDims[3];
+  int inputImageH = info->inputDims[2];
+
+  int outputChannels = info->outputDims[1];
+  int outputImageH = info->outputDims[2];
+  int outputImageW = info->outputDims[3];
+
+  int inputSize = inputImageW * inputImageH * inputChannels;
+  int outputSize = outputImageW * outputImageH * outputChannels;
+
+  float *tempInput = (float *)malloc(sizeof(float) * inputSize);
+  float *tempOutput = (float *)malloc(sizeof(float) * outputSize);
+
+  float *inputView = (float *)inputX;
+  float *biasView = (float *)inputB;
+
+  // Convert NCHW to NHWC
+  for (int y = 0; y < inputImageH; y++) {
+    for (int x = 0; x < inputImageW; x++) {
+      for (int c = 0; c < inputChannels; c++) {
+        int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
+        int NHWC_Index =
+            y * (inputImageW * inputChannels) + x * inputChannels + c;
+
+        tempInput[NHWC_Index] = inputView[NCHW_Index];
+      }
+    }
+  }
+
+  ActivateMergedAccelerator(MergeType_Top_Conv);
+
+  ExtraInfo extra = CalculateExtraInfo_Conv(info);
+
+  WindowGen genInst = StartWindowGen(&extra, true, true);
+  WindowGen *gen = &genInst;
+
+  for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+    AdvancedWindow w = WindowGen_Get(gen);
+    // AdvancedWindow_Print(w);
+    ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
+                               info);
+  }
+
+  // Flush the remaining data from the accelerator
+  config->features.enabled = 0;
+  config->weights.enabled = 0;
+  config->output.enabled = 0;
+  config->bias.enabled = 0;
   RunAccelerator(2);
 
   float *outputView = (float *)output;
@@ -725,14 +901,14 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 }
 
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
-                      MatMulInfo *info){
+                    MatMulInfo *info) {
 
   ActivateMergedAccelerator(MergeType_Top_MatMul);
   volatile Top_MatMulConfig *config = &accelConfig->Top_MatMul;
 
   int totalBSize = info->inputBDims[0] * info->inputBDims[1];
 
-  float* tempB = malloc(sizeof(float) * totalBSize);
+  float *tempB = malloc(sizeof(float) * totalBSize);
 
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;
@@ -747,7 +923,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int OH = info->outputDims[0];
   int OW = info->outputDims[1];
 
-  if(AW != BH){
+  if (AW != BH) {
     printf("Something very wrong is happening in MatMul\n");
   }
 
@@ -761,14 +937,14 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 
   for (int y = 0; y < OH; y++) {
     for (int x = 0; x < OW; x++) {
-      float* lineAStart = &viewA[y * AW];
-      float* lineBStart = &tempB[x * AW];
+      float *lineAStart = &viewA[y * AW];
+      float *lineBStart = &tempB[x * AW];
 
-      float* out = &viewOut[y * OW + x];
+      float *out = &viewOut[y * OW + x];
 
-      Linear_VRead(&config->leftRow,lineAStart,AW);
-      Linear_VRead(&config->rightRow,lineBStart,BH);
-      LinearStrided_VWrite(&config->output,out,1,AW);
+      Linear_VRead(&config->leftRow, lineAStart, AW);
+      Linear_VRead(&config->rightRow, lineBStart, BH);
+      LinearStrided_VWrite(&config->output, out, 1, AW);
 
       config->myAccum.strideMinusOne = AW - 1;
 
@@ -777,9 +953,16 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
     }
   }
 
+  config->leftRow.enabled = 0;
+  config->rightRow.enabled = 0;
+  config->output.enabled = 0;
   RunAccelerator(2);
 
   free(tempB);
 
   return output;
+}
+
+void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
+  return Software_Softmax(inputA, output, index, info);
 }

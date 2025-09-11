@@ -53,10 +53,10 @@ def CreateBinaryOpTest(op, leftShape, rightShape):
 
     maxDims = max(len(leftShape), len(rightShape))
 
-    #op0 = ExtendShape(leftShape, maxDims)
-    #op1 = ExtendShape(rightShape, maxDims)
+    # op0 = ExtendShape(leftShape, maxDims)
+    # op1 = ExtendShape(rightShape, maxDims)
 
-    #broadCastedShape = BroadCastShape(op0, op1)
+    # broadCastedShape = BroadCastShape(op0, op1)
 
     # Let onnx infer shape specifics
     outputShape = [None] * maxDims
@@ -131,7 +131,7 @@ def CreateMaxPool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     if auto_pad == "NOTSET":
         if pads == None:
-            pads = [0,0,0,0]
+            pads = [0, 0, 0, 0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -172,7 +172,7 @@ def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     if auto_pad == "NOTSET":
         if pads == None:
-            pads = [0,0,0,0]
+            pads = [0, 0, 0, 0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -233,7 +233,7 @@ def CreateConvolution(
 
     if auto_pad == "NOTSET":
         if pads == None:
-            pads = [0,0,0,0]
+            pads = [0, 0, 0, 0]
 
     if pads:
         assert auto_pad == "NOTSET"
@@ -305,7 +305,8 @@ def CreateReshape(shapeIn, shapeOut):
 
     tests.append(test)
 
-def CreateSoftmax(shape,axis = -1):
+
+def CreateSoftmax(shape, axis=-1):
     global tests
     testIndex = len(tests)
 
@@ -325,7 +326,7 @@ def CreateSoftmax(shape,axis = -1):
         "Softmax",
         [GetInputTrueName(testIndex, 0)],
         [GetOutputTrueName(testIndex)],
-        axis=axis
+        axis=axis,
     )
 
     randomArray = np.random.randn(*shape).astype(np.float32)
@@ -333,58 +334,59 @@ def CreateSoftmax(shape,axis = -1):
 
     tests.append(test)
 
-testAdd         = False
-testRelu        = False
-testReshape     = False
-testMatMul      = False
-testMaxPool     = False
-testConv        = False
+
+testAdd = True
+testRelu = False
+testReshape = False
+testMatMul = False
+testMaxPool = False
+testConv = False
 testAveragePool = False
-testSoftmax     = True
+testSoftmax = False
 
 if __name__ == "__main__":
     if testSoftmax:
-        w = 5
-        z = 4
-        y = 3
-        x = 2
-
         # Softmax axis come in pairs.
         # If the dim is N, then the pairs are X and X - N.
         # For dim=2, pairs are 0,-2 and 1,-1
         # For dim=3, pairs are 0,-3 , 1,-2 and 2,-1
         # Softmax sums everything to the "right" of (and including) the axis used.
-        # For the 2D example, 0 is everything 
+        # For the 2D example, 0 is everything
         # While 1 is everything to the right of the y dim (which means that we iterate the y dim).
 
-        # For the 3D example, 0 is everything 
+        # For the 3D example, 0 is everything
         #                     1 is everything right of Z (iterate Z).
         #                     2 is everything right of Y (iterate Z and Y).
 
-        CreateSoftmax([1],0)
-        CreateSoftmax([2],0)
-        CreateSoftmax([10],0)
+        w = 5
+        z = 4
+        y = 3
+        x = 2
 
-        CreateSoftmax([y,x],-2) # A
-        CreateSoftmax([y,x],-1) # B
-        CreateSoftmax([y,x],0) # A
-        CreateSoftmax([y,x],1) # B
+        CreateSoftmax([1], 0)
+        CreateSoftmax([2], 0)
+        CreateSoftmax([10], 0)
 
-        CreateSoftmax([z,y,x],-3) # A
-        CreateSoftmax([z,y,x],-2) # B
-        CreateSoftmax([z,y,x],-1) # C
-        CreateSoftmax([z,y,x],0) # A
-        CreateSoftmax([z,y,x],1) # B
-        CreateSoftmax([z,y,x],2) # C
+        CreateSoftmax([y, x], -2)  # A
+        CreateSoftmax([y, x], -1)  # B
+        CreateSoftmax([y, x], 0)  # A
+        CreateSoftmax([y, x], 1)  # B
 
-        CreateSoftmax([w,z,y,x],-4) # A
-        CreateSoftmax([w,z,y,x],-3) # B
-        CreateSoftmax([w,z,y,x],-2) # C
-        CreateSoftmax([w,z,y,x],-1) # D
-        CreateSoftmax([w,z,y,x],0) # A
-        CreateSoftmax([w,z,y,x],1) # B
-        CreateSoftmax([w,z,y,x],2) # C
-        CreateSoftmax([w,z,y,x],3) # D
+        CreateSoftmax([z, y, x], -3)  # A
+        CreateSoftmax([z, y, x], -2)  # B
+        CreateSoftmax([z, y, x], -1)  # C
+        CreateSoftmax([z, y, x], 0)  # A
+        CreateSoftmax([z, y, x], 1)  # B
+        CreateSoftmax([z, y, x], 2)  # C
+
+        CreateSoftmax([w, z, y, x], -4)  # A
+        CreateSoftmax([w, z, y, x], -3)  # B
+        CreateSoftmax([w, z, y, x], -2)  # C
+        CreateSoftmax([w, z, y, x], -1)  # D
+        CreateSoftmax([w, z, y, x], 0)  # A
+        CreateSoftmax([w, z, y, x], 1)  # B
+        CreateSoftmax([w, z, y, x], 2)  # C
+        CreateSoftmax([w, z, y, x], 3)  # D
 
     if testAdd:
         # Simplest tests, no broadcast or abusing dimensions
@@ -417,15 +419,15 @@ if __name__ == "__main__":
         CreateReshape([24], [4, 3, 2])
 
     if testMatMul:
-        CreateBinaryOpTest("MatMul",[1,1],[1,1])
-        CreateBinaryOpTest("MatMul",[1,2],[2,1])
-        CreateBinaryOpTest("MatMul",[2,1],[1,2])
-        CreateBinaryOpTest("MatMul",[2,2],[2,2])
-        CreateBinaryOpTest("MatMul",[2,3],[3,2])
-        CreateBinaryOpTest("MatMul",[3,2],[2,3])
-        CreateBinaryOpTest("MatMul",[2,4],[4,8])
-        CreateBinaryOpTest("MatMul",[8,4],[4,2])
-        CreateBinaryOpTest("MatMul",[10,11],[11,20])
+        CreateBinaryOpTest("MatMul", [1, 1], [1, 1])
+        CreateBinaryOpTest("MatMul", [1, 2], [2, 1])
+        CreateBinaryOpTest("MatMul", [2, 1], [1, 2])
+        CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
+        CreateBinaryOpTest("MatMul", [2, 3], [3, 2])
+        CreateBinaryOpTest("MatMul", [3, 2], [2, 3])
+        CreateBinaryOpTest("MatMul", [2, 4], [4, 8])
+        CreateBinaryOpTest("MatMul", [8, 4], [4, 2])
+        CreateBinaryOpTest("MatMul", [10, 11], [11, 20])
 
     if testMaxPool:
         # All padding posibilities, mostly to test the window generation
@@ -447,7 +449,7 @@ if __name__ == "__main__":
         CreateMaxPool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
         CreateMaxPool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
         CreateMaxPool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
-        CreateMaxPool([1, 1,10,10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+        CreateMaxPool([1, 1, 10, 10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
 
         # Test different kernels, strides, no padding
         CreateMaxPool([1, 3, 8, 8], [2, 2], [2, 2])
@@ -519,7 +521,7 @@ if __name__ == "__main__":
         CreateAveragePool([1, 1, 3, 2], [2, 2], [2, 2], "NOTSET", [0, 1, 1, 1])
         CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
         CreateAveragePool([1, 1, 1, 1], [3, 3], [3, 3], "NOTSET", [1, 1, 1, 1])
-        CreateAveragePool([1, 1,10,10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
+        CreateAveragePool([1, 1, 10, 10], [2, 2], [2, 2], "NOTSET", [1, 1, 1, 1])
 
         # Test different kernels, strides, no padding
         CreateAveragePool([1, 3, 8, 8], [2, 2], [2, 2])
@@ -578,67 +580,87 @@ if __name__ == "__main__":
         c = 3
         f = 16
 
-        k = [3,3]
-        s = [3,3]
-        d = [1,1]
+        k = [3, 3]
+        s = [3, 3]
+        d = [1, 1]
         b = False
         p = "NOTSET"
 
-        # No padding                                       T  L  B  R
-        CreateConvolution([n, c, 6, 6], f, k, s, d, b, p, [0, 0, 0, 0])
-        CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [1, 0, 0, 0])
-        CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 1, 0, 0])
-        CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [0, 0, 1, 0])
-        CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 0, 0, 1])
-        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 1, 0, 0])
-        CreateConvolution([n, c, 4, 6], f, k, s, d, b, p, [1, 0, 1, 0])
-        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 0, 0, 1])
-        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 1, 1, 0])
-        CreateConvolution([n, c, 6, 4], f, k, s, d, b, p, [0, 1, 0, 1])
-        CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 0, 1, 1])
-        CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 1, 1, 0])
-        CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [1, 1, 0, 1])
-        CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 0, 1, 1])
-        CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [0, 1, 1, 1])
-        CreateConvolution([n, c, 4, 4], f, k, s, d, b, p, [1, 1, 1, 1])
-        CreateConvolution([n, c, 1, 1], f, k, s, d, b, p, [1, 1, 1, 1])
-        CreateConvolution([n, c, 10, 10], f, k, s, d, b, p, [1, 1, 1, 1])
+        if False:
+            #                                                  T  L  B  R
+            CreateConvolution([n, c, 6, 6], f, k, s, d, b, p, [0, 0, 0, 0])
+            CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [1, 0, 0, 0])
+            CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 1, 0, 0])
+            CreateConvolution([n, c, 5, 6], f, k, s, d, b, p, [0, 0, 1, 0])
+            CreateConvolution([n, c, 6, 5], f, k, s, d, b, p, [0, 0, 0, 1])
+            CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 1, 0, 0])
+            CreateConvolution([n, c, 4, 6], f, k, s, d, b, p, [1, 0, 1, 0])
+            CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [1, 0, 0, 1])
+            CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 1, 1, 0])
+            CreateConvolution([n, c, 6, 4], f, k, s, d, b, p, [0, 1, 0, 1])
+            CreateConvolution([n, c, 5, 5], f, k, s, d, b, p, [0, 0, 1, 1])
+            CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 1, 1, 0])
+            CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [1, 1, 0, 1])
+            CreateConvolution([n, c, 4, 5], f, k, s, d, b, p, [1, 0, 1, 1])
+            CreateConvolution([n, c, 5, 4], f, k, s, d, b, p, [0, 1, 1, 1])
+            CreateConvolution([n, c, 4, 4], f, k, s, d, b, p, [1, 1, 1, 1])
+            CreateConvolution([n, c, 1, 1], f, k, s, d, b, p, [1, 1, 1, 1])
+            CreateConvolution([n, c, 10, 10], f, k, s, d, b, p, [1, 1, 1, 1])
 
-        # No padding
-        # Different: Input shape, features, kernel, stride, dilations, bias
-        CreateConvolution([1, 1, 3, 3],1,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 2, 3, 3],1,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 1, 3, 3],2,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 2, 3, 3],2,[3, 3],[3, 3],[1, 1])
+            # No padding
+            # Different: Input shape, features, kernel, stride, dilations, bias
+            CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d)
+            CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d)
+            CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d)
+            CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d)
 
-        # Same but in a 2x2 square
-        CreateConvolution([1, 1, 6, 6],1,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 2, 6, 6],1,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 1, 6, 6],2,[3, 3],[3, 3],[1, 1])
-        CreateConvolution([1, 2, 6, 6],2,[3, 3],[3, 3],[1, 1])
+            # Same but in a 2x2 square
+            CreateConvolution([1, 1, 6, 6], 1, [3, 3], [3, 3], d)
+            CreateConvolution([1, 2, 6, 6], 1, [3, 3], [3, 3], d)
+            CreateConvolution([1, 1, 6, 6], 2, [3, 3], [3, 3], d)
+            CreateConvolution([1, 2, 6, 6], 2, [3, 3], [3, 3], d)
 
-        # Same but for a 5x5 kernel
-        CreateConvolution([1, 1, 5, 5],1,[5, 5],[5, 5],[1, 1])
-        CreateConvolution([1, 2, 5, 5],1,[5, 5],[5, 5],[1, 1])
-        CreateConvolution([1, 1, 5, 5],2,[5, 5],[5, 5],[1, 1])
-        CreateConvolution([1, 2, 5, 5],2,[5, 5],[5, 5],[1, 1])
+            # Same but for a 5x5 kernel
+            CreateConvolution([1, 1, 5, 5], 1, [5, 5], [5, 5], d)
+            CreateConvolution([1, 2, 5, 5], 1, [5, 5], [5, 5], d)
+            CreateConvolution([1, 1, 5, 5], 2, [5, 5], [5, 5], d)
+            CreateConvolution([1, 2, 5, 5], 2, [5, 5], [5, 5], d)
 
-        # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
-        CreateConvolution([1, 1, 4, 4],1,[2, 2],[1, 1],[1, 1])
-        CreateConvolution([1, 2, 4, 4],1,[2, 2],[1, 1],[1, 1])
-        CreateConvolution([1, 1, 4, 4],2,[2, 2],[1, 1],[1, 1])
-        CreateConvolution([1, 2, 4, 4],2,[2, 2],[1, 1],[1, 1])
+            # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
+            CreateConvolution([1, 1, 4, 4], 1, [2, 2], [1, 1], d)
+            CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d)
+            CreateConvolution([1, 1, 4, 4], 2, [2, 2], [1, 1], d)
+            CreateConvolution([1, 2, 4, 4], 2, [2, 2], [1, 1], d)
 
-        # Different sized kernels
-        CreateConvolution([1, 1, 2, 3],1,[2, 3],[2, 3],[1, 1])
-        CreateConvolution([1, 1, 3, 2],1,[3, 2],[3, 2],[1, 1])
-        CreateConvolution([1, 1, 4, 9],1,[2, 3],[2, 3],[1, 1])
-        CreateConvolution([1, 1, 9, 4],1,[3, 2],[3, 2],[1, 1])
+            # Different sized kernels
+            CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d)
+            CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d)
+            CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d)
+            CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d)
 
-        # Bigger more realistic examples
-        CreateConvolution([1, 3, 16, 16],16,[2, 2],[2, 2],[1, 1])
+            # Bigger more realistic examples
+            CreateConvolution([1, 3, 16, 16], 16, [2, 2], [2, 2], d)
 
-        # TODO: Missing bias 
+        CreateConvolution([1, 1, 1, 1], 2, [5, 5], [5, 5], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 1, 1], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 1, 1], 1, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 3, 3], 1, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 5, 5], 1, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 8, 8], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 10, 10], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 15, 15], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 20, 20], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 28, 28], 2, [5, 5], [1, 1], d, False, "SAME_UPPER")
+
+        # Adding bias
+        CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d, True)
+        CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d, True)
+        CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d, True)
+        CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d, True)
+        CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d, True)
+        CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d, True)
+        CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d, True)
+        CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d, True)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

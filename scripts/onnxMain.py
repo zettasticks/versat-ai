@@ -488,10 +488,15 @@ def GenerateDebug(
             spec = GetOperatorSpec(c.opName)
             decider = "Software_" if not spec.generateVersatCode else "Versat_"
 
+            opName = c.opName
+            if opName == "Conv":
+                if len(c.inputs) == 3:
+                    opName = "ConvWithBias"
+
             f.write(
                 f"  void* res_{index} = "
                 + decider
-                + c.opName
+                + opName
                 + "("
                 + ",".join(content)
                 + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"

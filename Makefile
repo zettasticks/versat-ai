@@ -57,7 +57,7 @@ test2: $(VERSAT_ACCEL) $(DOWNLOADED_TEST)
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
-test3: $(VERSAT_ACCEL) 
+test3: $(VERSAT_ACCEL)
 
 pc-emul-run: $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
