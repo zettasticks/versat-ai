@@ -344,10 +344,6 @@ testSoftmax     = True
 
 if __name__ == "__main__":
     if testSoftmax:
-        #CreateSoftmax([1],0)
-        #CreateSoftmax([2],0)
-        #CreateSoftmax([10],0)
-
         z = 2
         y = 3
         x = 4
@@ -365,15 +361,20 @@ if __name__ == "__main__":
         #                     2 is everything right of X (iterate Z and Y).
 
         if True:
+            CreateSoftmax([1],0)
+            CreateSoftmax([2],0)
+            CreateSoftmax([10],0)
+
+        if True:
             CreateSoftmax([y,x],-2) # A
             CreateSoftmax([y,x],-1) # B
             CreateSoftmax([y,x],0) # A
             CreateSoftmax([y,x],1) # B
 
         if True:
-            CreateSoftmax([z,y,x],-3) # A
-            CreateSoftmax([z,y,x],-2) # B
-            CreateSoftmax([z,y,x],-1) # C
+            #CreateSoftmax([z,y,x],-3) # A
+            #CreateSoftmax([z,y,x],-2) # B
+            #CreateSoftmax([z,y,x],-1) # C
             CreateSoftmax([z,y,x],0) # A
             CreateSoftmax([z,y,x],1) # B
             CreateSoftmax([z,y,x],2) # C

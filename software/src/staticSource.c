@@ -14,6 +14,9 @@ void clear_cache();
 #define MIN(A, B) ((A < B ? A : B))
 #define MAX(A, B) ((A > B ? A : B))
 
+// Care when using this, when not debugging this just crashes the program
+#define DEBUG_BREAK() __asm__("int3")
+
 typedef struct {
   int addressVars[16];
   int64_t iterationDims[16];
@@ -98,13 +101,29 @@ void Address_Advance(AddressGen *gen) {
 }
 
 void Address_AdvanceAxis(AddressGen* gen,int axisToAdvance){
-  if (gen->addressVars[axisToAdvance] >= gen->iterationDims[axisToAdvance]) {
+  // Any negative axis just puts the address gen into an invalid state
+  if(axisToAdvance < 0){
+    gen->addressVars[0] = gen->iterationDims[0] + 1;
     return;
   }
 
-  gen->addressVars[axisToAdvance] += 1;
+  if (gen->addressVars[0] >= gen->iterationDims[0]) {
+    return;
+  }
+
+  for (int i = axisToAdvance; i >= 0; i--) {
+    if (i != 0 && gen->addressVars[i] + 1 >= gen->iterationDims[i]) {
+      gen->addressVars[i] = 0;
+      continue;
+    } else {
+      gen->addressVars[i] += 1;
+      return;
+    }
+  }
 }
 
+// Proper dims are the dims used to calculate an index.
+// Iteration dims are the iterations. 
 AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
                         int numberDims) {
   AddressGen gen = {};
@@ -136,6 +155,21 @@ AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   return gen;
 }
 
+/* 
+  A Kernel gen is basically a subiterator that starts from the position on the parent AddressGen
+  and iterates a subsection of a subsection of the dimensions.
+  
+  If we have an AddressGen that iterates over A,B,C,D then as an example we can create
+  a KernelGen that iterates over C,D and the iteration can be bounded to a smaller "rectangle"
+  like a 3x3 area over the C,D dimensions.
+  Note that the KernelGen always starts from the AddressGen position.
+  Furthermore, because the KernelGen can "escape" over the given dimensions, we provide a 
+  Kernel_IsInsidePad that returns true if the KernelGen is outside the boundaries of the 
+  provided dimensions. In this case the Kernel_GetValue function returns garbage and should 
+  not be used.
+
+*/
+
 typedef struct {
   int kernelVars[16]; // Current state
 
@@ -147,19 +181,27 @@ typedef struct {
   int numberDims;
 } KernelGen;
 
-KernelGen StartKernel(AddressGen *addresss, int *kernelDims, int numberDims) {
+// KernelDims are the bounds of the dimensions that the KernelGen iterates over
+// Example, if we have a layer of dim A,B,C,D and kernelSize of 2, then 
+// the kernel only iterates over the C and D dimensions, never A or B.
+// kernelDims has kernelSize size and defines the boundary of the iteration
+KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
   KernelGen gen = {};
-  gen.address = addresss;
-  gen.kernelDims[0] = 1;
-  gen.kernelDims[1] = 1;
-  gen.numberDims = numberDims + 2;
+  gen.address = address;
+
+  int nonKernelDims = address->numberDims - kernelSize;
+
+  for(int i = 0; i < nonKernelDims; i++){
+    gen.kernelDims[i] = 1;
+  }
+  gen.numberDims = address->numberDims;
 
   for (int i = 0; i < 16; i++) {
     gen.kernelDilations[i] = 1;
   }
 
-  for (int i = 0; i < numberDims; i++) {
-    gen.kernelDims[2 + i] = kernelDims[i];
+  for (int i = 0; i < kernelSize; i++) {
+    gen.kernelDims[nonKernelDims + i] = kernelDims[i];
   }
 
   return gen;
@@ -440,7 +482,7 @@ void *Software_MaxPool(void *inputX, void *output, int index,
 
     AddressGen inputPos = Address_Map(outGen, info->inputDims, stride);
     KernelGen kernInst =
-        StartKernel(&inputPos, info->kernelDims, info->kernelSize);
+        StartKernel(&inputPos, info->kernelDims, 2);
     KernelGen *kern = &kernInst;
     for (; Kernel_IsValid(kern); Kernel_Advance(kern)) {
       if (Kernel_IsInsidePad(kern)) {
@@ -495,7 +537,7 @@ void *Software_AveragePool(void *inputX, void *output, int index,
 
     AddressGen inputPos = Address_Map(outGen, info->inputDims, stride);
     KernelGen kernInst =
-        StartKernel(&inputPos, info->kernelDims, info->kernelSize);
+        StartKernel(&inputPos, info->kernelDims, 2);
     KernelGen *kern = &kernInst;
     for (; Kernel_IsValid(kern); Kernel_Advance(kern)) {
       if (Kernel_IsInsidePad(kern)) {
@@ -549,9 +591,71 @@ void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
   float* view = (float*) input;
   float* out = (float*) output;
 
+  // Axis are normalized here, no need to handle negative axis after this point
   int axis = info->axis;
+  if(axis < 0){
+    axis += info->numberInputDims;
+  }
 
-  if(axis == 0 || axis == -info->numberInputDims || info->numberInputDims == 1){
+  /*
+    The idea being the softmax axis is that we separate softmax into two regions
+    One is the iteration region and the other is the value region.
+    The axis is the separator and the dims to the left and including the axis are the value region.
+    For an axis of 0, the value region is everything so we sum everything and calculate softmax.
+      We do 1 sum in this mode.
+    For an axis of 1, the iteration region is a single loop and the rest is sum and used to calculate softmax.
+      Note that if the iteration region contains a loop of size N we do N total sums.
+    For an axis of 2 the iteration region is two loops. If we have loop of size N and M then we calculate N*M total sums.
+    And so on.
+  */
+
+  if(false && (axis == 0 || info->numberInputDims == 1))  {
+    AddressGen inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+    AddressGen* inputGen = &inputGenInst;
+    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
+      int index = Address_GetValue(inputGen);
+      sum += exp(view[index]);
+    }
+    inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+    for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
+      int index = Address_GetValue(inputGen);
+      out[index] = exp(view[index]) / sum;
+    }
+  } else {
+    AddressGen testInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+    AddressGen* test = &testInst;
+    
+    int kernelSize = info->numberInputDims - axis;
+
+    for (; Address_IsValid(test); Address_AdvanceAxis(test,axis - 1)) {
+      int kernelDims[16] = {};
+      for(int i = 0; i < kernelSize; i++){
+        kernelDims[i] = info->inputDims[i + axis];
+      }
+
+      float sum = 0.0f;
+
+      KernelGen genInst = StartKernel(test,kernelDims,kernelSize);
+      KernelGen* gen = &genInst;
+      for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
+        int index = Kernel_GetValue(gen);
+        
+        sum += exp(view[index]);
+      }
+
+      genInst = StartKernel(test,kernelDims,kernelSize);
+      for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
+        int index = Kernel_GetValue(gen);
+        
+        out[index] = exp(view[index]) / sum;
+      }      
+    }
+  }
+
+  return output;
+
+#if 0
+  if(axis == 0 || info->numberInputDims == 1){
     AddressGen inputGenInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
     AddressGen* inputGen = &inputGenInst;
     for (; Address_IsValid(inputGen); Address_Advance(inputGen)) {
@@ -584,7 +688,7 @@ void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
     int yDim = info->inputDims[1];
     int xDim = info->inputDims[2];
 
-    if(axis == 1 || axis == -2){
+    if(axis == 1){
       for(int z = 0; z < zDim; z++){
         float sum = 0.0f;
         for(int y = 0; y < yDim; y++){
@@ -601,7 +705,7 @@ void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
           }
         }
       }
-    } else if(axis == -1 || axis == 2) {
+    } else if(axis == 2) {
       for(int z = 0; z < zDim; z++){
         for(int y = 0; y < yDim; y++){
           float sum = 0.0f;
@@ -618,6 +722,7 @@ void *Software_Softmax(void* input,void* output,int index,SoftmaxInfo* info){
       }
     }
   }
+#endif
 
   return output;
 }
