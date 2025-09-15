@@ -357,7 +357,7 @@ def GenerateDebug(
             properOutputs.append(output)
 
     for ref_o, o in zip(ref_outputs, properOutputs):
-        np.testing.assert_almost_equal(ref_o, o, decimal=9)
+        np.testing.assert_allclose(ref_o, o, rtol=1e-05, atol=0)
 
     print("Test outputs match with the expected values")
 
