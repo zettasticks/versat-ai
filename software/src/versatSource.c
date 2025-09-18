@@ -720,6 +720,8 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info) {
   forceDoubleLoop = true;
 
+  printf("[Versat Conv]\n");
+
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
   int inputChannels = info->inputDims[1];
@@ -805,6 +807,9 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
+  //Print_Conv2D_NHWC(w.inputX, w.inputY, w.actualKernelW, w.actualKernelH,
+  //                  inputImageW, inputImageC, outputImageC);
+
   Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
                     w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
                     outputImageC);
@@ -825,6 +830,8 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           void *output, int index, ConvInfo *info) {
   forceDoubleLoop = true;
+
+  printf("[Versat Conv]\n");
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 

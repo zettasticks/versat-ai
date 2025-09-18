@@ -306,6 +306,36 @@ def CreateReshape(shapeIn, shapeOut):
     tests.append(test)
 
 
+def CreateTranspose(shapeIn, perm):
+    global tests
+    testIndex = len(tests)
+
+    test = Test()
+
+    shapeOut = [None] * len(shapeIn)
+    test.shapes = [shapeIn]
+
+    tensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shapeIn
+    )
+
+    test.tensors = [tensor]
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, shapeOut
+    )
+    test.node = make_node(
+        "Transpose",
+        [GetInputTrueName(testIndex, 0)],
+        [GetOutputTrueName(testIndex)],
+        perm=perm,
+    )
+
+    randomArray = np.random.randn(*shapeIn).astype(np.float32)
+    test.randomArrays = [randomArray]
+
+    tests.append(test)
+
+
 def CreateSoftmax(shape, axis=-1):
     global tests
     testIndex = len(tests)
@@ -335,7 +365,7 @@ def CreateSoftmax(shape, axis=-1):
     tests.append(test)
 
 
-testAdd = True
+testAdd = False
 testRelu = False
 testReshape = False
 testMatMul = False
@@ -343,6 +373,7 @@ testMaxPool = False
 testConv = False
 testAveragePool = False
 testSoftmax = False
+testTranspose = True
 
 if __name__ == "__main__":
     if testSoftmax:
@@ -417,6 +448,18 @@ if __name__ == "__main__":
         CreateReshape([2, 3, 4], [24])
         CreateReshape([24], [2, 3, 4])
         CreateReshape([24], [4, 3, 2])
+
+    if testTranspose:
+        CreateTranspose([2, 2], [0, 1])
+        CreateTranspose([2, 2], [1, 0])
+        CreateTranspose([2, 3], [0, 1])
+        CreateTranspose([2, 3], [1, 0])
+        CreateTranspose([2, 3, 4], [0, 1, 2])
+        CreateTranspose([2, 3, 4], [0, 2, 1])
+        CreateTranspose([2, 3, 4], [1, 0, 2])
+        CreateTranspose([2, 3, 4], [2, 0, 1])
+        CreateTranspose([2, 3, 4], [1, 2, 0])
+        CreateTranspose([2, 3, 4], [2, 1, 0])
 
     if testMatMul:
         CreateBinaryOpTest("MatMul", [1, 1], [1, 1])

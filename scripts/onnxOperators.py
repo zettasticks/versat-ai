@@ -82,6 +82,10 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
         if name in op.parsedAttributes:
             res[name] = op.parsedAttributes[name]
         else:
+            if callable(attrType.defaultValue):
+                print("Callable default type")
+                assert False  # TODO: Need to implement this. Call the function with the operation and implement these functions to return the default value for the operation
+
             # For spatial axis attributes, calculate spatialAxes from output.
             if (
                 attrType.attrType == OnnxAttributeType.AXIS_LIST
@@ -216,6 +220,18 @@ def EmitSoftmax(emitter, op: Operation):
     return [inputShape, dims, attr["axis"]]
 
 
+def EmitTranspose(emitter, op: Operation):
+    dims = len(op.inputDimensions[0])
+    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
+
+    attr = GetAttributesForOperator(op)
+
+    perm = attr["perm"].value
+    permShape = emitter.EmitArray("int64_t", perm)
+
+    return [inputShape, dims, permShape, len(perm)]
+
+
 def IsOperatorRegistered(opName: str):
     return opName in operatorNameToSpec
 
@@ -272,6 +288,12 @@ averagePoolAttributes = {
 
 softmaxAttributes = {"axis": MakeAttrInteger(-1)}
 
+transposeAttributes = {
+    "perm": MakeAttrIntegerList(
+        lambda x: x
+    )  # TODO: Implement this when needed. Basically receive an Operation and return the default value
+}
+
 
 def GetOperatorSpec(opName):
     global operatorNameToSpec
@@ -296,4 +318,7 @@ operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
 )
 operatorNameToSpec["Softmax"] = OnnxOperatorSpec(
     "Softmax", EmitSoftmax, softmaxAttributes, False
+)
+operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
+    "Transpose", EmitTranspose, transposeAttributes, False
 )

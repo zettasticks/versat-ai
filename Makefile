@@ -57,7 +57,23 @@ test2: $(VERSAT_ACCEL) $(DOWNLOADED_TEST)
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
+do-test3:
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/keyword/ model.onnx software/ software/src"
+
 test3: $(VERSAT_ACCEL)
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/keyword/ model.onnx software/ software/src"
+	cp software/*.bin hardware/simulation
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
+
+do-test4:
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/image/ model.onnx software/ software/src"
+
+test4: $(VERSAT_ACCEL)
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/image/ model.onnx software/ software/src"
+	cp software/*.bin hardware/simulation
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
 pc-emul-run: $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
@@ -65,7 +81,7 @@ pc-emul-run: $(TEST)
 sim-run: $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
-# Need to be inside nix-shell for fast- rules to work. Mostly used to speed up development instead of waiting for setup everytime
+# Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime
 fast-versat:
 	python3 ./scripts/versatGenerate.py
 
@@ -105,7 +121,6 @@ versat-generate:
 
 clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
-	@rm -rf ./tests
 	@rm -rf ./submodules/iob_versat
 	@rm -rf ./hardware/simulation/*.bin
 	@rm -rf ./software/*.bin
@@ -114,6 +129,7 @@ clean:
 	@find . -name \*~ -delete
 
 full-clean: clean
+	@rm -rf ./tests
 	@rm -rf $(PYTHON_ENV)
 
 # Remove all __pycache__ folders with python bytecode

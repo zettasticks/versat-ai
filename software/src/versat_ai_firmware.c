@@ -35,6 +35,13 @@ void clear_cache() {
 #endif
 }
 
+void *Align4(void *in) {
+  iptr asInt = (iptr)in;
+
+  asInt = ((asInt + 3) & ~3);
+  return (void *)asInt;
+}
+
 int main() {
   char pass_string[] = "Test passed!";
   char fail_string[] = "Test failed!";
@@ -57,11 +64,19 @@ int main() {
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
-  void *output = malloc(VERSAT_AI_OUTPUT_SIZE);
-  void *temp = malloc(VERSAT_AI_TEMP_SIZE);
-  void *model = malloc(VERSAT_AI_MODEL_SIZE);
-  void *correct = malloc(VERSAT_AI_CORRECT_SIZE);
-  void *inputMemory = malloc(VERSAT_AI_ALL_INPUTS_SIZE);
+  int stackVar;
+
+  printf("Stack  : %p\n", &stackVar);
+
+  // Something is causing problems in sim-run. We allocate a little bit more
+  // just in case.
+  int extra = 100;
+
+  void *output = Align4(malloc(VERSAT_AI_OUTPUT_SIZE + extra));
+  void *temp = Align4(malloc(VERSAT_AI_TEMP_SIZE + extra));
+  void *model = Align4(malloc(VERSAT_AI_MODEL_SIZE + extra));
+  void *correct = Align4(malloc(VERSAT_AI_CORRECT_SIZE + extra));
+  void *inputMemory = Align4(malloc(VERSAT_AI_ALL_INPUTS_SIZE + extra));
 
   void *inputs[VERSAT_AI_N_INPUTS];
   for (int i = 0; i < VERSAT_AI_N_INPUTS; i++) {
@@ -72,10 +87,16 @@ int main() {
   printf("Temp   : %p\n", temp);
   printf("Model  : %p\n", model);
   printf("Correct: %p\n", correct);
+  printf("Input  : %p\n", inputMemory);
 
-  uart_recvfile("model.bin", model);
+  printf("Total  : %p\n", ((char *)inputMemory) + VERSAT_AI_ALL_INPUTS_SIZE);
+
   uart_recvfile("correctOutputs.bin", correct);
+  printf("Received correct outputs\n");
+  uart_recvfile("model.bin", model);
+  printf("Received model\n");
   uart_recvfile("inputs.bin", inputMemory);
+  printf("Received inputs\n");
 
   DebugRunInference(output, temp, inputs, model, correct);
 

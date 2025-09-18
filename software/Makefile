@@ -81,7 +81,7 @@ debug:
 #########################################
 
 fw_emul: $(EMUL_HDR) $(EMUL_SRC) libaccel.a
-	gcc -o $@ $(EMUL_CFLAGS) $(EMUL_INCLUDES) $(EMUL_SRC) -lm libaccel.a -lstdc++
+	gcc -o $@ $(EMUL_CFLAGS) $(EMUL_INCLUDES) $(EMUL_SRC) libaccel.a -lm -lstdc++
 
 build_emul: fw_emul
 	@echo "build"

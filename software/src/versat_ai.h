@@ -111,6 +111,13 @@ typedef struct {
   int axis;
 } SoftmaxInfo;
 
+typedef struct {
+  int64_t *inputDims;
+  int numberInputDims;
+  int64_t *perm;
+  int permSize;
+} TransposeInfo;
+
 extern LayerInfo layers[];
 extern int numberLayers;
 
@@ -121,6 +128,8 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
                             void *output, int index, ConvInfo *info);
 void *Software_Reshape(void *data, void *shape, void *output, int index,
                        ReshapeInfo *info);
+void *Software_Transpose(void *inputA, void *output, int index,
+                         TransposeInfo *info);
 void *Software_Add(void *inputA, void *inputB, void *output, int index,
                    AddInfo *info);
 void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info);
