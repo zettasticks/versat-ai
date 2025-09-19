@@ -169,6 +169,12 @@ def setup(py_params_dict):
                     },
                     # NOTE: Add other components/peripherals here.
                 ],
+                "sw_modules": [
+                    {
+                        "core_name": "iob_coverage_analyze",
+                        "instance_name": "iob_coverage_analyze_inst",
+                    },
+                ],
             },
             **py_params_dict,
         },
