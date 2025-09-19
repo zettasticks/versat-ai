@@ -93,10 +93,19 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
   int64_t totalSize = CalculateSizeOfDim(dim, dims);
 
-  Linear_VRead(&config->input, inputA, totalSize);
-  Linear_VWrite(&config->output, output, totalSize);
+  int64_t maxAtATime = 256;
 
-  RunAccelerator(1);
+  float *inputView = (float *)inputA;
+  float *outputView = (float *)output;
+
+  for (int i = 0; i < totalSize; i += maxAtATime) {
+    int size = MIN(maxAtATime, totalSize - i);
+
+    Linear_VRead(&config->input, &inputView[i], size);
+    Linear_VWrite(&config->output, &outputView[i], size);
+
+    RunAccelerator(1);
+  }
 
   config->input.enabled = 0;
   config->output.enabled = 0;
@@ -807,8 +816,8 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
-  //Print_Conv2D_NHWC(w.inputX, w.inputY, w.actualKernelW, w.actualKernelH,
-  //                  inputImageW, inputImageC, outputImageC);
+  // Print_Conv2D_NHWC(w.inputX, w.inputY, w.actualKernelW, w.actualKernelH,
+  //                   inputImageW, inputImageC, outputImageC);
 
   Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
                     w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,

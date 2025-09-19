@@ -44,9 +44,6 @@ $(GENERATED_TEST): $(PYTHON_ENV) $(ALL_SCRIPTS)
 $(DOWNLOADED_TEST): $(PYTHON_ENV)
 	./scripts/downloadTests.sh
 
-do-test:
-	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py $(TEST_PATH) model.onnx software/ software/src"
-
 # TODO: When adding more tests, we need a better way of doing this.
 test1: $(VERSAT_ACCEL) $(GENERATED_TEST)
 	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
@@ -112,11 +109,20 @@ fast-sim-run:
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
 	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
-# Rules to force certain files to be build, mostly for debugging as the files should just be built by the rules of the makefile
+# Rules to force certain files to be build, mostly for debugging and to support the runTest.py script
+# Do not call them directly unless you know what you are doing
+do-test:
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py $(TEST_PATH) model.onnx software/ software/src"
+
 test-generate: 
 	rm -f $(GENERATED_TEST)
 	$(MAKE) $(GENERATED_TEST) 
 	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
+
+test-setup:
+	cp software/*.bin hardware/simulation
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
 versat-generate:
 	rm -f $(VERSAT_ACCEL)

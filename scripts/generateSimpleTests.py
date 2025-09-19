@@ -375,6 +375,8 @@ testAveragePool = False
 testSoftmax = False
 testTranspose = True
 
+testBig = False
+
 if __name__ == "__main__":
     if testSoftmax:
         # Softmax axis come in pairs.
@@ -393,6 +395,11 @@ if __name__ == "__main__":
         z = 4
         y = 3
         x = 2
+
+        if testBig:
+            CreateSoftmax([256], 0)
+            CreateSoftmax([256, 256], 0)
+            CreateSoftmax([256, 256], 1)
 
         CreateSoftmax([1], 0)
         CreateSoftmax([2], 0)
@@ -434,12 +441,18 @@ if __name__ == "__main__":
         CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
         CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
+        if testBig:
+            CreateBinaryOpTest("Add", [1024], [1024])
+
     if testRelu:
         CreateUnaryOpTest("Relu", [1])
         CreateUnaryOpTest("Relu", [4])
         CreateUnaryOpTest("Relu", [2, 4])
         CreateUnaryOpTest("Relu", [2, 4, 6])
         CreateUnaryOpTest("Relu", [2, 4, 6, 8])
+
+        if testBig:
+            CreateUnaryOpTest("Relu", [4096])
 
     if testReshape:
         CreateReshape([4, 2], [8])
@@ -471,6 +484,9 @@ if __name__ == "__main__":
         CreateBinaryOpTest("MatMul", [2, 4], [4, 8])
         CreateBinaryOpTest("MatMul", [8, 4], [4, 2])
         CreateBinaryOpTest("MatMul", [10, 11], [11, 20])
+
+        if testBig:
+            CreateBinaryOpTest("MatMul", [100, 200], [200, 300])
 
     if testMaxPool:
         # All padding posibilities, mostly to test the window generation
@@ -538,6 +554,9 @@ if __name__ == "__main__":
 
         # Common example
         CreateMaxPool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
+
+        if testBig:
+            CreateMaxPool([1, 3, 100, 100], [100, 100], [100, 100], "SAME_LOWER")
 
         # 3 D
         # CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
@@ -609,6 +628,9 @@ if __name__ == "__main__":
 
         # Common example
         CreateAveragePool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
+
+        if testBig:
+            CreateAveragePool([1, 3, 100, 100], [100, 100], [100, 100], "SAME_LOWER")
 
         # 3 D
         # CreateAveragePool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
@@ -704,6 +726,9 @@ if __name__ == "__main__":
         CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d, True)
         CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d, True)
         CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d, True)
+
+        if testBig:
+            CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, True)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

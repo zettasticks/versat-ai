@@ -56,11 +56,19 @@ int main() {
   // test puts
   uart_puts("\n\n\nHello world from versat_ai!\n\n\n");
 
-  uart_puts("\n\n\nGonna init versat!\n\n\n");
+#ifdef TEST_NAME
+  printf("\n\nRunning test %s\n\n", TEST_NAME);
+#endif
+
+  uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
+#ifdef CREATE_VCD
+  ConfigCreateVCD(CREATE_VCD);
+#else
   ConfigCreateVCD(false);
+#endif
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
