@@ -68,8 +68,8 @@ int main() {
 
   printf("Stack  : %p\n", &stackVar);
 
-  // Something is causing problems in sim-run. We allocate a little bit more
-  // just in case.
+  // We allocate a little bit more just in case.
+  // Also need to allocate a bit more to ensure that Align4 works fine.
   int extra = 100;
 
   void *output = Align4(malloc(VERSAT_AI_OUTPUT_SIZE + extra));

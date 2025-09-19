@@ -44,6 +44,9 @@ $(GENERATED_TEST): $(PYTHON_ENV) $(ALL_SCRIPTS)
 $(DOWNLOADED_TEST): $(PYTHON_ENV)
 	./scripts/downloadTests.sh
 
+do-test:
+	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py $(TEST_PATH) model.onnx software/ software/src"
+
 # TODO: When adding more tests, we need a better way of doing this.
 test1: $(VERSAT_ACCEL) $(GENERATED_TEST)
 	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"

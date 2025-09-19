@@ -1,0 +1,14 @@
+{
+  "Generated": {
+    "type": "GENERATED"
+  },
+  "ToyCar":{
+    "type": "FIXED",
+    "path": "./tests/toycar"
+  },
+  "Image":{
+    "type": "FIXED",
+    "path": "./tests/image"
+  }
+}
+
