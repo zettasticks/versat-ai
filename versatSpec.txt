@@ -79,20 +79,20 @@ module Top_AveragePool(){
    inversedDiv -> output;
 }
 
-addressGen Conv2D_NHWC(startX,startY,sizeW,sizeH,inputImageW,inputImageC,features){
+addressGen Conv2D_NHWC(startX,startY,sizeW,sizeH,inputImageW,inputImageC,sizeC,features,startC){
    for d 0..features
-   for c 0..inputImageC
+   for c 0..sizeC
    for ky 0..sizeH
    for kx 0..sizeW
-   addr = (startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + c;
+   addr = (startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + (c + startC);
 }
 
-addressGen Weight2D(startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,features){
-   for c 0..features
-   for d 0..inputChannels
+addressGen Weight2D(startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,sizeC,features,startC){
+   for d 0..features
+   for c 0..sizeC
    for y 0..sizeH
    for x 0..sizeW
-   addr = c * inputChannels * kernelW * kernelH + d * kernelW * kernelH + (y + startY) * kernelW + (x + startX);
+   addr = d * inputChannels * kernelW * kernelH + (c + startC) * kernelW * kernelH + (y + startY) * kernelW + (x + startX);
 }
 
 addressGen Linear2_NHWC(startX,startY,height,width,startC,outputChannels,outputWidth,stride){

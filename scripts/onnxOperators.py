@@ -12,7 +12,7 @@ from versatDefs import (
 )
 from enum import Enum, auto
 
-# TODO: I eventually want to start generating the C structs from the emitters defined here. Really clubersome to have to match
+# TODO: I eventually want to start generating the C structsF from the emitters defined here. Really clubersome to have to match
 #      the emitter code with the C code, any change requires to carefully interact with
 
 # TODO: Because Onnx supports variable sized tensors, we might want to start moving the tensors shape calculations to runtime.
@@ -173,6 +173,8 @@ def EmitConv(emitter, op: Operation):
     pads = attr["pads"].value
     padsShape = emitter.EmitArray("int", pads)
 
+    group = attr["group"].value
+
     return [
         dims,
         inputShape,
@@ -187,6 +189,7 @@ def EmitConv(emitter, op: Operation):
         "PaddingType_" + attr["auto_pad"].value,
         len(pads),
         padsShape,
+        group
     ]
 
 

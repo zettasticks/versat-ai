@@ -24,6 +24,36 @@ char *send_string = "Sending this string as a file to console.\n"
                     "file transfer between pc-emul, simulation and fpga without"
                     " adding extra targets for file generation.\n";
 
+#ifdef PC
+#include <stdio.h>
+long int GetFileSize(FILE* file){
+  long int mark = ftell(file);
+
+  fseek(file,0,SEEK_END);
+  long int size = ftell(file);
+
+  fseek(file,mark,SEEK_SET);
+
+  return size;
+}
+#endif
+
+void FastReceiveFile(const char* path, void* buffer){
+#ifdef PC
+  FILE* f = fopen(path,"r");
+  if(!f){
+    printf("Problem opening file for reading: %s\n",path);
+    return;
+  }
+
+  long int size = GetFileSize(f);
+  fread(buffer,sizeof(char),size,f);
+  fclose(f);
+#else
+  uart_recvfile(path,buffer);
+#endif
+}
+
 void clear_cache() {
 #ifndef PC
   // Delay to ensure all data is written to memory
@@ -67,7 +97,7 @@ int main() {
 #ifdef CREATE_VCD
   ConfigCreateVCD(CREATE_VCD);
 #else
-  ConfigCreateVCD(false);
+  ConfigCreateVCD(true);
 #endif
 
   printf("Versat base: %x\n", VERSAT0_BASE);
@@ -99,14 +129,18 @@ int main() {
 
   printf("Total  : %p\n", ((char *)inputMemory) + VERSAT_AI_ALL_INPUTS_SIZE);
 
-  uart_recvfile("correctOutputs.bin", correct);
+  FastReceiveFile("correctOutputs.bin", correct);
   printf("Received correct outputs\n");
-  uart_recvfile("model.bin", model);
+  FastReceiveFile("model.bin", model);
   printf("Received model\n");
-  uart_recvfile("inputs.bin", inputMemory);
+  FastReceiveFile("inputs.bin", inputMemory);
   printf("Received inputs\n");
 
   DebugRunInference(output, temp, inputs, model, correct);
+
+#ifdef PC
+  sleep(1);
+#endif
 
   uart_sendfile("test.log", strlen(pass_string), pass_string);
 

@@ -9,6 +9,10 @@
   "Image":{
     "type": "FIXED",
     "path": "./tests/image"
+  },
+  "Keyword": {
+    "type": "FIXED",
+    "path": "./tests/keyword"
   }
 }
 

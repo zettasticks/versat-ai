@@ -17,21 +17,22 @@ void clear_cache();
 // Care when using this, when not debugging this just crashes the program
 #define DEBUG_BREAK() __asm__("int3")
 
-#define MAX_DIMS 16
+Dimensions CreateDimensions(int64_t* dims,int numberDims){
+  Dimensions res = {};
+  res.size = numberDims;
+  for(int i = 0; i < numberDims; i++){
+    res.data[i] = dims[i];
+  }
+  return res;
+}
 
-typedef struct {
-  int addressVars[MAX_DIMS];
-  int64_t iterationDims[MAX_DIMS];
-  int64_t properDims[MAX_DIMS]; // TODO: This is kinda ugly. We use this to
-                                // handle broadcasting but we might solve the
-                                // problem by either creating a new address gen
-                                // that is used for broadcasting or by creating
-                                // a function that takes an address gen that
-                                // does the full iteration and returns an
-                                // address gen that has been downsized to the
-                                // value expected by the broadcasting.
-  int numberDims;
-} AddressGen;
+int Dimensions_Size(Dimensions dim){
+  int size = 1;
+  for(int i = 0; i < dim.size; i++){
+    size *= dim.data[i];
+  }  
+  return size;
+}
 
 void Address_Print(AddressGen *gen) {
   for (int i = 0; i < gen->numberDims; i++) {
@@ -54,7 +55,7 @@ void Address_Print(AddressGen *gen) {
 int Address_GetValue(AddressGen *gen) {
   int address = 0;
   for (int i = 0; i < gen->numberDims; i++) {
-    int index = gen->addressVars[i];
+    int index = gen->addressVars[i] + gen->offsetAddressVars[i];
 
     if (index >= gen->properDims[i]) {
       index = 0;
@@ -170,7 +171,11 @@ AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   Kernel_IsInsidePad that returns true if the KernelGen is outside the
   boundaries of the provided dimensions. In this case the Kernel_GetValue
   function returns garbage and should not be used.
-
+  
+  TODO: We probably can augment the AddressGen struct to support this usecase 
+  so that we can return an AddressGen struct that returns the same indexes
+  that this would return. I do not think there is a need to have a separate struct
+  for this, altough not sure about it.
 */
 
 typedef struct {

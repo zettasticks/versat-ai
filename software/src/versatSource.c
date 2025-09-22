@@ -167,6 +167,7 @@ typedef struct {
   int outputX;
   int outputY;
 
+  int startC;
   int inputSizeC; // This is mostly the same as inputImageC since Conv cannot
                   // handle half sums. We must always process the entire input
                   // channels, we cannot handle half sums.
@@ -285,7 +286,9 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
     res.inputX = 0;
   }
   if (res.inputX + res.actualKernelW > gen->info->inputImageW) {
-    int offset = (res.inputX + res.actualKernelW) - gen->info->outputImageW;
+    int offset = (res.inputX + res.actualKernelW) - gen->info->inputImageW;
+    // printf("A: %d %d %d
+    // %d\n",res.inputX,res.actualKernelW,gen->info->inputImageW,offset);
     res.actualKernelW -= offset;
     res.padding |= PaddingRegion_RIGHT;
   }
@@ -298,7 +301,9 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
     res.inputY = 0;
   }
   if (res.inputY + res.actualKernelH > gen->info->inputImageH) {
-    int offset = (res.inputY + res.actualKernelH) - gen->info->outputImageH;
+    int offset = (res.inputY + res.actualKernelH) - gen->info->inputImageH;
+    // printf("B: %d %d %d
+    // %d\n",res.inputY,res.actualKernelH,gen->info->inputImageH,offset);
     res.actualKernelH -= offset;
     res.padding |= PaddingRegion_BOTTOM;
   }
@@ -625,6 +630,72 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 }
 #endif
 
+typedef struct {
+  Dimensions dims;
+  float* data;
+} Tensor;
+
+Tensor CreateTensor(int64_t* dims,int numberDims){
+  Tensor tensor = {};
+  tensor.dims.size = numberDims;
+
+  int size = 1;
+  for(int i = 0; i < numberDims; i++){
+    tensor.dims.data[i] = dims[i];
+    size *= dims[i];
+  }
+
+  tensor.data = (float*) malloc(sizeof(float) * size);
+  return tensor;
+}
+
+int Tensor_Size(Tensor tensor){
+  int size = 1;
+  for(int i = 0; i < tensor.dims.size; i++){
+    size *= tensor.dims.data[i];
+  }
+
+  return size;
+}
+
+void Tensor_Print(Tensor tensor){
+  int size = Tensor_Size(tensor);
+
+  for(int i = 0; i < tensor.dims.size; i++){
+    if(i != 0){
+      printf("x ");
+    }
+    printf("%d ",tensor.dims.data[i]);
+  }
+  printf("\n");
+  for(int i = 0; i < size; i++){
+    printf("%f\n",tensor.data[i]);
+  }
+}
+
+Tensor Tensor_ExtractView(Tensor input,int dimIndex,int start,int size){
+  AddressGen in = StartAddress(input.dims.data,input.dims.data,input.dims.size);
+
+  in.offsetAddressVars[dimIndex] = start;
+  in.iterationDims[dimIndex] = (int64_t) size;
+
+  Dimensions outDims = input.dims;
+  outDims.data[dimIndex] = size;
+
+  Tensor output = CreateTensor(outDims.data,outDims.size);
+
+  AddressGen out = StartAddress(outDims.data,outDims.data,outDims.size);
+
+  for(; Address_IsValid(&in); Address_Advance(&in),Address_Advance(&out)){
+    int inIndex = Address_GetValue(&in);
+    int outIndex = Address_GetValue(&out);
+
+    output.data[outIndex] = input.data[inIndex];
+  }
+
+  return output;
+}
+
 ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
   ExtraInfo res = {};
 
@@ -692,32 +763,46 @@ ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
   return res;
 }
 
-void Conv_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
-                        void *output, ConvInfo *info) {
+void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
+                                void *output, float *bias, ConvInfo *info,int inputC,int outputC) {
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
   int inputImageW = info->inputDims[3];
-  int inputImageC = info->inputDims[1];
+  int inputImageC = inputC;
 
   int outputImageW = info->outputDims[3];
-  int outputImageC = info->outputDims[1];
+  int outputImageC = outputC;
+
+  printf("Input imageC:%d\n",inputImageC);
 
   int kernelW = info->kernelDims[1];
   int kernelH = info->kernelDims[0];
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
+  int convChannelSize = inputImageC;
+  int kernelChannelSize = inputImageC;
+  int group = info->group;
+  int convStartC = w.startC;
+
+  // MARK: Effects of group are being simulated right now. Do not put final logic 
+  //convChannelSize /= group;
+
   Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
-                    w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
-                    outputImageC);
+                    w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,convChannelSize,
+                    outputImageC, convStartC);
   Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
                  w.actualKernelW, w.actualKernelH, kernelW, kernelH,
-                 inputImageC, outputImageC);
+                 inputImageC,kernelChannelSize, outputImageC, convStartC);
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
                       w.outputW, 0, outputImageC, outputImageW, stride);
 
-  float bias = 0.0f;
-  LinearStrided_VRead(&config->bias, &bias, 1, 1);
+  if(bias == NULL){
+    static float bias = 0.0f;
+    LinearStrided_VRead(&config->bias, &bias, 1, 1);
+  } else {
+    LinearStrided_VRead(&config->bias, bias, outputImageC, stride);
+  }
 
   config->myAccum.strideMinusOne = stride - 1;
 
@@ -727,113 +812,7 @@ void Conv_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
                   ConvInfo *info) {
-  forceDoubleLoop = true;
-
-  printf("[Versat Conv]\n");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int inputChannels = info->inputDims[1];
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
-
-  int outputChannels = info->outputDims[1];
-  int outputImageH = info->outputDims[2];
-  int outputImageW = info->outputDims[3];
-
-  int inputSize = inputImageW * inputImageH * inputChannels;
-  int outputSize = outputImageW * outputImageH * outputChannels;
-
-  float *tempInput = (float *)malloc(sizeof(float) * inputSize);
-  float *tempOutput = (float *)malloc(sizeof(float) * outputSize);
-
-  float *inputView = (float *)inputX;
-  // Convert NCHW to NHWC
-  for (int y = 0; y < inputImageH; y++) {
-    for (int x = 0; x < inputImageW; x++) {
-      for (int c = 0; c < inputChannels; c++) {
-        int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
-        int NHWC_Index =
-            y * (inputImageW * inputChannels) + x * inputChannels + c;
-
-        tempInput[NHWC_Index] = inputView[NCHW_Index];
-      }
-    }
-  }
-
-  ActivateMergedAccelerator(MergeType_Top_Conv);
-
-  ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
-  WindowGen genInst = StartWindowGen(&extra, true, true);
-  WindowGen *gen = &genInst;
-
-  for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
-    AdvancedWindow w = WindowGen_Get(gen);
-    Conv_ProcessWindow(w, tempInput, inputW, tempOutput, info);
-  }
-
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->weights.enabled = 0;
-  config->output.enabled = 0;
-  config->bias.enabled = 0;
-  RunAccelerator(2);
-
-  float *outputView = (float *)output;
-  // Convert NHWC to NCHW
-  for (int c = 0; c < outputChannels; c++) {
-    for (int y = 0; y < outputImageH; y++) {
-      for (int x = 0; x < outputImageW; x++) {
-        int NCHW_Index =
-            c * (outputImageH * outputImageW) + y * outputImageW + x;
-        int NHWC_Index =
-            y * (outputImageW * outputChannels) + x * outputChannels + c;
-
-        outputView[NCHW_Index] = tempOutput[NHWC_Index];
-      }
-    }
-  }
-
-  free(tempInput);
-  free(tempOutput);
-
-  return output;
-}
-
-void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
-                                void *output, float *bias, ConvInfo *info) {
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int inputImageW = info->inputDims[3];
-  int inputImageC = info->inputDims[1];
-
-  int outputImageW = info->outputDims[3];
-  int outputImageC = info->outputDims[1];
-
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
-
-  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
-
-  // Print_Conv2D_NHWC(w.inputX, w.inputY, w.actualKernelW, w.actualKernelH,
-  //                   inputImageW, inputImageC, outputImageC);
-
-  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
-                    w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
-                    outputImageC);
-  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
-                 w.actualKernelW, w.actualKernelH, kernelW, kernelH,
-                 inputImageC, outputImageC);
-  Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
-                      w.outputW, 0, outputImageC, outputImageW, stride);
-
-  LinearStrided_VRead(&config->bias, bias, outputImageC, stride);
-
-  config->myAccum.strideMinusOne = stride - 1;
-
-  EndAccelerator();
-  StartAccelerator();
+  Versat_ConvWithBias(inputX,inputW,NULL,output,index,info);
 }
 
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
@@ -844,6 +823,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
+  int batches = info->inputDims[0];
   int inputChannels = info->inputDims[1];
   int inputImageW = info->inputDims[3];
   int inputImageH = info->inputDims[2];
@@ -854,64 +834,144 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   int inputSize = inputImageW * inputImageH * inputChannels;
   int outputSize = outputImageW * outputImageH * outputChannels;
-
-  float *tempInput = (float *)malloc(sizeof(float) * inputSize);
-  float *tempOutput = (float *)malloc(sizeof(float) * outputSize);
-
-  float *inputView = (float *)inputX;
-  float *biasView = (float *)inputB;
-
-  // Convert NCHW to NHWC
-  for (int y = 0; y < inputImageH; y++) {
-    for (int x = 0; x < inputImageW; x++) {
-      for (int c = 0; c < inputChannels; c++) {
-        int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
-        int NHWC_Index =
-            y * (inputImageW * inputChannels) + x * inputChannels + c;
-
-        tempInput[NHWC_Index] = inputView[NCHW_Index];
-      }
-    }
-  }
+  int group = info->group;
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
 
   ExtraInfo extra = CalculateExtraInfo_Conv(info);
 
-  WindowGen genInst = StartWindowGen(&extra, true, true);
-  WindowGen *gen = &genInst;
+  for(int i = 0; i < batches; i++){
+    Tensor tempInputTensor = CreateTensor(info->inputDims,4);
+    Tensor tempOutputTensor = CreateTensor(info->outputDims,4);
 
-  for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
-    AdvancedWindow w = WindowGen_Get(gen);
-    // AdvancedWindow_Print(w);
-    ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
-                               info);
-  }
+    int64_t kernelDims[] = {2,1,2,2};
+    Tensor kernel = CreateTensor(kernelDims,4);
+    kernel.data = inputW;
 
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->weights.enabled = 0;
-  config->output.enabled = 0;
-  config->bias.enabled = 0;
-  RunAccelerator(2);
+    printf("Kernel:\n");
+    Tensor_Print(kernel);
 
-  float *outputView = (float *)output;
-  // Convert NHWC to NCHW
-  for (int c = 0; c < outputChannels; c++) {
-    for (int y = 0; y < outputImageH; y++) {
-      for (int x = 0; x < outputImageW; x++) {
-        int NCHW_Index =
-            c * (outputImageH * outputImageW) + y * outputImageW + x;
-        int NHWC_Index =
-            y * (outputImageW * outputChannels) + x * outputChannels + c;
+    float* tempInput = tempInputTensor.data;
+    float* tempOutput = tempOutputTensor.data;
 
-        outputView[NCHW_Index] = tempOutput[NHWC_Index];
+    float *inputView = (float *)inputX;
+    float *biasView = (float *)inputB;
+
+    inputView += i * inputSize;
+
+    // Convert NCHW to NHWC
+    for (int y = 0; y < inputImageH; y++) {
+      for (int x = 0; x < inputImageW; x++) {
+        for (int c = 0; c < inputChannels; c++) {
+          int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
+          int NHWC_Index =
+              y * (inputImageW * inputChannels) + x * inputChannels + c;
+
+          tempInput[NHWC_Index] = inputView[NCHW_Index];
+        }
       }
     }
-  }
 
-  free(tempInput);
-  free(tempOutput);
+    Tensor_Print(tempInputTensor);
+
+    // Extract the channel
+    Tensor extracted1 = Tensor_ExtractView(tempInputTensor,3,0,1);
+    Tensor extracted2 = Tensor_ExtractView(tempInputTensor,3,1,1);
+
+    printf("Extracted1:\n");
+    Tensor_Print(extracted1);
+    printf("Extracted2:\n");
+    Tensor_Print(extracted2);
+
+    if(group == 2){
+      // MARK: Simulation the effects of group
+      extra.inputImageC = 1;
+      extra.outputImageC = 1;
+
+      Dimensions dims = CreateDimensions(info->inputDims,4);
+      dims.data[1] = 1;
+
+      int size = Dimensions_Size(dims); 
+
+      Tensor tempOutputTensor2 = CreateTensor(dims.data,4);
+      Tensor tempOutputTensor3 = CreateTensor(dims.data,4);
+
+      float* tempOutput1 = tempOutputTensor2.data; 
+      float* tempOutput2 = tempOutputTensor3.data; 
+
+      WindowGen genInst = StartWindowGen(&extra, true, true);
+      WindowGen *gen = &genInst;
+
+      for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+        AdvancedWindow w = WindowGen_Get(gen);
+        AdvancedWindow_Print(w);
+        ConvWithBias_ProcessWindow(w, extracted1.data, ((float*) inputW), tempOutput1, biasView,info,1,1);
+      }
+
+      genInst = StartWindowGen(&extra, true, true);
+
+      for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+        AdvancedWindow w = WindowGen_Get(gen);
+        ConvWithBias_ProcessWindow(w, extracted2.data, ((float*) inputW) + size, tempOutput2, biasView,info,1,1);
+      }
+
+      // Flush the remaining data from the accelerator
+      config->features.enabled = 0;
+      config->weights.enabled = 0;
+      config->output.enabled = 0;
+      config->bias.enabled = 0;
+      RunAccelerator(2);
+
+      int index = 0;
+      for(int i = 0; i < outputSize / 2; i++){
+        tempOutput[index++] = tempOutputTensor2.data[i];
+      }
+      for(int i = 0; i < outputSize / 2; i++){
+        tempOutput[index++] = tempOutputTensor3.data[i];
+      }
+
+      printf("First1:\n");
+      Tensor_Print(tempOutputTensor2);
+      printf("First2:\n");
+      Tensor_Print(tempOutputTensor3);
+    } else {
+
+      WindowGen genInst = StartWindowGen(&extra, true, true);
+      WindowGen *gen = &genInst;
+
+      for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+        AdvancedWindow w = WindowGen_Get(gen);
+        ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,info,info->inputDims[1],info->outputDims[1]);
+      }
+
+      // Flush the remaining data from the accelerator
+      config->features.enabled = 0;
+      config->weights.enabled = 0;
+      config->output.enabled = 0;
+      config->bias.enabled = 0;
+      RunAccelerator(2);
+    }
+
+    float *outputView = (float *)output;
+    outputView += i * outputSize;
+
+    // Convert NHWC to NCHW
+    for (int c = 0; c < outputChannels; c++) {
+      for (int y = 0; y < outputImageH; y++) {
+        for (int x = 0; x < outputImageW; x++) {
+          int NCHW_Index =
+              c * (outputImageH * outputImageW) + y * outputImageW + x;
+          int NHWC_Index =
+              y * (outputImageW * outputChannels) + x * outputChannels + c;
+
+          outputView[NCHW_Index] = tempOutput[NHWC_Index];
+        }
+      }
+    }
+
+    free(tempInput);
+    free(tempOutput);
+  }
 
   return output;
 }

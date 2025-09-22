@@ -11,12 +11,38 @@
 // code.
 #define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
 
+#define MAX_DIMS 6
+
 // TODO: Remove this.
 // What we should have is a function that goes:
 // OutputInfo GetOutput(void* output,int index);
 // That not only fixes the output to the correct address but also fills it with
 // some information.
 
+typedef struct {
+  int64_t data[MAX_DIMS];
+  int size;
+} Dimensions;
+
+Dimensions CreateDimensions(int64_t* dims,int numberDims);
+int Dimensions_Size(Dimensions dim);
+
+typedef struct {
+  int offsetAddressVars[MAX_DIMS];
+  int addressVars[MAX_DIMS];
+  int64_t properDims[MAX_DIMS];
+
+  int64_t iterationDims[MAX_DIMS];
+  int numberDims;
+} AddressGen;
+
+void Address_Print(AddressGen *gen);
+int Address_GetValue(AddressGen *gen);
+bool Address_IsValid(AddressGen *gen);
+void Address_Advance(AddressGen *gen);
+void Address_AdvanceAxis(AddressGen *gen, int axisToAdvance);
+AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
+                        int numberDims);
 typedef struct {
   int numberOfOutputs;
   void **outputLocation; // outputLocation[N] gives the address of the N output.
@@ -88,6 +114,7 @@ typedef struct {
   PaddingType padding;
   int padsSize;
   int *padsDims;
+  int group;
 } ConvInfo;
 
 typedef struct {
