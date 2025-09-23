@@ -16,41 +16,36 @@
 #include "modelInfo.h"
 #include "versat_ai.h"
 
-char *send_string = "Sending this string as a file to console.\n"
-                    "The file is then requested back from console.\n"
-                    "The sent file is compared to the received file to confirm "
-                    "correct file transfer via UART using console.\n"
-                    "Generating the file in the firmware creates an uniform "
-                    "file transfer between pc-emul, simulation and fpga without"
-                    " adding extra targets for file generation.\n";
+// Contains a set of defines for each test type.
+#include "testInfo.h"
 
 #ifdef PC
 #include <stdio.h>
-long int GetFileSize(FILE* file){
+long int GetFileSize(FILE *file) {
   long int mark = ftell(file);
 
-  fseek(file,0,SEEK_END);
+  fseek(file, 0, SEEK_END);
   long int size = ftell(file);
 
-  fseek(file,mark,SEEK_SET);
+  fseek(file, mark, SEEK_SET);
 
   return size;
 }
 #endif
 
-void FastReceiveFile(const char* path, void* buffer){
+void FastReceiveFile(const char *path, void *buffer) {
 #ifdef PC
-  FILE* f = fopen(path,"r");
-  if(!f){
-    printf("Problem opening file for reading: %s\n",path);
+  FILE *f = fopen(path, "r");
+  if (!f) {
+    printf("Problem opening file for reading: %s\n", path);
     return;
   }
 
   long int size = GetFileSize(f);
-  fread(buffer,sizeof(char),size,f);
+  fread(buffer, sizeof(char), size, f);
   fclose(f);
 #else
-  uart_recvfile(path,buffer);
+  uart_recvfile(path, buffer);
 #endif
 }
 
@@ -97,7 +92,7 @@ int main() {
 #ifdef CREATE_VCD
   ConfigCreateVCD(CREATE_VCD);
 #else
-  ConfigCreateVCD(true);
+  ConfigCreateVCD(false);
 #endif
 
   printf("Versat base: %x\n", VERSAT0_BASE);

@@ -24,8 +24,24 @@ typedef struct {
   int size;
 } Dimensions;
 
-Dimensions CreateDimensions(int64_t* dims,int numberDims);
+Dimensions CreateDimensions(int64_t *dims, int numberDims);
 int Dimensions_Size(Dimensions dim);
+
+typedef struct {
+  Dimensions dims;
+  float *data;
+} Tensor;
+
+// NOTE: Very important. We are currently allocating stuff but we will
+// eventually remove all the memory allocations and push them to outside this
+// code. We want to offer a very simple "allocate x amount of space before
+// starting our code" model of usage since this is intented to run on embedded
+// targets.
+Tensor CreateTensor(int64_t *dims, int numberDims);
+Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims);
+Tensor Tensor_Transpose(Tensor in, int *index);
+void Tensor_Print(Tensor tensor);
+void FreeTensor(Tensor tensor);
 
 typedef struct {
   int offsetAddressVars[MAX_DIMS];

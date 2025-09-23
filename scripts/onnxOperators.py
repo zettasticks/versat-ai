@@ -189,7 +189,7 @@ def EmitConv(emitter, op: Operation):
         "PaddingType_" + attr["auto_pad"].value,
         len(pads),
         padsShape,
-        group
+        group,
     ]
 
 

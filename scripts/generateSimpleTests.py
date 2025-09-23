@@ -196,6 +196,54 @@ def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     tests.append(test)
 
+@dataclass
+class PaddingType:
+    kind: str
+    padding: list[int] = None
+
+@dataclass
+class ConvArgs:
+    batches: int
+    inputChannels: int
+    innerShape: list[int]
+    features: int
+    kernelShape: list[int]
+    stride: list[int]
+    dilations: list[int]
+    group: int
+    bias: bool
+    pad: PaddingType
+
+    def IsValid(self):
+        assert (self.pad.kind in ["NOTSET","SAME_LOWER","SAME_UPPER","VALID"])
+
+        assert len(self.innerShape) == 2
+
+        if self.features % self.group != 0:
+            return False
+        if (self.features * self.group) != self.inputChannels:
+            return False
+        if ((self.features * self.group) % self.inputChannels) != 0:
+            return False
+        return True
+
+    def CreateConvolution(self):
+        s = self
+        inputShape = [s.batches, s.inputChannels, s.innerShape[0], s.innerShape[1]]
+
+        assert self.IsValid()
+
+        CreateConvolution(
+            inputShape,
+            s.features,
+            s.kernelShape,
+            s.stride,
+            s.dilations,
+            s.group,
+            s.bias,
+            s.pad.kind,
+            s.pad.padding,
+        )
 
 def CreateConvolution(
     shape,
@@ -203,13 +251,23 @@ def CreateConvolution(
     kernel,
     strides,
     dilations,
-    group = 1,
+    group=1,
     bias: bool = False,
     auto_pad="NOTSET",
     pads=None,
 ):
     global tests
     testIndex = len(tests)
+
+    outputChannels = features
+    inputChannels = shape[1]
+
+    if outputChannels % group != 0:
+        print("First", outputChannels, group)
+        return
+    if (outputChannels * group) % inputChannels != 0:
+        print("Second", outputChannels, group, inputChannels)
+        return
 
     test = Test()
     test.shapes = [shape]
@@ -262,10 +320,9 @@ def CreateConvolution(
         strides=strides,
     )
 
+    print(shape,kernelShape,features)
     randomArray0 = np.random.randn(*shape).astype(np.float32)
-    randomArray1 = np.random.randn(*kernelShape).astype(
-        np.float32
-    )
+    randomArray1 = np.random.randn(*kernelShape).astype(np.float32)
 
     test.randomArrays = [randomArray0, randomArray1]
 
@@ -641,37 +698,100 @@ if __name__ == "__main__":
 
     # Convolution
     if testConv:
-        #CreateConvolution([1, 2, 4, 4], 2, [2, 2], [2, 2], [1,1], 1)
+        # CreateConvolution([1, 2, 4, 4], 2, [2, 2], [2, 2], [1,1], 1)
 
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
-        if False:
-            nP = [1,2]
-            cP = [1,3,8]
-            fP = [1,4,8]
-            kP = [[3,3],[5,5]]
-            sP = [[3,3],[5,5]]
-            dP = [[1,1]]
-            bP = [False,True]
-            pP = ["SAME_LOWER","SAME_UPPER"]
-            gP = [1]
+        if True:
+            nP = [1, 2]
+            aP = [[3, 3], [5, 5], [7, 7]]
+            cP = [1, 3, 4, 6, 8]
+            fP = [1, 3, 4, 6, 8]
+            kP = [[3, 3], [5, 5]]
+            sP = [[3, 3], [5, 5], [7, 7]]
+            dP = [[1, 1]]
+            bP = [False, True]
+            pP = [PaddingType("NOTSET",[1,1,1,1])]
+            #pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
+            gP = [1, 2, 3, 4]
+            # gP = [2]
 
             args = []
             for n in nP:
-                for c in cP:
-                    for f in fP:
-                        for k in kP:
-                            for s in sP:
-                                for d in dP:
-                                    for b in bP:
-                                        for p in pP:
-                                            for g in gP:
-                                                args.append([n,c,f,k,s,d,b,p,g])
+                for a in aP:
+                    for c in cP:
+                        for f in fP:
+                            for k in kP:
+                                for s in sP:
+                                    for d in dP:
+                                        for b in bP:
+                                            for p in pP:
+                                                for g in gP:
+                                                    conv = ConvArgs(
+                                                        n,
+                                                        c,
+                                                        a,
+                                                        f,
+                                                        k,
+                                                        s,
+                                                        d,
+                                                        g,
+                                                        b,
+                                                        p,
+                                                    )
 
-            for n,c,f,k,s,d,b,p,g in args:
-                CreateConvolution([n, c, 3, 3], f, k, s, d, g, b, p)
+                                                    if not conv.IsValid():
+                                                        continue
+                                                    args.append(conv)
 
-        CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1,1], 2)
+            # This set of examples is causing problems because somehow the SAME_LOWER padding is causing the 
+            #t = 7
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+
+            # For this example, the SAME_LOWER padding works if we use the value of the input in position x,y = (1,1) (offset 1 in both directions)
+            # It is almost like we end up with a negative padding. A padding of -1 on the left and top would make this work, but then again why are we adding padding in the first place?
+            #t = 5
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+
+
+            if False:
+                ind = 192
+
+                lastGood = args[ind-1]
+                fail = args[ind]
+                #args[ind].pad = PaddingType("")
+
+                print("Good:", lastGood)
+                print("Bad:", fail)
+                fail.CreateConvolution()
+            else:
+                for convArgs in args:
+                    convArgs.CreateConvolution()
+
+        if False:
+            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2, True)
+
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4)
+
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1, True)
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2, True)
+            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4, True)
+
+            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+            CreateConvolution([1, 4, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+            CreateConvolution([1, 4, 4, 4], 2, [2, 2], [2, 2], [1, 1], 2)
+
+            # CreateConvolution([1, 3, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4)
+            # CreateConvolution([1, 4, 2, 2], 3, [2, 2], [2, 2], [1, 1], 4)
+            # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 3)
 
         if False:
             n = 1
@@ -740,19 +860,39 @@ if __name__ == "__main__":
             CreateConvolution([1, 3, 16, 16], 16, [2, 2], [2, 2], d)
 
         # Different groups
-        #CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d, 2)
+        # CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d, 2)
 
         if False:
-            CreateConvolution([1, 1, 1, 1], 2, [5, 5], [5, 5], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 1, 1], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 1, 1], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 3, 3], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 5, 5], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 8, 8], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 10, 10], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 15, 15], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 20, 20], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
-            CreateConvolution([1, 1, 28, 28], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+            CreateConvolution(
+                [1, 1, 1, 1], 2, [5, 5], [5, 5], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 1, 1], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 1, 1], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 3, 3], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 5, 5], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 8, 8], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 10, 10], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 15, 15], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 20, 20], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
+            CreateConvolution(
+                [1, 1, 28, 28], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
+            )
 
         # Adding bias
         if False:
@@ -820,6 +960,8 @@ if __name__ == "__main__":
     for i, test in enumerate(tests):
         for j, randomArray in enumerate(test.randomArrays):
             modelInputs[GetInputTrueName(i, j)] = randomArray
+
+    print(f"Created {len(tests)} tests")
 
     modelOutput = sess.run(None, modelInputs)
 

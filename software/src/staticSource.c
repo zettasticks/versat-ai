@@ -17,20 +17,20 @@ void clear_cache();
 // Care when using this, when not debugging this just crashes the program
 #define DEBUG_BREAK() __asm__("int3")
 
-Dimensions CreateDimensions(int64_t* dims,int numberDims){
+Dimensions CreateDimensions(int64_t *dims, int numberDims) {
   Dimensions res = {};
   res.size = numberDims;
-  for(int i = 0; i < numberDims; i++){
+  for (int i = 0; i < numberDims; i++) {
     res.data[i] = dims[i];
   }
   return res;
 }
 
-int Dimensions_Size(Dimensions dim){
+int Dimensions_Size(Dimensions dim) {
   int size = 1;
-  for(int i = 0; i < dim.size; i++){
+  for (int i = 0; i < dim.size; i++) {
     size *= dim.data[i];
-  }  
+  }
   return size;
 }
 
@@ -171,11 +171,11 @@ AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   Kernel_IsInsidePad that returns true if the KernelGen is outside the
   boundaries of the provided dimensions. In this case the Kernel_GetValue
   function returns garbage and should not be used.
-  
-  TODO: We probably can augment the AddressGen struct to support this usecase 
+
+  TODO: We probably can augment the AddressGen struct to support this usecase
   so that we can return an AddressGen struct that returns the same indexes
-  that this would return. I do not think there is a need to have a separate struct
-  for this, altough not sure about it.
+  that this would return. I do not think there is a need to have a separate
+  struct for this, altough not sure about it.
 */
 
 typedef struct {
