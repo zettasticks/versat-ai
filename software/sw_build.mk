@@ -68,12 +68,14 @@ build_versat_ai_software: versat_ai_firmware versat_ai_boot versat_ai_preboot
 
 ifneq ($(USE_FPGA),)
 WRAPPER_CONFS_PREFIX=versat_ai_$(BOARD)
+WRAPPER_DIR=src
 else
 WRAPPER_CONFS_PREFIX=iob_uut
+WRAPPER_DIR=simulation/src
 endif
 
 iob_bsp:
-	sed 's/$(WRAPPER_CONFS_PREFIX)/IOB_BSP/Ig' src/$(WRAPPER_CONFS_PREFIX)_conf.h > src/iob_bsp.h
+	sed 's/$(WRAPPER_CONFS_PREFIX)/IOB_BSP/Ig' $(WRAPPER_DIR)/$(WRAPPER_CONFS_PREFIX)_conf.h > src/iob_bsp.h
 
 versat_ai_firmware: iob_bsp
 	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_FW_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)"
