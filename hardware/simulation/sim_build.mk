@@ -22,7 +22,7 @@ GRAB_TIMEOUT ?= 3600
 
 TBTYPE?=C
 ifeq ($(VCD),1)
-# Enable FST traces: 
+# Enable FST traces:
 # if TRACE_FST is defined in CPP, simulation outputs FST instead of VCD
 VFLAGS+=--trace-fst
 endif
