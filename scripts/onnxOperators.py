@@ -91,7 +91,7 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
                 attrType.attrType == OnnxAttributeType.AXIS_LIST
                 or attrType.attrType == OnnxAttributeType.AXIS_PAIR_LIST
             ):
-                spatialAxes = len(op.outputDimensions) - 2
+                spatialAxes = 2 * (len(op.outputDimensions) - 2)
                 trueDefaultValue = [attrType.defaultValue] * spatialAxes
 
                 res[name] = InstantiatedAttribute(attrType, trueDefaultValue)

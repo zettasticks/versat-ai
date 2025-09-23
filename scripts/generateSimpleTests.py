@@ -196,10 +196,12 @@ def CreateAveragePool(shape, kernel, strides, auto_pad="NOTSET", pads=None):
 
     tests.append(test)
 
+
 @dataclass
 class PaddingType:
     kind: str
     padding: list[int] = None
+
 
 @dataclass
 class ConvArgs:
@@ -215,7 +217,7 @@ class ConvArgs:
     pad: PaddingType
 
     def IsValid(self):
-        assert (self.pad.kind in ["NOTSET","SAME_LOWER","SAME_UPPER","VALID"])
+        assert self.pad.kind in ["NOTSET", "SAME_LOWER", "SAME_UPPER", "VALID"]
 
         assert len(self.innerShape) == 2
 
@@ -244,6 +246,7 @@ class ConvArgs:
             s.pad.kind,
             s.pad.padding,
         )
+
 
 def CreateConvolution(
     shape,
@@ -320,7 +323,7 @@ def CreateConvolution(
         strides=strides,
     )
 
-    print(shape,kernelShape,features)
+    print(shape, kernelShape, features)
     randomArray0 = np.random.randn(*shape).astype(np.float32)
     randomArray1 = np.random.randn(*kernelShape).astype(np.float32)
 
@@ -429,8 +432,8 @@ testRelu = False
 testReshape = False
 testMatMul = False
 testMaxPool = False
-testConv = True
-testAveragePool = False
+testConv = False
+testAveragePool = True
 testSoftmax = False
 testTranspose = False
 
@@ -711,8 +714,8 @@ if __name__ == "__main__":
             sP = [[3, 3], [5, 5], [7, 7]]
             dP = [[1, 1]]
             bP = [False, True]
-            pP = [PaddingType("NOTSET",[1,1,1,1])]
-            #pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
+            pP = [PaddingType("NOTSET", [1, 1, 1, 1])]
+            # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             gP = [1, 2, 3, 4]
             # gP = [2]
 
@@ -744,27 +747,26 @@ if __name__ == "__main__":
                                                         continue
                                                     args.append(conv)
 
-            # This set of examples is causing problems because somehow the SAME_LOWER padding is causing the 
-            #t = 7
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+            # This set of examples is causing problems because somehow the SAME_LOWER padding is causing the
+            # t = 7
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
             # For this example, the SAME_LOWER padding works if we use the value of the input in position x,y = (1,1) (offset 1 in both directions)
             # It is almost like we end up with a negative padding. A padding of -1 on the left and top would make this work, but then again why are we adding padding in the first place?
-            #t = 5
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            #ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
-
+            # t = 5
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
+            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
             if False:
                 ind = 192
 
-                lastGood = args[ind-1]
+                lastGood = args[ind - 1]
                 fail = args[ind]
-                #args[ind].pad = PaddingType("")
+                # args[ind].pad = PaddingType("")
 
                 print("Good:", lastGood)
                 print("Bad:", fail)

@@ -145,24 +145,24 @@ typedef struct {
   int padH;
 } ExtraInfo;
 
-void ExtraInfo_Print(ExtraInfo e){
+void ExtraInfo_Print(ExtraInfo e) {
   printf("ExtraInfo:\n");
-  printf("strideW: %d\n",e.strideW);
-  printf("strideH: %d\n",e.strideH);
-  printf("kernelW: %d\n",e.kernelW);
-  printf("kernelH: %d\n",e.kernelH);
-  printf("inputImageW: %d\n",e.inputImageW);
-  printf("inputImageH: %d\n",e.inputImageH);
-  printf("inputImageC: %d\n",e.inputImageC);
-  printf("outputImageW: %d\n",e.outputImageW);
-  printf("outputImageH: %d\n",e.outputImageH);
-  printf("outputImageC: %d\n",e.outputImageC);
-  printf("leftPadW: %d\n",e.leftPadW);
-  printf("leftPadH: %d\n",e.leftPadH);
-  printf("rightPadW: %d\n",e.rightPadW);
-  printf("rightPadH: %d\n",e.rightPadH);
-  printf("padW: %d\n",e.padW);
-  printf("padH: %d\n",e.padH);
+  printf("strideW: %d\n", e.strideW);
+  printf("strideH: %d\n", e.strideH);
+  printf("kernelW: %d\n", e.kernelW);
+  printf("kernelH: %d\n", e.kernelH);
+  printf("inputImageW: %d\n", e.inputImageW);
+  printf("inputImageH: %d\n", e.inputImageH);
+  printf("inputImageC: %d\n", e.inputImageC);
+  printf("outputImageW: %d\n", e.outputImageW);
+  printf("outputImageH: %d\n", e.outputImageH);
+  printf("outputImageC: %d\n", e.outputImageC);
+  printf("leftPadW: %d\n", e.leftPadW);
+  printf("leftPadH: %d\n", e.leftPadH);
+  printf("rightPadW: %d\n", e.rightPadW);
+  printf("rightPadH: %d\n", e.rightPadH);
+  printf("padW: %d\n", e.padW);
+  printf("padH: %d\n", e.padH);
   printf("\n");
 }
 
@@ -517,6 +517,8 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
+
+
 #if 1
 ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
   ExtraInfo res = {};
@@ -537,6 +539,8 @@ ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
+    
+
     if (info->padsSize != 4) {
       printf("ERROR, pads size is not expected");
       return (ExtraInfo){};
@@ -893,7 +897,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int outputSize = outputImageW * outputImageH * outputChannels;
   int group = info->group;
 
-  Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims,4);
+  Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
   inputTensor.data = inputX;
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
@@ -904,7 +908,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     //       that change these values. If we remove them we can then push this
     //       outside the loop
     ExtraInfo extra = CalculateExtraInfo_Conv(info);
-    //ExtraInfo_Print(extra);
+    // ExtraInfo_Print(extra);
 
     int64_t NHWCDims[] = {info->inputDims[0], info->inputDims[2],
                           info->inputDims[3], info->inputDims[1]};
@@ -956,7 +960,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       Dimensions outDims = CreateDimensions(info->outputDims, 4);
       outDims.data[1] /= group;
 
-      int64_t NHWCOutDims[4] = {outDims.data[0],outDims.data[2],outDims.data[3],outDims.data[1]};
+      int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2],
+                                outDims.data[3], outDims.data[1]};
       Tensor tempGroupTensor = CreateTensor(NHWCOutDims, 4);
       float *tempGroupOutput = tempGroupTensor.data;
 
