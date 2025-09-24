@@ -42,6 +42,8 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
   return 0;
 }
 
+#define SWAP(TYPE,A,B) do{TYPE t = A; A = B; B = t;} while(0)
+
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
   printf("[Add] Using Versat\n");
@@ -51,29 +53,48 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   int64_t *o = info->broadCastedShape;
   int d = info->maxDims;
 
+  Dimensions left = CreateDimensions(l,d);
+  Dimensions right = CreateDimensions(r,d);
+
+  if(Dimensions_Size(left) < Dimensions_Size(right)){
+    SWAP(void*,inputA,inputB);
+    SWAP(Dimensions,left,right);
+    SWAP(int64_t*,l,r);
+  }
+
   volatile Top_AddConfig *config = &accelConfig->Top_Add;
 
   ActivateMergedAccelerator(MergeType_Top_Add);
 
-  DataBroadCasted_VRead(
-      &config->inputs_0, inputA, GetSize(l, d, 0), GetDim(o, d, 0),
-      GetSize(l, d, 1), GetDim(o, d, 1), GetDim(l, d, 1), GetSize(l, d, 2),
-      GetDim(o, d, 2), GetDim(l, d, 2), GetSize(l, d, 3), GetDim(o, d, 3),
-      GetDim(l, d, 3), GetSize(l, d, 4), GetDim(o, d, 4), GetDim(l, d, 4),
-      GetSize(l, d, 5), GetDim(o, d, 5), GetDim(l, d, 5));
+  float *viewA = (float *)inputA;
+  float *viewB = (float *)inputB;
+  float *out = (float *)output;
 
-  DataBroadCasted_VRead(
-      &config->inputs_1, inputB, GetSize(r, d, 0), GetDim(o, d, 0),
-      GetSize(r, d, 1), GetDim(o, d, 1), GetDim(r, d, 1), GetSize(r, d, 2),
-      GetDim(o, d, 2), GetDim(r, d, 2), GetSize(r, d, 3), GetDim(o, d, 3),
-      GetDim(r, d, 3), GetSize(r, d, 4), GetDim(o, d, 4), GetDim(r, d, 4),
-      GetSize(r, d, 5), GetDim(o, d, 5), GetDim(r, d, 5));
+  AddressGen inA    = StartAddress(o,l, info->maxDims);
+  AddressGen inB    = StartAddress(o,r, info->maxDims);
+  AddressGen outGen = StartAddress(o,o, info->maxDims);
 
-  DataSimple_VWrite(&config->output, output, GetDim(o, d, 0), GetDim(o, d, 1),
-                    GetDim(o, d, 2), GetDim(o, d, 3), GetDim(o, d, 4),
-                    GetDim(o, d, 5));
+  int lineLength = l[d-1];
+  while (Address_IsValid(&outGen)){
+    int indexA = Address_GetValue(&inA);
+    int indexB = Address_GetValue(&inB);
+    int indexO = Address_GetValue(&outGen);
 
-  RunAccelerator(1);
+    // TODO: Still need to break this into multiple lines if the size
+    //       becomes too big for Versat to handle
+    DataBroadCasted_VRead(&config->inputs_0,&viewA[indexA],GetSize(l,d,d-1), GetDim(o,d,d-1),0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
+    DataBroadCasted_VRead(&config->inputs_1,&viewB[indexB],GetSize(r, d, d-1), GetDim(o, d, d-1),0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
+    DataSimple_VWrite(&config->output, &out[indexO], GetDim(o, d, d-1), 1,1, 1, 1,1);
+
+    RunAccelerator(1);
+
+    for(int i = 0; i < lineLength; i++){
+      Address_Advance(&inA);
+      Address_Advance(&inB);
+      Address_Advance(&outGen);
+    }
+  }
+
   config->inputs_0.enabled = 0;
   config->inputs_1.enabled = 0;
   config->output.enabled = 0;
@@ -517,8 +538,6 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
-
-
 #if 1
 ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
   ExtraInfo res = {};
@@ -539,7 +558,6 @@ ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
-    
 
     if (info->padsSize != 4) {
       printf("ERROR, pads size is not expected");

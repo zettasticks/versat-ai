@@ -458,12 +458,9 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
   //       Basically pull out all the properDim logic from address gen into a
   //       extra function.
 
-  AddressGen inA =
-      StartAddress(info->broadCastedShape, info->firstInputDim, info->maxDims);
-  AddressGen inB =
-      StartAddress(info->broadCastedShape, info->secondInputDim, info->maxDims);
-  AddressGen outGen = StartAddress(info->broadCastedShape,
-                                   info->broadCastedShape, info->maxDims);
+  AddressGen inA    = StartAddress(info->broadCastedShape,info->firstInputDim, info->maxDims);
+  AddressGen inB    = StartAddress(info->broadCastedShape,info->secondInputDim, info->maxDims);
+  AddressGen outGen = StartAddress(info->broadCastedShape,info->broadCastedShape, info->maxDims);
 
   while (Address_IsValid(&outGen)) {
     int indexA = Address_GetValue(&inA);

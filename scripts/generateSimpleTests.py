@@ -426,18 +426,17 @@ def CreateSoftmax(shape, axis=-1):
 
     tests.append(test)
 
+testAdd         = True
+testRelu        = False
+testReshape     = False
+testMatMul      = False
+testMaxPool     = False
+testConv        = False
+testAveragePool = False
+testSoftmax     = False
+testTranspose   = False
 
-testAdd = False
-testRelu = False
-testReshape = False
-testMatMul = False
-testMaxPool = False
-testConv = False
-testAveragePool = True
-testSoftmax = False
-testTranspose = False
-
-testBig = False
+testBig = True
 
 if __name__ == "__main__":
     if testSoftmax:
@@ -489,6 +488,11 @@ if __name__ == "__main__":
         CreateSoftmax([w, z, y, x], 3)  # D
 
     if testAdd:
+        CreateBinaryOpTest("Add", [1], [1])
+        CreateBinaryOpTest("Add", [2], [2])
+        CreateBinaryOpTest("Add", [3,2], [3,2])
+        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+
         # Simplest tests, no broadcast or abusing dimensions
         CreateBinaryOpTest("Add", [1], [1])
         CreateBinaryOpTest("Add", [4], [4])
@@ -963,7 +967,7 @@ if __name__ == "__main__":
         for j, randomArray in enumerate(test.randomArrays):
             modelInputs[GetInputTrueName(i, j)] = randomArray
 
-    print(f"Created {len(tests)} tests")
+    print(f"Created {len(tests)} subtests")
 
     modelOutput = sess.run(None, modelInputs)
 
