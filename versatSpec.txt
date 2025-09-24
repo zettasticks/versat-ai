@@ -19,14 +19,19 @@ addressGen DataBroadCasted(cEnable,cLoop,bEnable,bLoop,cWidth,aEnable,aLoop,bWid
    addr = ((((c * cEnable * cWidth + b * bEnable) * bWidth + a * aEnable) * aWidth + z * zEnable) * zWidth + y * yEnable) * yWidth + x * xEnable;
 }
 
+addressGen Broadcast1(size,enable){
+   for x 0..size
+   addr = x * enable;
+}
+
 addressGen Linear(size){
    for x 0..size
    addr = x;
 }
 
 module Top_Add(){
-   using(DataBroadCasted) VRead inputs[2];
-   using(DataSimple) VWrite output;
+   using(DataBroadCasted,Linear,Broadcast1) VRead inputs[2];
+   using(DataSimple,Linear) VWrite output;
    F_Add adder;
 #
    inputs[0..1] -> adder:0..1;

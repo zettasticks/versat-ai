@@ -70,6 +70,10 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   float *viewB = (float *)inputB;
   float *out = (float *)output;
 
+  // TODO: Eventually this will depend on the size of Versat memories
+  //       The bigger the more efficient we can be
+  int maxLineSupported = 1024;
+
   AddressGen inA    = StartAddress(o,l, info->maxDims);
   AddressGen inB    = StartAddress(o,r, info->maxDims);
   AddressGen outGen = StartAddress(o,o, info->maxDims);
@@ -80,13 +84,27 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     int indexB = Address_GetValue(&inB);
     int indexO = Address_GetValue(&outGen);
 
-    // TODO: Still need to break this into multiple lines if the size
-    //       becomes too big for Versat to handle
-    DataBroadCasted_VRead(&config->inputs_0,&viewA[indexA],GetSize(l,d,d-1), GetDim(o,d,d-1),0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
-    DataBroadCasted_VRead(&config->inputs_1,&viewB[indexB],GetSize(r, d, d-1), GetDim(o, d, d-1),0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
-    DataSimple_VWrite(&config->output, &out[indexO], GetDim(o, d, d-1), 1,1, 1, 1,1);
+    //printf("A:%d %d\n",GetSize(l,d,d-1), GetDim(o,d,d-1));
+    //printf("B:%d %d\n",GetSize(r, d, d-1), GetDim(o, d, d-1));
+    //printf("O:%d\n",GetDim(o, d, d-1));
 
-    RunAccelerator(1);
+    bool broadcastedB = (GetSize(r, d, d-1) == 0);
+
+    for(int offset = 0; offset < lineLength; offset += maxLineSupported){
+      int trueLength = MIN(maxLineSupported,lineLength - offset);
+
+      //printf("T:%d\n",trueLength);
+
+      Linear_VRead(&config->inputs_0,&viewA[indexA + offset],trueLength);
+      Broadcast1_VRead(&config->inputs_1,&viewB[indexB + (broadcastedB ? 0 : offset)],trueLength,GetSize(r, d, d-1));
+      Linear_VWrite(&config->output, &out[indexO + offset],trueLength);
+
+      //DataBroadCasted_VRead(&config->inputs_0,&viewA[indexA + offset],GetSize(l,d,d-1), trueLength,0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
+      //DataBroadCasted_VRead(&config->inputs_1,&viewB[indexB + broadcastedB ? 0 : offset],GetSize(r, d, d-1), trueLength,0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
+      //DataSimple_VWrite(&config->output, &out[indexO + offset], trueLength, 1,1, 1, 1,1);
+      
+      RunAccelerator(1);
+    }
 
     for(int i = 0; i < lineLength; i++){
       Address_Advance(&inA);

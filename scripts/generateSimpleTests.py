@@ -488,27 +488,29 @@ if __name__ == "__main__":
         CreateSoftmax([w, z, y, x], 3)  # D
 
     if testAdd:
-        CreateBinaryOpTest("Add", [1], [1])
-        CreateBinaryOpTest("Add", [2], [2])
-        CreateBinaryOpTest("Add", [3,2], [3,2])
-        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+        if True:
+            CreateBinaryOpTest("Add", [1], [1])
+            CreateBinaryOpTest("Add", [2], [2])
+            CreateBinaryOpTest("Add", [3,2], [3,2])
+            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
 
-        # Simplest tests, no broadcast or abusing dimensions
-        CreateBinaryOpTest("Add", [1], [1])
-        CreateBinaryOpTest("Add", [4], [4])
-        CreateBinaryOpTest("Add", [2, 4], [2, 4])
-        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+            # Simplest tests, no broadcast or abusing dimensions
+            CreateBinaryOpTest("Add", [1], [1])
+            CreateBinaryOpTest("Add", [4], [4])
+            CreateBinaryOpTest("Add", [2, 4], [2, 4])
+            CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+            CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-        # Broadcasting
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+            # Broadcasting
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+            CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+            CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
         if testBig:
-            CreateBinaryOpTest("Add", [1024], [1024])
+            CreateBinaryOpTest("Add", [10240], [10240])
+            CreateBinaryOpTest("Add", [10240], [1])
 
     if testRelu:
         CreateUnaryOpTest("Relu", [1])
