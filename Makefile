@@ -45,11 +45,11 @@ $(DOWNLOADED_TEST): $(PYTHON_ENV)
 	./scripts/downloadTests.sh
 
 pc-emul-run: $(VERSAT_ACCEL)
-	python ./setupTest.py $(TEST)
+	python3 ./setupTest.py $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
 
 sim-run: $(VERSAT_ACCEL)
-	python ./setupTest.py $(TEST)
+	python3 ./setupTest.py $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
 # Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime
@@ -125,12 +125,14 @@ VLINT_FLAGS += -d ../versat_ai_V0.8/hardware/src
 VLINT_FLAGS += -c ./hardware/lint
 VLINT_FLAGS += -c ./submodules/VERSAT/hardware/lint
 VLINT_FLAGS += -o lint.rpt
-lint-all-fus: clean $(TEST)
+lint-all-fus: clean $(VERSAT_ACCEL)
+	python3 ./setupTest.py Generated
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS)"
 	cat lint.rpt
 
 FU?=iob_fp_clz
-lint-fu: clean $(TEST)
+lint-fu: clean $(VERSAT_ACCEL)
+	python3 ./setupTest.py Generated
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS) --fu $(FU)"
 	cat lint.rpt
 
