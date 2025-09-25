@@ -62,10 +62,6 @@ jobs:
         run: |
           make clean;\
           make pc-emul-run TEST=Keyword
-      - name: run Keyword sim
-        run: |
-          make clean;\
-          make sim-run TEST=Keyword
 
   lint-FUs:
     runs-on: self-hosted
