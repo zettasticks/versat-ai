@@ -193,7 +193,7 @@ end
    end
 
    // Round
-   wire [MAN_W-1:0]         Mantissa_rnd;
+   wire [MAN_W-2:0]         Mantissa_rnd;
    wire [EXP_W-1:0]         Exponent_rnd;
    iob_fp_round #(
            .DATA_W (MAN_W),
