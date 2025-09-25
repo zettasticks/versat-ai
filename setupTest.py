@@ -69,6 +69,13 @@ if __name__ == "__main__":
     createVCD = False
     if test.type == TestType.GENERATED:
         createVCD = True
+
+    boolStr = "true" if createVCD else "false"
+    with open("./software/src/testInfo.h", "w") as f:
+        f.write(f'#define TEST_NAME "{testName}"\n')
+        f.write(f"#define CREATE_VCD {boolStr}\n")
+
+    if test.type == TestType.GENERATED:
         try:
             sp.run(["make", "test-generate"])
         except Exception as e:
@@ -86,8 +93,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Failed to generate test: {e}")
         sys.exit(-1)
-
-    boolStr = "true" if createVCD else "false"
-    with open("software/src/testInfo.h", "w") as f:
-        f.write(f'#define TEST_NAME "{testName}"\n')
-        f.write(f"#define CREATE_VCD {boolStr}\n")

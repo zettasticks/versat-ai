@@ -104,7 +104,7 @@ clean:
 	@rm -rf ./submodules/iob_versat
 	@rm -rf ./hardware/simulation/*.bin
 	@rm -rf ./software/*.bin
-	@rm -f  ./software/src/code.c ./software/src/modelInfo.h
+	@rm -f  ./software/src/code.c ./software/src/modelInfo.h ./software/src/testInfo.h 
 	@rm -rf ../*.summary ../*.rpt
 	@rm -rf ./*.rpt
 	@find . -name \*~ -delete
