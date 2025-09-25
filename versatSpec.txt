@@ -1,4 +1,3 @@
-
 addressGen DataSimple(xWidth,yWidth,zWidth,aWidth,bWidth,cWidth){
    for c 0..cWidth
    for b 0..bWidth
