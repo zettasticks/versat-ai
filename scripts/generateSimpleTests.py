@@ -427,17 +427,17 @@ def CreateSoftmax(shape, axis=-1):
     tests.append(test)
 
 
-testAdd = False
+testAdd = True
 testRelu = False
 testReshape = False
 testMatMul = False
 testMaxPool = False
 testConv = False
 testAveragePool = False
-testSoftmax = True
+testSoftmax = False
 testTranspose = False
 
-testBig = True
+testBig = False
 
 if __name__ == "__main__":
     if testSoftmax:
