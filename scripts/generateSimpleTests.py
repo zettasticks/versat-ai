@@ -426,15 +426,16 @@ def CreateSoftmax(shape, axis=-1):
 
     tests.append(test)
 
-testAdd         = True
-testRelu        = False
-testReshape     = False
-testMatMul      = False
-testMaxPool     = False
-testConv        = False
+
+testAdd = False
+testRelu = False
+testReshape = False
+testMatMul = False
+testMaxPool = False
+testConv = False
 testAveragePool = False
-testSoftmax     = False
-testTranspose   = False
+testSoftmax = True
+testTranspose = False
 
 testBig = True
 
@@ -491,7 +492,7 @@ if __name__ == "__main__":
         if True:
             CreateBinaryOpTest("Add", [1], [1])
             CreateBinaryOpTest("Add", [2], [2])
-            CreateBinaryOpTest("Add", [3,2], [3,2])
+            CreateBinaryOpTest("Add", [3, 2], [3, 2])
             CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
 
             # Simplest tests, no broadcast or abusing dimensions

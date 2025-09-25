@@ -458,9 +458,12 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
   //       Basically pull out all the properDim logic from address gen into a
   //       extra function.
 
-  AddressGen inA    = StartAddress(info->broadCastedShape,info->firstInputDim, info->maxDims);
-  AddressGen inB    = StartAddress(info->broadCastedShape,info->secondInputDim, info->maxDims);
-  AddressGen outGen = StartAddress(info->broadCastedShape,info->broadCastedShape, info->maxDims);
+  AddressGen inA =
+      StartAddress(info->broadCastedShape, info->firstInputDim, info->maxDims);
+  AddressGen inB =
+      StartAddress(info->broadCastedShape, info->secondInputDim, info->maxDims);
+  AddressGen outGen = StartAddress(info->broadCastedShape,
+                                   info->broadCastedShape, info->maxDims);
 
   while (Address_IsValid(&outGen)) {
     int indexA = Address_GetValue(&inA);
@@ -625,21 +628,27 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
 float ABS(float x) { return x < 0 ? -x : x; }
 
 float my_exp(float x) {
-  float result = 1.0f;
-  float term = 1.0f;
-  float div = 1.0f;
+  double result = 1.0;
+  double term = 1.0;
+  double div = 1.0;
+  double dx = (double)x;
+  int maxTerms = 100000; // Failsafe
 
-  for (int n = 1; true; n++) {
-    term *= x / div;
-    div += 1.0f;
+  double lastResult = result;
+  for (int n = 1; n < maxTerms; n++) {
+    term *= dx / div;
+    div += 1.0;
     result += term;
 
-    if (ABS(term) < 1e-6f) {
+    // As term gets smaller eventually we will reach a point where addition does
+    // not change anything
+    if (lastResult == result) {
       break;
     }
+    lastResult = result;
   }
 
-  return result;
+  return (float)result;
 }
 
 void *Software_Softmax(void *input, void *output, int index,

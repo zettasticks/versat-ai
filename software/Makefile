@@ -87,7 +87,7 @@ build_emul: fw_emul
 	@echo "build"
 
 #board client command
-BOARD_GRAB_CMD ?=../scripts/board_client.py grab 1000
+BOARD_GRAB_CMD ?=../scripts/board_client.py grab 3000
 
 test.log: build_emul
 	$(BOARD_GRAB_CMD) -s './fw_emul' -c '$(CONSOLE_CMD)'
@@ -102,12 +102,12 @@ run_emul: test.log
 #########################################
 
 ifneq ($(wildcard ./src/$(NAME)_csrs.c),)
-CSRS ?= ./src/$(NAME)_csrs.c
+TB_SRC ?= ./src/$(NAME)_csrs.c
 endif
 
 TB_INCLUDES ?=-I./src
 
-tb: ./src/iob_c_tb.c ./src/iob_core_tb.c $(CSRS)
+tb: ./src/iob_c_tb.c ./src/iob_core_tb.c $(TB_SRC)
 	gcc $(TB_INCLUDES) -g -o $@ $^
 
 

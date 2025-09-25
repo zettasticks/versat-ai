@@ -42,7 +42,12 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
   return 0;
 }
 
-#define SWAP(TYPE,A,B) do{TYPE t = A; A = B; B = t;} while(0)
+#define SWAP(TYPE, A, B)                                                       \
+  do {                                                                         \
+    TYPE t = A;                                                                \
+    A = B;                                                                     \
+    B = t;                                                                     \
+  } while (0)
 
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
@@ -53,13 +58,13 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   int64_t *o = info->broadCastedShape;
   int d = info->maxDims;
 
-  Dimensions left = CreateDimensions(l,d);
-  Dimensions right = CreateDimensions(r,d);
+  Dimensions left = CreateDimensions(l, d);
+  Dimensions right = CreateDimensions(r, d);
 
-  if(Dimensions_Size(left) < Dimensions_Size(right)){
-    SWAP(void*,inputA,inputB);
-    SWAP(Dimensions,left,right);
-    SWAP(int64_t*,l,r);
+  if (Dimensions_Size(left) < Dimensions_Size(right)) {
+    SWAP(void *, inputA, inputB);
+    SWAP(Dimensions, left, right);
+    SWAP(int64_t *, l, r);
   }
 
   volatile Top_AddConfig *config = &accelConfig->Top_Add;
@@ -74,39 +79,31 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   //       The bigger the more efficient we can be
   int maxLineSupported = 1024;
 
-  AddressGen inA    = StartAddress(o,l, info->maxDims);
-  AddressGen inB    = StartAddress(o,r, info->maxDims);
-  AddressGen outGen = StartAddress(o,o, info->maxDims);
+  AddressGen inA = StartAddress(o, l, info->maxDims);
+  AddressGen inB = StartAddress(o, r, info->maxDims);
+  AddressGen outGen = StartAddress(o, o, info->maxDims);
 
-  int lineLength = l[d-1];
-  while (Address_IsValid(&outGen)){
+  int lineLength = l[d - 1];
+  while (Address_IsValid(&outGen)) {
     int indexA = Address_GetValue(&inA);
     int indexB = Address_GetValue(&inB);
     int indexO = Address_GetValue(&outGen);
 
-    //printf("A:%d %d\n",GetSize(l,d,d-1), GetDim(o,d,d-1));
-    //printf("B:%d %d\n",GetSize(r, d, d-1), GetDim(o, d, d-1));
-    //printf("O:%d\n",GetDim(o, d, d-1));
+    bool broadcastedB = (GetSize(r, d, d - 1) == 0);
 
-    bool broadcastedB = (GetSize(r, d, d-1) == 0);
+    for (int offset = 0; offset < lineLength; offset += maxLineSupported) {
+      int trueLength = MIN(maxLineSupported, lineLength - offset);
 
-    for(int offset = 0; offset < lineLength; offset += maxLineSupported){
-      int trueLength = MIN(maxLineSupported,lineLength - offset);
+      Linear_VRead(&config->inputs_0, &viewA[indexA + offset], trueLength);
+      Broadcast1_VRead(&config->inputs_1,
+                       &viewB[indexB + (broadcastedB ? 0 : offset)], trueLength,
+                       GetSize(r, d, d - 1));
+      Linear_VWrite(&config->output, &out[indexO + offset], trueLength);
 
-      //printf("T:%d\n",trueLength);
-
-      Linear_VRead(&config->inputs_0,&viewA[indexA + offset],trueLength);
-      Broadcast1_VRead(&config->inputs_1,&viewB[indexB + (broadcastedB ? 0 : offset)],trueLength,GetSize(r, d, d-1));
-      Linear_VWrite(&config->output, &out[indexO + offset],trueLength);
-
-      //DataBroadCasted_VRead(&config->inputs_0,&viewA[indexA + offset],GetSize(l,d,d-1), trueLength,0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
-      //DataBroadCasted_VRead(&config->inputs_1,&viewB[indexB + broadcastedB ? 0 : offset],GetSize(r, d, d-1), trueLength,0, 1, 1, 0,1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1);
-      //DataSimple_VWrite(&config->output, &out[indexO + offset], trueLength, 1,1, 1, 1,1);
-      
       RunAccelerator(1);
     }
 
-    for(int i = 0; i < lineLength; i++){
+    for (int i = 0; i < lineLength; i++) {
       Address_Advance(&inA);
       Address_Advance(&inB);
       Address_Advance(&outGen);
