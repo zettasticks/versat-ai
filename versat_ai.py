@@ -108,7 +108,7 @@ def setup(py_params_dict):
                         "name": "EXT_MEM_HEXFILE",
                         "descr": "Firmware file name",
                         "type": "D",
-                        "val": f"{name}_firmware",
+                        "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
                         "min": "NA",
                         "max": "NA",
                     },
