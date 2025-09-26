@@ -7,9 +7,6 @@ module FloatToLargeInteger (
    output reg [278:0] out_o  // Much higher order
 );
 
-   localparam EXP_W = 8;
-   localparam BIAS = 2 ** (EXP_W - 1) - 1;
-
    wire [  7:0] exponent = in_i[30:23];
 
    wire [ 23:0] mantissa = {(exponent == 8'h00 ? 1'b0 : 1'b1), in_i[22:0]};
