@@ -5,7 +5,7 @@ module iob_fp_special #(
                     parameter EXP_W = 8
                     )
    (
-    input [DATA_W-1:0] data_i,
+    input [DATA_W-2:0] data_i,
 
     output             nan_o,
     output             infinite_o,
@@ -15,7 +15,6 @@ module iob_fp_special #(
 
    localparam MAN_W = DATA_W-EXP_W;
 
-   wire                sign = data_i[DATA_W-1];
    wire [EXP_W-1:0]    exponent = data_i[DATA_W-2 -: EXP_W];
    wire [MAN_W-2:0]    mantissa = data_i[MAN_W-2:0];
 
