@@ -71,10 +71,6 @@ if __name__ == "__main__":
         pass  # Nothing if dir already exists
 
     shutil.move(
-        "./submodules/iob_versat/software/versat_emul.c",
-        "./submodules/iob_versat/software/src/versat_emul.c",
-    )
-    shutil.move(
         "./submodules/iob_versat/software/iob-versat.c",
         "./submodules/iob_versat/software/src/iob_versat.c",
     )

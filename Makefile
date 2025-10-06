@@ -7,7 +7,7 @@ CORE := versat_ai
 SIMULATOR ?= verilator
 SYNTHESIZER ?= yosys
 LINTER ?= spyglass
-BOARD ?= iob_cyclonev_gt_dk
+BOARD ?= iob_aes_ku040_db_g
 
 TEST := Generated # Run setupTest.py to see the possible values for this
 
@@ -22,7 +22,7 @@ BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
 
 USE_INTMEM ?= 0
 USE_EXTMEM ?= 1
-INIT_MEM ?= 1
+INIT_MEM ?= 0
 
 VERSION ?=$(shell cat versat_ai.py | grep version | cut -d '"' -f 4)
 
@@ -52,6 +52,11 @@ sim-run: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
+fpga-run: $(VERSAT_ACCEL)
+	python3 ./setupTest.py $(TEST)
+	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
+	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
+
 # Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime
 fast-versat:
 	python3 ./scripts/versatGenerate.py
@@ -79,6 +84,15 @@ fast-sim-run:
 	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
 	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
+
+fast-only-sim-run:
+	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
+
+fast-fpga:
+	cp -r software ../versat_ai_V0.8/
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/	
+	make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)
+	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
 # Rules to force certain files to be build, mostly for debugging and to support the runTest.py script
 # Do not call them directly unless you know what you are doing

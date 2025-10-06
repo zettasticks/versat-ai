@@ -53,11 +53,6 @@ def CreateBinaryOpTest(op, leftShape, rightShape):
 
     maxDims = max(len(leftShape), len(rightShape))
 
-    # op0 = ExtendShape(leftShape, maxDims)
-    # op1 = ExtendShape(rightShape, maxDims)
-
-    # broadCastedShape = BroadCastShape(op0, op1)
-
     # Let onnx infer shape specifics
     outputShape = [None] * maxDims
 
@@ -427,7 +422,44 @@ def CreateSoftmax(shape, axis=-1):
     tests.append(test)
 
 
-testAdd = True
+def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
+    global tests
+
+    maxDims = max(len(leftShape), len(rightShape))
+
+    # Let onnx infer shape specifics
+    outputShape = [None] * maxDims
+
+    testIndex = len(tests)
+
+    test = Test()
+    test.shapes = [actualLeft, actualRight]
+
+    leftTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, leftShape
+    )
+    rightTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 1), TensorProto.FLOAT, rightShape
+    )
+
+    test.tensors = [leftTensor, rightTensor]
+    test.outputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+    )
+    test.node = make_node(
+        "Add",
+        [GetInputTrueName(testIndex, 0), GetInputTrueName(testIndex, 1)],
+        [GetOutputTrueName(testIndex)],
+    )
+
+    leftRandomArray = np.random.randn(*actualLeft).astype(np.float32)
+    rightRandomArray = np.random.randn(*actualRight).astype(np.float32)
+    test.randomArrays = [leftRandomArray, rightRandomArray]
+
+    tests.append(test)
+
+
+testAdd = False
 testRelu = False
 testReshape = False
 testMatMul = False
@@ -440,6 +472,9 @@ testTranspose = False
 testBig = False
 
 if __name__ == "__main__":
+    if True:
+        CreateBinaryOpDynamicTest(["unk__0", 1], ["unk__1", 1], [1, 1], [1, 1])
+
     if testSoftmax:
         # Softmax axis come in pairs.
         # If the dim is N, then the pairs are X and X - N.

@@ -61,8 +61,12 @@ EMUL_INCLUDES ?=-I. -Isrc
 
 build: $(UTARGETS)
 %.elf: $(TEMPLATE_LDS) $(HDR) $(SRC) $(EXTRA_SRC)
-	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
+	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) -fPIC $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ $(*F).bin
+
+versat_ai_boot.elf: $(TEMPLATE_LDS) $(HDR) $(SRC) $(EXTRA_SRC)
+	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) -fPIC $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
+	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ versat_ai_boot.bin
 
 ifneq ($(BOARD),)
 FPGA_TOOL:=$(shell find ../hardware/fpga -name $(BOARD) | cut -d"/" -f5)

@@ -24,13 +24,25 @@ class DataSourceType(Enum):
 
 
 @dataclass
+class CDataHandle:
+    index: int
+
+
+@dataclass
+class TypedArray:
+    dtype: str
+    data: list[any]
+    name: str = None
+
+
+@dataclass
 class DataSource:
     sourceType: DataSourceType
     name: str
 
     # Computed afterwards. Easier to store directly.
     index: int = -1
-    correctInputIndex: int = -1
+    # correctInputIndex: int = -1
 
 
 class MemoryType(Enum):
@@ -104,7 +116,7 @@ class OnnxOperatorSpec:
 @dataclass
 class Port:
     name: str
-    shape: list[int]
+    shape: list[int | str]
     isOriginal: bool = (
         True  # In order to extract data from nodes, we add custom output ports. This variable is true only for the ports that are original, no modification made
     )

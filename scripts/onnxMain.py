@@ -14,7 +14,6 @@ from onnx import shape_inference
 from skl2onnx.helpers.onnx_helper import enumerate_model_node_outputs
 from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
 from skl2onnx.helpers.onnx_helper import save_onnx_model
-from dataclasses import dataclass, field
 from functools import reduce
 from pprint import pprint
 
@@ -24,7 +23,6 @@ import onnx
 
 import onnxruntime as ort
 
-from enum import Enum, auto
 from onnx import __version__, IR_VERSION
 from onnx.defs import onnx_opset_version
 from onnx import numpy_helper
@@ -49,8 +47,7 @@ def GetValueForDim(dim):
     if dim.WhichOneof("value") == "dim_value":
         return dim.dim_value
     else:
-        # TODO: For now we convert all the variable sized expressions to 1
-        return 1  # dim.dim_param
+        return dim.dim_param
 
 
 def GetShape(model, name):
@@ -230,7 +227,58 @@ def GenerateModelFromOnnxModel(onnxModel):
         )
         cModel.operations.append(op)
 
+    # Calculate initializer position
+    initializersSeen = 0
+    for index, c in enumerate(cModel.operations):
+        for source in c.inputs:
+            if source.sourceType == DataSourceType.INITIALIZER:
+                source.index = initializersSeen
+                initializersSeen += 1
+            elif source.sourceType == DataSourceType.MODEL_INPUT:
+                for index, port in enumerate(cModel.modelInputs):
+                    if port.name == source.name:
+                        source.index = index
+            else:
+                source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
+
+    pprint(cModel)
+
+    allInputsShapes = sum([port.shape for port in cModel.modelInputs], [])
+
+    # TODO: Currently we force variable sizes to 1 in here
+    mapped = {}
+    forcedSize = 1
+
+    for port in cModel.modelInputs:
+        for i, name in enumerate(port.shape):
+            if type(name) == str:
+                port.shape[i] = mapped.get(name, forcedSize)
+                mapped[name] = port.shape[i]
+
+    for op in cModel.operations:
+        for inputs in op.inputDimensions:
+            for i, name in enumerate(inputs):
+                if type(name) == str:
+                    inputs[i] = mapped.get(name, forcedSize)
+                    mapped[name] = inputs[i]
+
+        for i, name in enumerate(op.outputDimensions):
+            if type(name) == str:
+                op.outputDimensions[i] = mapped.get(name, forcedSize)
+                mapped[name] = op.outputDimensions[i]
+
+    print(mapped.keys())
+
+    for name in mapped.keys():
+        print(name, allInputsShapes)
+        if name in allInputsShapes:
+            print(f"{name} is an input")
+        else:
+            print(f"{name} is not an input")
+
     CalculateMemoryAllocations(cModel)
+
+    pprint(cModel)
 
     return cModel
 
@@ -248,18 +296,6 @@ def RunModel(model: Model, inputs):
         outputs[index] = mappedOutputs[op.output]
 
     return ModelRunResult(outputs)
-
-
-@dataclass
-class CDataHandle:
-    index: int
-
-
-@dataclass
-class TypedArray:
-    dtype: str
-    data: list[any]
-    name: str = None
 
 
 class CDataEmitter:
@@ -406,30 +442,9 @@ def GenerateDebug(
     result = RunModel(cModel, inputs)
     correctData = result.outputs
 
-    outputNameToNodeIndex = {}
-    ind = 0
-    for index, c in enumerate(cModel.operations):
-        outputNameToNodeIndex[c.output] = ind
-        ind += 1
-
     packedInputs = PackMultipleArrays(inputs)
     packedCorrectData = PackMultipleArrays(correctData)
     packedInitializers = PackMultipleArrays(cModel.initializers)
-
-    # Calculate initializer position
-    initializersSeen = 0
-    for index, c in enumerate(cModel.operations):
-        for source in c.inputs:
-            if source.sourceType == DataSourceType.INITIALIZER:
-                source.index = initializersSeen
-                initializersSeen += 1
-            elif source.sourceType == DataSourceType.MODEL_INPUT:
-                for index, port in enumerate(cModel.modelInputs):
-                    if port.name == source.name:
-                        source.index = index
-            else:
-                source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
-                source.correctInputIndex = outputNameToNodeIndex[source.name]
 
     with open(os.path.join(sourceOutputLocation, "code.c"), "w") as f:
         f.write('#include "versat_ai.h"\n')
