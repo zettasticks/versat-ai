@@ -35,57 +35,45 @@ module iob_fp_mul #(
 
    // Special cases
 `ifdef SPECIAL_CASES
-   wire                     op_a_nan, op_a_inf, op_a_zero, op_a_sub;
+   wire                     op_a_nan, op_a_inf, op_a_zero;
    iob_fp_special #(
                 .DATA_W(DATA_W),
                 .EXP_W(EXP_W)
                 )
    special_op_a
      (
-      .data_i      (op_a_i),
+      .data_i      (op_a_i[DATA_W-2:0]),
 
       .nan_o        (op_a_nan),
       .infinite_o   (op_a_inf),
       .zero_o       (op_a_zero),
-      .sub_normal_o (op_a_sub)
+      .sub_normal_o ()
       );
 
-   wire                     op_b_nan, op_b_inf, op_b_zero, op_b_sub;
+   wire                     op_b_nan, op_b_inf, op_b_zero;
    iob_fp_special #(
                 .DATA_W(DATA_W),
                 .EXP_W(EXP_W)
                 )
    special_op_b
      (
-      .data_i       (op_b_i),
+      .data_i       (op_b_i[DATA_W-2:0]),
 
       .nan_o        (op_b_nan),
       .infinite_o   (op_b_inf),
       .zero_o       (op_b_zero),
-      .sub_normal_o (op_b_sub)
+      .sub_normal_o ()
       );
 
    wire                     special = op_a_nan | op_a_inf | op_b_nan | op_b_inf;
-   wire [DATA_W-1:0]        res_special = (op_a_nan | op_b_nan)? `NAN:
-                                          (op_a_inf & op_b_inf)? `NAN:
-                                        (op_a_zero | op_b_zero)? `NAN:
-                                                                 `INF(op_b_i[DATA_W-1] ^ op_b_i[DATA_W-1]);
 
 wire any_nan = op_a_nan | op_b_nan;
 wire any_inf = op_a_inf | op_b_inf;
 wire any_zero = op_a_zero | op_b_zero;
 
-reg any_nan_1,any_nan_2,any_nan_3;
-reg any_inf_1,any_inf_2,any_inf_3;
 reg any_zero_1,any_zero_2,any_zero_3;
 
 always @(posedge clk_i) begin
-   any_nan_1 <= any_nan;
-   any_nan_2 <= any_nan_1;
-   any_nan_3 <= any_nan_2;
-   any_inf_1 <= any_inf;
-   any_inf_2 <= any_inf_1;
-   any_inf_3 <= any_inf_2;
    any_zero_1 <= any_zero;
    any_zero_2 <= any_zero_1;
    any_zero_3 <= any_zero_2;
@@ -219,7 +207,6 @@ end
                                                   (any_nan ? `NAN : 
                                                              (any_inf ? `INF(Sign) : {Sign, Exponent, Mantissa}));
 
-   //wire [DATA_W-1:0]        res_in  = special? res_special: {Sign, Exponent, Mantissa};
    wire                     done_in = special? start_i: done_int3;
 `else
    wire [DATA_W-1:0]        res_in  = {Sign, Exponent, Mantissa};

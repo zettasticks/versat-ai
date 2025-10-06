@@ -12,7 +12,7 @@ from versatDefs import (
 )
 from enum import Enum, auto
 
-# TODO: I eventually want to start generating the C structsF from the emitters defined here. Really clubersome to have to match
+# TODO: I eventually want to start generating the C structs from the emitters defined here. Really cumbersome to have to match
 #      the emitter code with the C code, any change requires to carefully interact with
 
 # TODO: Because Onnx supports variable sized tensors, we might want to start moving the tensors shape calculations to runtime.
