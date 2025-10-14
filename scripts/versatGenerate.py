@@ -13,7 +13,6 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         os.path.realpath(versat_spec),
         "-s",
         f"-b{axi_data_w}",
-        "-d",  # DMA
         "-p",
         "iob_csrs_",
         "-t",
@@ -70,10 +69,10 @@ if __name__ == "__main__":
     except:
         pass  # Nothing if dir already exists
 
-    shutil.move(
-        "./submodules/iob_versat/software/iob-versat.c",
-        "./submodules/iob_versat/software/src/iob_versat.c",
-    )
+    # shutil.move(
+    #    "./submodules/iob_versat/software/iob-versat.c",
+    #    "./submodules/iob_versat/software/src/iob_versat.c",
+    # )
 
     with open("submodules/iob_versat/iob_versat.py", "w") as f:
         attributes_dict = {

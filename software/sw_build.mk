@@ -49,6 +49,7 @@ VERSAT_AI_FW_SRC+=src/iob_printf.c
 VERSAT_AI_FW_SRC+=src/code.c
 VERSAT_AI_FW_SRC+=src/staticSource.c
 VERSAT_AI_FW_SRC+=src/versatSource.c
+VERSAT_AI_FW_SRC+=src/iob-versat.c
 
 # PERIPHERAL SOURCES
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))

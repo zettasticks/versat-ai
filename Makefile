@@ -57,6 +57,11 @@ fpga-run: $(VERSAT_ACCEL)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
+fpga-build: $(VERSAT_ACCEL)
+	python3 ./setupTest.py $(TEST)
+	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
+	make -C ../$(CORE)_V$(VERSION)/ fpga-build BOARD=$(BOARD)
+
 # Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime
 fast-versat:
 	python3 ./scripts/versatGenerate.py
@@ -81,6 +86,7 @@ fast-pc-hard: fast-versat
 fast-sim-run:
 	cp -r software ../versat_ai_V0.8/
 	cp -r hardware ../versat_ai_V0.8/
+	cp software/*.bin ../versat_ai_V0.8/hardware/simulation
 	cp -r submodules/iob_versat/hardware ../versat_ai_V0.8/
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/
 	make -C ../versat_ai_V0.8/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
@@ -91,6 +97,7 @@ fast-only-sim-run:
 fast-fpga:
 	cp -r software ../versat_ai_V0.8/
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/	
+	cp    software/*.bin ../versat_ai_V0.8/hardware/fpga
 	make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
@@ -107,6 +114,7 @@ test-generate:
 test-setup:
 	mkdir -p hardware/simulation
 	cp software/*.bin hardware/simulation
+	cp software/*.bin hardware/fpga
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
 
@@ -118,6 +126,7 @@ clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
 	@rm -rf ./submodules/iob_versat
 	@rm -rf ./hardware/simulation/*.bin
+	@rm -rf ./hardware/fpga/*.bin
 	@rm -rf ./software/*.bin
 	@rm -f  ./software/src/code.c ./software/src/modelInfo.h ./software/src/testInfo.h 
 	@rm -rf ../*.summary ../*.rpt
