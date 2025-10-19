@@ -55,6 +55,7 @@ sim-run: $(VERSAT_ACCEL)
 fpga-run: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
+	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
 fpga-build: $(VERSAT_ACCEL)

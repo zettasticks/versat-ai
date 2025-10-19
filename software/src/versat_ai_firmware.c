@@ -122,7 +122,15 @@ int main() {
   printf("Correct: %p\n", correct);
   printf("Input  : %p\n", inputMemory);
 
-  printf("Total  : %p\n", ((char *)inputMemory) + VERSAT_AI_ALL_INPUTS_SIZE);
+  void *total = ((void *)((char *)inputMemory) + VERSAT_AI_ALL_INPUTS_SIZE);
+  printf("Total  : %p\n", total);
+
+  if (total > &stackVar) {
+    printf("Error, we run out of memory, increase the value of firm_w argument "
+           "and setup again\n");
+    uart_finish();
+    return 0;
+  }
 
   FastReceiveFile("correctOutputs.bin", correct);
   printf("Received correct outputs\n");
@@ -153,4 +161,6 @@ int main() {
   printf("\nExecution time: %dus @%dMHz\n\n", elapsedu, IOB_BSP_FREQ / 1000000);
 
   uart_finish();
+
+  return 0;
 }

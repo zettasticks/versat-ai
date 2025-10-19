@@ -262,10 +262,10 @@ def CreateConvolution(
 
     if outputChannels % group != 0:
         print("First", outputChannels, group)
-        return
-    if (outputChannels * group) % inputChannels != 0:
+        assert False
+    if group != 1 and (outputChannels * group) % inputChannels != 0:
         print("Second", outputChannels, group, inputChannels)
-        return
+        assert False
 
     test = Test()
     test.shapes = [shape]
@@ -472,8 +472,11 @@ testTranspose = False
 testBig = False
 
 if __name__ == "__main__":
-    if True:
-        CreateBinaryOpDynamicTest(["unk__0", 1], ["unk__1", 1], [1, 1], [1, 1])
+    CreateConvolution(
+        [1, 3, 32, 32], 16, [3, 3], [1, 1], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
+    )
+    # if True:
+    #    CreateBinaryOpDynamicTest(["unk__0", 1], ["unk__1", 1], [1, 1], [1, 1])
 
     if testSoftmax:
         # Softmax axis come in pairs.
@@ -803,12 +806,11 @@ if __name__ == "__main__":
             # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
             # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
-            if False:
-                ind = 192
+            if True:
+                ind = 48
 
                 lastGood = args[ind - 1]
                 fail = args[ind]
-                # args[ind].pad = PaddingType("")
 
                 print("Good:", lastGood)
                 print("Bad:", fail)

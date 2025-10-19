@@ -888,6 +888,7 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
                  w.actualKernelW, w.actualKernelH, kernelW, kernelH,
                  inputImageC, kernelChannelSize, outputImageC, convStartC);
+
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
                       w.outputW, 0, outputImageC, outputImageW, stride);
 
@@ -917,6 +918,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
+  ActivateMergedAccelerator(MergeType_Top_Conv);
+
   int batches = info->inputDims[0];
   int inputChannels = info->inputDims[1];
   int inputImageW = info->inputDims[3];
@@ -932,8 +935,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
   inputTensor.data = inputX;
-
-  ActivateMergedAccelerator(MergeType_Top_Conv);
 
   for (int batch = 0; batch < batches; batch++) {
     // TODO: This technically depends on batch because we have group related
@@ -1000,7 +1001,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       int index = 0;
       for (int g = 0; g < group; g++) {
-
         int s = extra.inputImageC;
         int o = extra.outputImageC;
         Tensor extracted = Tensor_ExtractView(tempInputTensor, 3, g * s, s);
@@ -1027,6 +1027,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         config->output.enabled = 0;
         config->bias.enabled = 0;
         RunAccelerator(2);
+
+        clear_cache();
 
         // We obtain the result in NHWC format and we need to "concatenate" this
         // with the output that we are building.
@@ -1073,6 +1075,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
+        // AdvancedWindow_Print(w);
         ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
                                    info, info->inputDims[1],
                                    info->outputDims[1]);
@@ -1087,6 +1090,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       float *outputView = (float *)output;
       outputView += batch * outputSize;
+
+      clear_cache();
 
       // Convert NHWC to NCHW
       for (int c = 0; c < outputChannels; c++) {
@@ -1144,6 +1149,8 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
       tempB[x * BH + y] = viewB[y * BW + x];
     }
   }
+
+  clear_cache();
 
   for (int y = 0; y < OH; y++) {
     for (int x = 0; x < OW; x++) {

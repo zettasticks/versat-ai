@@ -45,7 +45,7 @@ VFLAGS+=$(VLT_INCLUDES) -CFLAGS "$(CPP_INCLUDES) -g"
 
 # verilator  flags
 VFLAGS+=--cc --exe --top-module $(VTOP) #compile to C++, alow user C/C++ code, and set top module
-VFLAGS+=-Wno-lint --Wno-UNOPTFLAT -DSIM
+VFLAGS+=-Wno-lint --Wno-UNOPTFLAT -DSIM -DVERSAT_SIM_AXI_DELAY=20 #-Wno-lint  
 ifneq ($(TBTYPE),V)
 VFLAGS+=--no-timing
 else
