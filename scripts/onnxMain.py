@@ -126,6 +126,27 @@ def PackMultipleArrays(arrayList, endianess: Endianess = Endianess.NATIVE):
 
     return PackedArrays(data, offsets)
 
+def RemoveContentExcept(packed : PackedArrays, indexesToPreserve : list[int]):
+    content = bytearray()
+
+    newOffsets = []
+    for index in indexesToPreserve:
+        offset = packed.offsets[index]
+
+        nextOffset = 0
+        if(index < len(packed.offsets)):
+            nextOffset = packed.offsets[index + 1]
+        else:
+            nextOffset = len(packed.data)
+
+        newOff = len(content)
+        content = content + packed.data[offset:nextOffset]
+        newOffsets.append(newOff)
+
+    if(len(newOffsets)):
+        return PackedArrays(content,newOffsets)
+    else:
+        return PackedArrays(bytearray(),[])
 
 def IndexOfNodeThatProducesOutput(cModel, outputName):
     for index, op in enumerate(cModel.operations):
@@ -227,6 +248,9 @@ def GenerateModelFromOnnxModel(onnxModel):
         )
         cModel.operations.append(op)
 
+    for index,c in enumerate(cModel.operations):
+        c.outputIndex = index
+
     # Calculate initializer position
     initializersSeen = 0
     for index, c in enumerate(cModel.operations):
@@ -240,8 +264,6 @@ def GenerateModelFromOnnxModel(onnxModel):
                         source.index = index
             else:
                 source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
-
-    pprint(cModel)
 
     allInputsShapes = sum([port.shape for port in cModel.modelInputs], [])
 
@@ -267,18 +289,13 @@ def GenerateModelFromOnnxModel(onnxModel):
                 op.outputDimensions[i] = mapped.get(name, forcedSize)
                 mapped[name] = op.outputDimensions[i]
 
-    print(mapped.keys())
-
     for name in mapped.keys():
-        print(name, allInputsShapes)
         if name in allInputsShapes:
             print(f"{name} is an input")
         else:
             print(f"{name} is not an input")
 
     CalculateMemoryAllocations(cModel)
-
-    pprint(cModel)
 
     return cModel
 
@@ -374,9 +391,7 @@ def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
     return modified
 
 
-def GenerateDebug(
-    testLocation: str, modelName: str, binOutputLocation: str, sourceOutputLocation: str
-):
+def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sourceOutputLocation: str,focusLayer: int):
     print(
         f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}"
     )
@@ -434,9 +449,6 @@ def GenerateDebug(
 
     cModel = GenerateModelFromOnnxModel(model)
 
-    # pprint(cModel)
-    # sys.exit(0)
-
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
     # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
     result = RunModel(cModel, inputs)
@@ -445,6 +457,41 @@ def GenerateDebug(
     packedInputs = PackMultipleArrays(inputs)
     packedCorrectData = PackMultipleArrays(correctData)
     packedInitializers = PackMultipleArrays(cModel.initializers)
+
+    if(focusLayer):
+        op = cModel.operations[focusLayer]
+        cModel.operations = [op]
+
+        op.outputMemoryAddress = MemoryLocation(0,MemoryType.OUTPUT)
+
+        inputIndexes = []
+        nodeInputIndexes = []
+        initializersIndexes = []
+
+        newInputIndex = 0
+        newNodeInputIndex = 0
+        newInitializerIndex = 0
+        for inp in op.inputs:
+            if(inp.sourceType == DataSourceType.MODEL_INPUT):
+                inputIndexes.append(inp.index)
+                inp.index = newInputIndex
+                newInputIndex += 1
+            if(inp.sourceType == DataSourceType.NODE_INPUT):
+                nodeInputIndexes.append(inp.index)
+                inp.index = newNodeInputIndex
+                newNodeInputIndex += 1
+            if(inp.sourceType == DataSourceType.INITIALIZER):
+                initializersIndexes.append(inp.index)
+                inp.index = newInitializerIndex
+                newInitializerIndex += 1
+
+
+        op.outputIndex = newNodeInputIndex
+        nodeInputIndexes.append(focusLayer)
+
+        packedInputs = RemoveContentExcept(packedInputs,inputIndexes)
+        packedCorrectData = RemoveContentExcept(packedCorrectData,nodeInputIndexes)
+        packedInitializers = RemoveContentExcept(packedInitializers,initializersIndexes)
 
     with open(os.path.join(sourceOutputLocation, "code.c"), "w") as f:
         f.write('#include "versat_ai.h"\n')
@@ -554,13 +601,11 @@ def GenerateDebug(
             )
             if debugging and (IsOperatorRegistered(c.opName)):
                 f.write(
-                    f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[index]}),{index});\n"
+                    f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index});\n"
                 )
         f.write("  return (InferenceOutput){};\n")
         f.write("}\n")
 
-    # pprint([x.inputDimensions for x in cModel.operations])
-    # sys.exit(0)
     with open(os.path.join(sourceOutputLocation, "modelInfo.h"), "w") as f:
         f.write("#pragma once\n")
         f.write(f"#define VERSAT_AI_OUTPUT_SIZE {cModel.outputMemoryNeeded}\n")

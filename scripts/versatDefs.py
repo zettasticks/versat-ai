@@ -92,11 +92,10 @@ class Operation:
     outputDimensions: list[int | str]
     parsedAttributes: dict[str, InstantiatedAttribute] = None
 
-    # Data computed from extracted model.
-    outputMemoryAddress: MemoryLocation = (
-        None  # Address at runtime. We precalculate it, we do not allocate memory at runtime.
-    )
+    outputIndex: int = -1
 
+    # Data computed from extracted model.
+    outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it, we do not allocate memory at runtime.
 
 class BroadcastType(Enum):
     NO_BROADCAST = auto()

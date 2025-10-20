@@ -7,6 +7,10 @@ import subprocess as sp
 from enum import Enum, auto
 from dataclasses import dataclass
 
+sys.path.append('./scripts')
+
+from generateSimpleTests import GenerateSimpleTest
+from onnxMain import GenerateDebug
 
 class TestType(Enum):
     GENERATED = (auto(),)
@@ -17,19 +21,19 @@ class TestType(Enum):
 class Test:
     type: TestType
     path: str = None
-
+    focusLayer: int | None = None
 
 def ValidateTest(test: Test):
     if test.type == TestType.FIXED:
         assert test.path != None
 
-
 def ParseTest(testJsonContent):
     try:
         testType = TestType[testJsonContent["type"]]
         path = testJsonContent.get("path", None)
+        focusLayer = testJsonContent.get("focusLayer",None)
 
-        test = Test(testType, path)
+        test = Test(testType, path, focusLayer)
         ValidateTest(test)
 
         return test
@@ -54,7 +58,8 @@ if __name__ == "__main__":
     print(testNames)
 
     parser = argparse.ArgumentParser(
-        prog="Tester", description="Setup for a single test"
+        prog="Tester",
+        description="Setup for a single test",
     )
     parser.add_argument("TestName", choices=testNames)
 
@@ -76,20 +81,8 @@ if __name__ == "__main__":
         f.write(f"#define CREATE_VCD {boolStr}\n")
 
     if test.type == TestType.GENERATED:
-        try:
-            sp.run(["make", "test-generate"])
-        except Exception as e:
-            print(f"Failed to generate test: {e}")
-            sys.exit(-1)
+        GenerateSimpleTest("./tests/generated/")
+        GenerateDebug("tests/generated/","model.onnx","software/","software/src")
     else:
-        try:
-            sp.run(["make", "do-test", f"TEST_PATH={test.path}"])
-        except Exception as e:
-            print(f"Failed to generate test: {e}")
-            sys.exit(-1)
+        GenerateDebug(test.path,"model.onnx","software/","software/src",test.focusLayer)
 
-    try:
-        sp.run(["make", "test-setup"])
-    except Exception as e:
-        print(f"Failed to generate test: {e}")
-        sys.exit(-1)

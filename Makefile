@@ -46,20 +46,24 @@ $(DOWNLOADED_TEST): $(PYTHON_ENV)
 
 pc-emul-run: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
+	$(MAKE) test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
 
 sim-run: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
+	$(MAKE) test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
 fpga-run: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
+	$(MAKE) test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
 fpga-build: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
+	$(MAKE) test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	make -C ../$(CORE)_V$(VERSION)/ fpga-build BOARD=$(BOARD)
 

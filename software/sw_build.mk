@@ -112,6 +112,8 @@ EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 EMUL_SRC+=$(addprefix src/,$(addsuffix _csrs_pc_emul.c,$(PERIPHERALS)))
 
 EMUL_SRC:=$(filter-out src/iob_versat.c,$(EMUL_SRC))
+EMUL_SRC:=$(filter-out src/iob_eth_csrs_pc_emul.c,$(EMUL_SRC))
+EMUL_SRC:=$(filter-out src/iob_eth.c,$(EMUL_SRC))
 
 # include software build segment of child systems
 # child systems can add their own child_sw_build.mk without having to override this one.

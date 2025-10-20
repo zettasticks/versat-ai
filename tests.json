@@ -13,6 +13,11 @@
   "Keyword": {
     "type": "FIXED",
     "path": "./tests/keyword"
+  },
+  "Image22": {
+    "type": "FIXED",
+    "path": "./tests/image",
+    "focusLayer": 22
   }
 }
 

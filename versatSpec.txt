@@ -119,6 +119,7 @@ module Top_Conv(){
    F_Mul muller;
    F_Add addBias;
    MyFloatAccum myAccum;
+   DebugWriteMem debug;
    using(Linear2_NHWC) VWrite output;
 #   
    {weights,features} -> muller:0..1;

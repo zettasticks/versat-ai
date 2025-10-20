@@ -458,20 +458,19 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 
     tests.append(test)
 
+def GenerateSimpleTest(outputPath):
+    testAdd = False
+    testRelu = False
+    testReshape = False
+    testMatMul = False
+    testMaxPool = False
+    testConv = False
+    testAveragePool = False
+    testSoftmax = False
+    testTranspose = False
 
-testAdd = False
-testRelu = False
-testReshape = False
-testMatMul = False
-testMaxPool = False
-testConv = False
-testAveragePool = False
-testSoftmax = False
-testTranspose = False
+    testBig = False
 
-testBig = False
-
-if __name__ == "__main__":
     CreateConvolution(
         [1, 3, 32, 32], 16, [3, 3], [1, 1], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
     )
@@ -980,7 +979,6 @@ if __name__ == "__main__":
     shaped = onnx.shape_inference.infer_shapes(onnx_model)
     check_model(shaped)
 
-    outputPath = sys.argv[1]
     try:
         shutil.rmtree(outputPath)
     except:
@@ -1019,3 +1017,7 @@ if __name__ == "__main__":
             f.write(asTensor.SerializeToString())
 
     save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
+
+
+if __name__ == "__main__":
+    GenerateSimpleTest(sys.argv[1])

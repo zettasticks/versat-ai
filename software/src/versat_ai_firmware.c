@@ -5,7 +5,6 @@
  */
 
 #include "iob_bsp.h"
-#include "iob_eth.h"
 #include "iob_printf.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
@@ -13,6 +12,10 @@
 #include "versat_ai_conf.h"
 #include "versat_ai_mmap.h"
 #include <string.h>
+
+#ifndef PC
+#include "iob_eth.h"
+#endif
 
 #include "modelInfo.h"
 #include "versat_ai.h"
@@ -34,8 +37,8 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
+#ifndef PC
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
-
   uart_puts(UART_PROGNAME);
   uart_puts(": requesting to receive file by ethernet\n");
 
@@ -65,6 +68,7 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
   uint32_t size = uart_request_ethernet_recvfile(path);
   eth_rcv_file(buffer, size);
 }
+#endif
 
 void FastReceiveFile(const char *path, void *buffer, int expectedSize) {
 #ifdef PC
@@ -127,19 +131,17 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
+#ifndef PC
   uart_puts("\nGonna init ethernet\n");
   eth_init(ETH0_BASE, &silent_clear_cache);
   eth_wait_phy_rst();
+#endif
 
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-#ifdef CREATE_VCD
-  ConfigCreateVCD(CREATE_VCD);
-#else
   ConfigCreateVCD(false);
-#endif
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
