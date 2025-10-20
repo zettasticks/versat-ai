@@ -27,12 +27,13 @@ def setup(py_params_dict):
             "s0_axi_s": "cpu_ibus",
             "s1_axi_s": "cpu_dbus",
             "s2_axi_s": "versat_axi",
+            "s3_axi_s": "eth_axi",
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
         "data_w": data_w,
         "lock_w": 1,
-        "num_subordinates": 3,
+        "num_subordinates": 4,
     }
     xbar_manager_interfaces = {
         "use_extmem": (
@@ -76,6 +77,7 @@ def setup(py_params_dict):
             # Full list of parameters availabe here: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
             "use_intmem": False,
             "use_extmem": True,
+            "use_ethernet": True,
             "mem_addr_w": mem_addr_w,
             "include_tester": False,
             "cpu": "iob_vexriscv",

@@ -5,6 +5,7 @@
  */
 
 #include "iob_bsp.h"
+#include "iob_eth.h"
 #include "iob_printf.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
@@ -33,7 +34,39 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-void FastReceiveFile(const char *path, void *buffer) {
+uint32_t uart_request_ethernet_recvfile(const char *file_name) {
+
+  uart_puts(UART_PROGNAME);
+  uart_puts(": requesting to receive file by ethernet\n");
+
+  // send file receive by ethernet request
+  uart_putc(0x13);
+
+  // send file name (including end of string)
+  uart_puts(file_name);
+  uart_putc(0);
+
+  // receive file size
+  uint32_t file_size = uart_getc();
+  file_size |= ((uint32_t)uart_getc()) << 8;
+  file_size |= ((uint32_t)uart_getc()) << 16;
+  file_size |= ((uint32_t)uart_getc()) << 24;
+
+  // send ACK before receiving file
+  uart_putc(ACK);
+
+  return file_size;
+}
+
+void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
+  if (expectedSize == 0) {
+    return;
+  }
+  uint32_t size = uart_request_ethernet_recvfile(path);
+  eth_rcv_file(buffer, size);
+}
+
+void FastReceiveFile(const char *path, void *buffer, int expectedSize) {
 #ifdef PC
   FILE *f = fopen(path, "r");
   if (!f) {
@@ -45,7 +78,16 @@ void FastReceiveFile(const char *path, void *buffer) {
   fread(buffer, sizeof(char), size, f);
   fclose(f);
 #else
-  uart_recvfile(path, buffer);
+  ethernet_receive_file(path, buffer, expectedSize);
+#endif
+}
+
+void silent_clear_cache() {
+#ifndef PC
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
 #endif
 }
 
@@ -84,6 +126,10 @@ int main() {
 #ifdef TEST_NAME
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
+
+  uart_puts("\nGonna init ethernet\n");
+  eth_init(ETH0_BASE, &silent_clear_cache);
+  eth_wait_phy_rst();
 
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
@@ -132,11 +178,11 @@ int main() {
     return 0;
   }
 
-  FastReceiveFile("correctOutputs.bin", correct);
+  FastReceiveFile("correctOutputs.bin", correct, VERSAT_AI_OUTPUT_SIZE);
   printf("Received correct outputs\n");
-  FastReceiveFile("model.bin", model);
+  FastReceiveFile("model.bin", model, VERSAT_AI_MODEL_SIZE);
   printf("Received model\n");
-  FastReceiveFile("inputs.bin", inputMemory);
+  FastReceiveFile("inputs.bin", inputMemory, VERSAT_AI_ALL_INPUTS_SIZE);
   printf("Received inputs\n");
 
   DebugRunInference(output, temp, inputs, model, correct);
