@@ -70,11 +70,6 @@ if __name__ == "__main__":
     except FileExistsError:
         pass  # Nothing if dir already exists
 
-    shutil.move(
-        "./submodules/iob_versat/software/iob-versat.c",
-        "./submodules/iob_versat/software/src/iob_versat.c",
-    )
-
     # Manual handling for coverage sources
     cov_src = "./submodules/VERSAT/hardware/simulation/coverage"
     cov_dst = "./submodules/iob_versat/hardware/simulation/coverage"
