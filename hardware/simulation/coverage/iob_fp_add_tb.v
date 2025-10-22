@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 // verilator coverage_off
-module iob_fp_mul_tb (
+module iob_fp_add_tb (
 
 );
   localparam DATA_W = 32;
@@ -36,7 +36,7 @@ module iob_fp_mul_tb (
   always #(CLOCK_PERIOD/2) clk_i = ~clk_i;
   `define ADVANCE @(posedge clk_i) #(CLOCK_PERIOD/2);
 
-  iob_fp_mul #(
+  iob_fp_add #(
       .DATA_W(DATA_W),
       .EXP_W(EXP_W)
   ) uut (
@@ -52,7 +52,7 @@ module iob_fp_mul_tb (
     .res_o(res_o)
   );
 
-  task Mul (input [DATA_W-1:0] m_a, input [DATA_W-1:0] m_b);
+  task Add (input [DATA_W-1:0] m_a, input [DATA_W-1:0] m_b);
   begin
 
     `ADVANCE;
@@ -97,12 +97,12 @@ module iob_fp_mul_tb (
     // special coverage
     for(op_a=0;op_a<4;op_a=op_a+1) begin
         op_a_int = { {(EXP_W+1){op_a[1]}}, {(DATA_W-EXP_W-1){op_a[0]}} };
-        Mul(op_a_int, {DATA_W{1'b0}});
+        Add(op_a_int, {DATA_W{1'b0}});
     end
     op_a_i = 0;
     for(op_b=0;op_b<4;op_b=op_b+1) begin
         op_b_int = { {(EXP_W+1){op_b[1]}}, {(DATA_W-EXP_W-1){op_b[0]}} };
-        Mul({DATA_W{1'b0}}, op_b_int);
+        Add({DATA_W{1'b0}}, op_b_int);
     end
     op_b_i = 0;
 
@@ -111,7 +111,7 @@ module iob_fp_mul_tb (
         op_a_int = (1<<op_a);
         for(op_b=0;op_b<32;op_b=op_b+1) begin
             op_b_int = (1<<op_b);
-            Mul(op_a_int, op_b_int);
+            Add(op_a_int, op_b_int);
         end
     end
 
@@ -120,7 +120,7 @@ module iob_fp_mul_tb (
         op_a_int = (32'hFFFF_FFFF<<op_a);
         for(op_b=0;op_b<32;op_b=op_b+1) begin
             op_b_int = (1<<op_b);
-            Mul(op_a_int, op_b_int);
+            Add(op_a_int, op_b_int);
         end
     end
 
@@ -131,10 +131,10 @@ module iob_fp_mul_tb (
         for(m_b=0;m_b<(2**BOT_MANTISSA_W);m_b=m_b+1) begin
 
             op_b_int = {1'b0, exp[EXP_W-1:0], { {TOP_MANTISSA_W{1'b1}}, {m_b[BOT_MANTISSA_W-1:0]} } };
-            Mul(op_a_int, op_b_int);
+            Add(op_a_int, op_b_int);
 
             op_b_int = {1'b0, exp[EXP_W-1:0], { {TOP_MANTISSA_W{1'b0}}, {m_b[BOT_MANTISSA_W-1:0]} } };
-            Mul(op_a_int, op_b_int);
+            Add(op_a_int, op_b_int);
 
         end
     end
@@ -143,7 +143,7 @@ module iob_fp_mul_tb (
 
     op_a_int = 0;
     op_b_int = 0;
-    Mul(op_a_int, op_b_int);
+    Add(op_a_int, op_b_int);
 
     `ADVANCE;
     rst_i = 1;
@@ -155,3 +155,4 @@ module iob_fp_mul_tb (
   end
 
 endmodule
+// verilator coverage_on
