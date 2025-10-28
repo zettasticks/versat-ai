@@ -39,16 +39,9 @@ module MyFloatAccum #(
 
    wire doAccum = (delay == 0);
 
-   reg [278:0] res;
-
-   localparam MAN_W = 23;
-   localparam EXP_W = 8;
-   localparam BIAS = 2 ** (EXP_W - 1) - 1;
-
    wire [278:0] in0_decoded;
    reg  [278:0] accum;
    reg  doAccum_2;
-   reg [31:0] valueUsedForAccumReset;
 
    // Stage 1 - Decode in0
    FloatToLargeInteger conv (
@@ -56,17 +49,14 @@ module MyFloatAccum #(
       .out_o(in0_decoded)
    );
 
-   reg [DATA_W-1:0] in0_non_decoded_reg;
    reg [278:0] in0_decoded_reg;
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          doAccum_2 <= 0;
          in0_decoded_reg <= 0;
-         in0_non_decoded_reg <= 0;
       end else if (running) begin
          doAccum_2 <= doAccum;
          in0_decoded_reg <= in0_decoded;
-         in0_non_decoded_reg <= in0;
       end
    end
 
@@ -74,11 +64,9 @@ module MyFloatAccum #(
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          accum <= 0;
-         valueUsedForAccumReset <= 0;
       end else begin
          if (doAccum_2) begin
             accum <= in0_decoded_reg;
-            valueUsedForAccumReset <= in0_non_decoded_reg; 
          end else if (running) begin
             accum <= in0_decoded_reg + accum;
          end

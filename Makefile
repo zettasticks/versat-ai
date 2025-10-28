@@ -120,6 +120,7 @@ python-cache-clean:
 
 # Use --fu-dir to list all FUs for linting
 VLINT_FLAGS += --fu-dir ./hardware/src
+VLINT_FLAGS += --fu-dir ./hardware/units
 VLINT_FLAGS += --fu-dir ./submodules/VERSAT/hardware/src/units
 # Use build directory to find all verilog sources and headers
 VLINT_FLAGS += -d ../versat_ai_V0.8/hardware/src

@@ -4,7 +4,6 @@
 
 module F_AccumMax #(
    parameter DATA_W = 32,
-   parameter STRIDE_W = 16,
    parameter DELAY_W = 7
 ) (
    //control
@@ -14,7 +13,7 @@ module F_AccumMax #(
    input run,
    input running,
 
-   input [STRIDE_W-1:0] strideMinusOne,
+   input [DELAY_W-1:0] strideMinusOne,
 
    input [DATA_W-1:0] in0,
 
