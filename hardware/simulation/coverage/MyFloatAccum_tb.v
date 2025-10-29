@@ -88,7 +88,7 @@ module MyFloatAccum_tb (
     `ADVANCE;
     rst_i = 0;
 
-    // input stimulus
+    // input stimuli
     `ADVANCE;
     delay0_i = {DELAY_W{1'b1}};
 
@@ -116,16 +116,16 @@ module MyFloatAccum_tb (
     rst_i = 0;
     `ADVANCE;
 
-    // accum stimulus
+    // accum stimuli
     delay0_i = 0;
     strideMinusOne_i = 0;
     Float_Accum(32'hFF800000);
 
-    for(d=0;d<(2*EXP_W);d=d+1) begin
+    for(d=0;d<(2**EXP_W);d=d+1) begin
       Float_Accum({1'b0, d[EXP_W-1:0], {(32-1-EXP_W-1){1'b0}}, 1'b1 });
     end
 
-    for(d=0;d<(2*EXP_W);d=d+1) begin
+    for(d=0;d<(2**EXP_W);d=d+1) begin
       Float_Accum({1'b1, d[EXP_W-1:0], {(32-1-EXP_W-1){1'b0}}, 1'b1 });
     end
 
@@ -136,7 +136,6 @@ module MyFloatAccum_tb (
     `ADVANCE;
     rst_i = 0;
     `ADVANCE;
-
 
     $finish();
   end
