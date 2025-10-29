@@ -46,7 +46,7 @@ module MyFloatAccum #(
       end else if (|delay) begin
          delay <= delay - 1;
       end else begin
-         delay <= strideMinusOne;
+         delay <= stride_int;
       end
    end
 
