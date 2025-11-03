@@ -731,10 +731,11 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
 
   size_t outputSize = layers[index].outputSize / sizeof(float);
 
-  printf("Gonna check output of layer: %d\n",index);
+  printf("Gonna check output of layer: %d\n", index);
 
   if (outputSize == 0) {
-    printf("Error, AssertAlmostEqual with output size of 0. Should not be possible\n");
+    printf("Error, AssertAlmostEqual with output size of 0. Should not be "
+           "possible\n");
     return;
   }
 

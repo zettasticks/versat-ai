@@ -20,7 +20,7 @@ def setup(py_params: dict):
         "mem_addr_w": mem_addr_w,
         "include_tester": False,
         "cpu": "iob_vexriscv",
-        "fw_addr_w": 19,
+        "fw_addr_w": mem_addr_w,
     }
 
     py_params = {**iob_system_default_overrides, **py_params}

@@ -3,7 +3,7 @@ from versatDefs import *
 import pulp  # TODO: Not sure how stable this is. Helpful for now, later we will see
 import itertools
 
-# Memory allocation is precomputed by transforming it into rectangle fitting, 
+# Memory allocation is precomputed by transforming it into rectangle fitting,
 # where the amount of memory is the width and the allocation time is the height and it is fixed
 
 # TODO: How do we handle graphs that contain variable dimensions?
@@ -14,71 +14,73 @@ import itertools
 #       probably solve this problem by further dividing the memory regions into one section for
 #       each function type.
 
+
 def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocation]):
     # TODO: We are making a very simple algorithm right now. We can always improve this in the future if needed.
     #       In fact, it is preferable since if we find a problem the problematic input can help us find out how best to approach this.
 
-    def GetFirstValidPointAfter(layerIndex,pointToStart):
+    def GetFirstValidPointAfter(layerIndex, pointToStart):
         layer = layers[layerIndex]
 
         currentPoint = pointToStart + 1
 
-        def Collision(point,range):
-            if(point >= range[0] and point < range[1]):
+        def Collision(point, range):
+            if point >= range[0] and point < range[1]:
                 return True
             return False
 
         for range in layer:
-            if(Collision(currentPoint,range)):
+            if Collision(currentPoint, range):
                 currentPoint = range[1]
 
         return currentPoint
 
-# Need to find the first point of collision between two rectangles
-# The collision is always the left point of the rectangle, right?
+    # Need to find the first point of collision between two rectangles
+    # The collision is always the left point of the rectangle, right?
 
-    def FindCollision(layerIndex,point,size):
+    def FindCollision(layerIndex, point, size):
         layer = layers[layerIndex]
         for range in layer:
-            if(point < range[0] and point + size > range[0]):
+            if point < range[0] and point + size > range[0]:
                 return range[0]
         return None
 
-    def AddRegion(layerIndex,point,size):
+    def AddRegion(layerIndex, point, size):
         layer = layers[layerIndex]
-        layer.append([point,point+size])
+        layer.append([point, point + size])
 
-        layer = list(sorted(layer,key = lambda x: x[0]))
+        layer = list(sorted(layer, key=lambda x: x[0]))
 
     # Layers are just a list of ordered ranges. No point making a proper struct for such simple use case
     totalCycles = max([x.lastCycle for x in memoryAllocations])
-    layers: list[list[int|int]] = [[] for x in range(totalCycles)]
-    offsets : list[int] = [None] * (totalCycles - 1)
+    layers: list[list[int | int]] = [[] for x in range(totalCycles)]
+    offsets: list[int] = [None] * (totalCycles - 1)
     totalMemoryNeeded = 0
-    for index,memAlloc in enumerate(memoryAllocations):
+    for index, memAlloc in enumerate(memoryAllocations):
         size = memAlloc.amount
 
         foundFit = False
         currentPoint = -1
-        while(not foundFit):
-            currentPoint = GetFirstValidPointAfter(memAlloc.firstCycle,currentPoint)
+        while not foundFit:
+            currentPoint = GetFirstValidPointAfter(memAlloc.firstCycle, currentPoint)
 
             canFit = True
-            for layer in range(memAlloc.firstCycle + 1,memAlloc.lastCycle):
-                collisionPoint = FindCollision(layer,currentPoint,size)
+            for layer in range(memAlloc.firstCycle + 1, memAlloc.lastCycle):
+                collisionPoint = FindCollision(layer, currentPoint, size)
 
-                if(collisionPoint):
-                    bestValidPoint = GetFirstValidPointAfter(layer,collisionPoint)
+                if collisionPoint:
+                    bestValidPoint = GetFirstValidPointAfter(layer, collisionPoint)
                     canFit = False
 
-            if(canFit):
+            if canFit:
                 foundFit = True
                 offsets[index] = currentPoint
-                totalMemoryNeeded = max(totalMemoryNeeded,currentPoint + size)
-                for layer in range(memAlloc.firstCycle + 1,memAlloc.lastCycle):
-                    AddRegion(layer,currentPoint,size)
+                totalMemoryNeeded = max(totalMemoryNeeded, currentPoint + size)
+                for layer in range(memAlloc.firstCycle + 1, memAlloc.lastCycle):
+                    AddRegion(layer, currentPoint, size)
 
-    return totalMemoryNeeded,offsets
+    return totalMemoryNeeded, offsets
+
 
 # Heavy weight algorithm to calculate the best way of performing memory allocations.
 # We encode the problem as a Integer Linear program and use a solver to find the optimal solution
@@ -157,6 +159,7 @@ def CalculateOptimalMemoryAllocationOffset(memoryAllocations: list[MemoryAllocat
 
     return totalMemoryNeeded, offsets
 
+
 def IndexOfNodesThatUseOutput(cModel, outputName):
     indexes = []
     for index, op in enumerate(cModel.operations):
@@ -164,6 +167,7 @@ def IndexOfNodesThatUseOutput(cModel, outputName):
             if inp.name == outputName:
                 indexes.append(index)
     return indexes
+
 
 def CalculateMemoryAllocations(cModel):
     memoryAllocations = []
@@ -189,14 +193,16 @@ def CalculateMemoryAllocations(cModel):
     # NOTE: The optimal method was not handling generating aligned addresses and I never like it much
     #       because of the large M approach to solving it. If we end up removing do not forget to remove pulp
     #       and the pip install pulp stuff.
-    #totalTempMemoryNeeded, offsets = CalculateOptimalMemoryAllocationOffset(memoryAllocations)
-    totalTempMemoryNeeded, offsets = CalculateGreedyMemoryAllocationOffset(memoryAllocations)
+    # totalTempMemoryNeeded, offsets = CalculateOptimalMemoryAllocationOffset(memoryAllocations)
+    totalTempMemoryNeeded, offsets = CalculateGreedyMemoryAllocationOffset(
+        memoryAllocations
+    )
 
-    print(totalTempMemoryNeeded,offsets)
+    print(totalTempMemoryNeeded, offsets)
 
     # Embedded does not support unaligned memory. Need to be very carefully with all the allocations that are just passed directly to the embedded this way
     for x in offsets:
-        assert(x % 4 == 0)
+        assert x % 4 == 0
 
     cModel.tempMemoryNeeded = totalTempMemoryNeeded
 

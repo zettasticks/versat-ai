@@ -86,7 +86,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     int indexA = Address_GetValue(&inA);
     int indexB = Address_GetValue(&inB);
     int indexO = Address_GetValue(&outGen);
-  
+
     bool broadcastedB = (GetSize(r, d, d - 1) == 0);
 
     for (int offset = 0; offset < lineLength; offset += maxLineSupported) {
