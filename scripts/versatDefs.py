@@ -44,6 +44,9 @@ class DataSource:
     index: int = -1
     # correctInputIndex: int = -1
 
+    def __repr__(self):
+        return self.sourceType.name + " " + str(self.index)
+
 
 class MemoryType(Enum):
     TEMP = auto()
@@ -95,7 +98,10 @@ class Operation:
     outputIndex: int = -1
 
     # Data computed from extracted model.
-    outputMemoryAddress: MemoryLocation = None # Address at runtime. We precalculate it, we do not allocate memory at runtime.
+    outputMemoryAddress: MemoryLocation = (
+        None  # Address at runtime. We precalculate it, we do not allocate memory at runtime.
+    )
+
 
 class BroadcastType(Enum):
     NO_BROADCAST = auto()

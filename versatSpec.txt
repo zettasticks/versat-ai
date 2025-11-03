@@ -115,17 +115,13 @@ module Top_Conv(){
    using(Conv2D_NHWC) VRead features;
    using(Weight2D) VRead weights;
    using(LinearStrided) VRead bias;
-   //Const bias;
    F_Mul muller;
    F_Add addBias;
    MyFloatAccum myAccum;
-   DebugWriteMem debug;
    using(Linear2_NHWC) VWrite output;
 #   
    {weights,features} -> muller:0..1;
    muller -> myAccum;
-      
-   //myAccum -> output;
 
    {myAccum,bias} -> addBias:0..1;
    addBias -> output;

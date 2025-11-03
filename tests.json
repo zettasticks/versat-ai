@@ -14,6 +14,20 @@
     "type": "FIXED",
     "path": "./tests/keyword"
   },
+  "VisualWake": {
+    "type": "FIXED",
+    "path": "./tests/visual_wake"
+  },
+  "Keyword22": {
+    "type": "FIXED",
+    "path": "./tests/keyword",
+    "focusLayer": 22
+  },
+  "Image3": {
+    "type": "FIXED",
+    "path": "./tests/image",
+    "focusLayer": 3
+  },
   "Image22": {
     "type": "FIXED",
     "path": "./tests/image",

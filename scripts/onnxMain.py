@@ -11,9 +11,6 @@ from onnxOperators import *
 from copy import copy
 
 from onnx import shape_inference
-from skl2onnx.helpers.onnx_helper import enumerate_model_node_outputs
-from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
-from skl2onnx.helpers.onnx_helper import save_onnx_model
 from functools import reduce
 from pprint import pprint
 
@@ -27,7 +24,7 @@ from onnx import __version__, IR_VERSION
 from onnx.defs import onnx_opset_version
 from onnx import numpy_helper
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 # Nodes have either inputs from other nodes or initializers, which are the constant values embedded in the model.
@@ -126,7 +123,8 @@ def PackMultipleArrays(arrayList, endianess: Endianess = Endianess.NATIVE):
 
     return PackedArrays(data, offsets)
 
-def RemoveContentExcept(packed : PackedArrays, indexesToPreserve : list[int]):
+
+def RemoveContentExcept(packed: PackedArrays, indexesToPreserve: list[int]):
     content = bytearray()
 
     newOffsets = []
@@ -134,7 +132,7 @@ def RemoveContentExcept(packed : PackedArrays, indexesToPreserve : list[int]):
         offset = packed.offsets[index]
 
         nextOffset = 0
-        if(index < len(packed.offsets)):
+        if index + 1 < len(packed.offsets):
             nextOffset = packed.offsets[index + 1]
         else:
             nextOffset = len(packed.data)
@@ -143,10 +141,11 @@ def RemoveContentExcept(packed : PackedArrays, indexesToPreserve : list[int]):
         content = content + packed.data[offset:nextOffset]
         newOffsets.append(newOff)
 
-    if(len(newOffsets)):
-        return PackedArrays(content,newOffsets)
+    if len(newOffsets):
+        return PackedArrays(content, newOffsets)
     else:
-        return PackedArrays(bytearray(),[])
+        return PackedArrays(bytearray(), [])
+
 
 def IndexOfNodeThatProducesOutput(cModel, outputName):
     for index, op in enumerate(cModel.operations):
@@ -248,7 +247,7 @@ def GenerateModelFromOnnxModel(onnxModel):
         )
         cModel.operations.append(op)
 
-    for index,c in enumerate(cModel.operations):
+    for index, c in enumerate(cModel.operations):
         c.outputIndex = index
 
     # Calculate initializer position
@@ -267,27 +266,21 @@ def GenerateModelFromOnnxModel(onnxModel):
 
     allInputsShapes = sum([port.shape for port in cModel.modelInputs], [])
 
-    # TODO: Currently we force variable sizes to 1 in here
     mapped = {}
-    forcedSize = 1
-
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
             if type(name) == str:
-                port.shape[i] = mapped.get(name, forcedSize)
-                mapped[name] = port.shape[i]
+                mapped[name] = True
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
                 if type(name) == str:
-                    inputs[i] = mapped.get(name, forcedSize)
-                    mapped[name] = inputs[i]
+                    mapped[name] = True
 
         for i, name in enumerate(op.outputDimensions):
             if type(name) == str:
-                op.outputDimensions[i] = mapped.get(name, forcedSize)
-                mapped[name] = op.outputDimensions[i]
+                mapped[name] = True
 
     for name in mapped.keys():
         if name in allInputsShapes:
@@ -295,7 +288,51 @@ def GenerateModelFromOnnxModel(onnxModel):
         else:
             print(f"{name} is not an input")
 
-    CalculateMemoryAllocations(cModel)
+    return cModel
+
+
+def GetModelFreeParameters(cModel):
+    params = {}
+
+    for port in cModel.modelInputs:
+        for i, name in enumerate(port.shape):
+            if type(name) == str:
+                params[name] = True
+
+    for op in cModel.operations:
+        for inputs in op.inputDimensions:
+            for i, name in enumerate(inputs):
+                if type(name) == str:
+                    params[name] = True
+
+        for i, name in enumerate(op.outputDimensions):
+            if type(name) == str:
+                params[name] = True
+
+    return params
+
+
+def RestrictModelFreeParameter(cModel, paramValue):
+    # TODO: Currently we force variable sizes to 1 in here
+    mapped = {}
+
+    for port in cModel.modelInputs:
+        for i, name in enumerate(port.shape):
+            if type(name) == str:
+                port.shape[i] = mapped.get(name, paramValue)
+                mapped[name] = port.shape[i]
+
+    for op in cModel.operations:
+        for inputs in op.inputDimensions:
+            for i, name in enumerate(inputs):
+                if type(name) == str:
+                    inputs[i] = mapped.get(name, paramValue)
+                    mapped[name] = inputs[i]
+
+        for i, name in enumerate(op.outputDimensions):
+            if type(name) == str:
+                op.outputDimensions[i] = mapped.get(name, paramValue)
+                mapped[name] = op.outputDimensions[i]
 
     return cModel
 
@@ -391,7 +428,13 @@ def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
     return modified
 
 
-def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sourceOutputLocation: str,focusLayer: int):
+def GenerateDebug(
+    testLocation: str,
+    modelName: str,
+    binOutputLocation: str,
+    sourceOutputLocation: str,
+    focusLayer: int = None,
+):
     print(
         f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}"
     )
@@ -449,6 +492,37 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
 
     cModel = GenerateModelFromOnnxModel(model)
 
+    freeParameters = GetModelFreeParameters(cModel)
+
+    if len(freeParameters) > 0:
+        # NOTE: Currently we assume that all free parameters are the same value.
+        #       All the testbenches that we have work on this assumption and I do not know if we can have a model where this assumption does not hold.
+        #       We are also assuming that we only have a single free parameter as input. Need to see a model where this assumption does not hold in order to
+        #       then decide on the proper way of progressing.
+        # assert len(freeParameters) <= 1
+
+        # We match the parameter to the input and then we instantiate the model with it. No runtime handling of free parameters
+        # We do not know it if we need to generate code that can handle this at runtime. Worry about it later, for now we need to make this work on the board first before handling stuff like that.
+        freeParameterValue = 1
+        for op in cModel.operations:
+            for inp in op.inputs:
+                if inp.sourceType == DataSourceType.MODEL_INPUT:
+                    inputIndex = inp.index
+                    inputDims = op.inputDimensions[inputIndex]
+
+                    inputShape = inputs[0].shape
+
+                    for index in range(len(inputShape)):
+                        if type(inputDims[index]) == str:
+                            freeParameterValue = inputShape[index]
+
+        cModel = RestrictModelFreeParameter(cModel, freeParameterValue)
+
+    CalculateMemoryAllocations(cModel)
+
+    for c in cModel.operations:
+        print(c.opName, c.inputDimensions)
+
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
     # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
     result = RunModel(cModel, inputs)
@@ -458,11 +532,11 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
     packedCorrectData = PackMultipleArrays(correctData)
     packedInitializers = PackMultipleArrays(cModel.initializers)
 
-    if(focusLayer):
+    if focusLayer:
         op = cModel.operations[focusLayer]
         cModel.operations = [op]
 
-        op.outputMemoryAddress = MemoryLocation(0,MemoryType.OUTPUT)
+        op.outputMemoryAddress = MemoryLocation(0, MemoryType.OUTPUT)
 
         inputIndexes = []
         nodeInputIndexes = []
@@ -472,37 +546,49 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
         newNodeInputIndex = 0
         newInitializerIndex = 0
         for inp in op.inputs:
-            if(inp.sourceType == DataSourceType.MODEL_INPUT):
+            if inp.sourceType == DataSourceType.MODEL_INPUT:
                 inputIndexes.append(inp.index)
                 inp.index = newInputIndex
                 newInputIndex += 1
-            if(inp.sourceType == DataSourceType.NODE_INPUT):
+            if inp.sourceType == DataSourceType.NODE_INPUT:
                 nodeInputIndexes.append(inp.index)
                 inp.index = newNodeInputIndex
                 newNodeInputIndex += 1
-            if(inp.sourceType == DataSourceType.INITIALIZER):
+            if inp.sourceType == DataSourceType.INITIALIZER:
                 initializersIndexes.append(inp.index)
                 inp.index = newInitializerIndex
                 newInitializerIndex += 1
 
-
         op.outputIndex = newNodeInputIndex
         nodeInputIndexes.append(focusLayer)
 
-        packedInputs = RemoveContentExcept(packedInputs,inputIndexes)
-        packedCorrectData = RemoveContentExcept(packedCorrectData,nodeInputIndexes)
-        packedInitializers = RemoveContentExcept(packedInitializers,initializersIndexes)
+        packedInputs = RemoveContentExcept(packedInputs, inputIndexes)
+        packedCorrectData = RemoveContentExcept(packedCorrectData, nodeInputIndexes)
+        packedInitializers = RemoveContentExcept(
+            packedInitializers, initializersIndexes
+        )
+
+        if len(packedInputs.data) == 0:
+            cModel.modelInputs = []
 
     with open(os.path.join(sourceOutputLocation, "code.c"), "w") as f:
         f.write('#include "versat_ai.h"\n')
-        f.write('#include "stdint.h"\n')
+        f.write('#include "stdint.h"\n\n')
+        f.write("#ifndef PC\n")
+        f.write('#include "iob_printf.h"\n')
+        f.write("#else\n")
+        f.write('#include "stdio.h"\n')
+        f.write("#endif\n\n")
 
         f.write(f"int numberLayers = {len(cModel.operations)};\n")
 
         layerInfo = []
+
         for index, c in enumerate(cModel.operations):
             outputSize = TensorSize(c.outputDimensions)
-            layerInfo.append("{" + f'"{c.nodeName}","{c.opName}",{outputSize}' + "}")
+            layerInfo.append(
+                "{" + f'"{c.nodeName}","{OperationToLayerName(c)}",{outputSize}' + "}"
+            )
 
         f.write("LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
 
@@ -547,9 +633,8 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
                 + "};\n"
             )
 
-        f.write("\n")
         f.write(
-            "InferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){\n"
+            "\nInferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){\n"
         )
 
         debugging = True
@@ -579,22 +664,14 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
             else:
                 outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
 
+            functionName = OperationToFunctionName(c)
+
             opIndex = opSeen.get(c.opName, -1) + 1
             opSeen[c.opName] = opIndex
-
-            # TODO: Just move spec to inside the operator and have the parse function initialize it.
-            spec = GetOperatorSpec(c.opName)
-            decider = "Software_" if not spec.generateVersatCode else "Versat_"
-
-            opName = c.opName
-            if opName == "Conv":
-                if len(c.inputs) == 3:
-                    opName = "ConvWithBias"
-
+            f.write(f'  printf("Gonna run layer {index}\\n");\n')
             f.write(
                 f"  void* res_{index} = "
-                + decider
-                + opName
+                + functionName
                 + "("
                 + ",".join(content)
                 + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"
@@ -614,17 +691,25 @@ def GenerateDebug(testLocation: str, modelName: str, binOutputLocation: str, sou
         f.write(f"#define VERSAT_AI_CORRECT_SIZE {len(packedCorrectData.data)}\n")
         f.write(f"#define VERSAT_AI_N_INPUTS {len(cModel.modelInputs)}\n")
 
-        inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
-        inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
+        if len(cModel.modelInputs) > 0:
+            inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
+            inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
 
-        for index, size in enumerate(inputSizes):
-            f.write(f"#define VERSAT_AI_INPUT_{index}_SIZE {size}\n")
+            for index, size in enumerate(inputSizes):
+                f.write(f"#define VERSAT_AI_INPUT_{index}_SIZE {size}\n")
 
-        f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE {totalInputSize}\n")
+            f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE {totalInputSize}\n")
 
-        f.write("const int VERSAT_AI_INPUT_OFFSET[] = {")
-        f.write(",".join([str(x) for x in inputOffsets]))
-        f.write("};\n")
+            f.write("const int VERSAT_AI_INPUT_OFFSET[] = {")
+            f.write(",".join([str(x) for x in inputOffsets]))
+            f.write("};\n")
+
+        else:
+            # We output a fake 0 input size so that the C code does not need to changed based on this
+            f.write(f"#define VERSAT_AI_INPUT_0_SIZE 0\n")
+            f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE 0\n")
+
+            f.write("const int VERSAT_AI_INPUT_OFFSET[] = {0};")
 
     try:
         os.makedirs(binOutputLocation)

@@ -11,7 +11,7 @@
 #define MIN(A, B) (((A < B) ? (A) : (B)))
 #define MAX(A, B) (((A > B) ? (A) : (B)))
 
-void clear_cache();
+void silent_clear_cache();
 
 typedef union {
   iptr i;
@@ -51,8 +51,6 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
 
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
-  printf("[Add] Using Versat\n");
-
   int64_t *l = info->firstInputDim;
   int64_t *r = info->secondInputDim;
   int64_t *o = info->broadCastedShape;
@@ -88,7 +86,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     int indexA = Address_GetValue(&inA);
     int indexB = Address_GetValue(&inB);
     int indexO = Address_GetValue(&outGen);
-
+  
     bool broadcastedB = (GetSize(r, d, d - 1) == 0);
 
     for (int offset = 0; offset < lineLength; offset += maxLineSupported) {
@@ -119,8 +117,6 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
 }
 
 void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
-  printf("[Relu] Using Versat\n");
-
   volatile Top_ReluConfig *config = &accelConfig->Top_Relu;
   ActivateMergedAccelerator(MergeType_Top_Relu);
 
@@ -152,8 +148,6 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info) {
-  printf("[Reshape] Using Versat\n");
-
   return data;
 }
 
@@ -516,7 +510,6 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
                  w.outputW, w.outputH, outputImageW, stride);
 
   config->accum.strideMinusOne = stride - 1;
-  EndAccelerator();
   StartAccelerator();
 }
 
@@ -649,7 +642,6 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
 
   config->averagePool_accum.strideMinusOne = stride - 1;
   config->invertedDivisor.constant = NoConvert(1.0f / (float)stride);
-  EndAccelerator();
   StartAccelerator();
 }
 
@@ -889,8 +881,10 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
                  w.actualKernelW, w.actualKernelH, kernelW, kernelH,
                  inputImageC, kernelChannelSize, outputImageC, convStartC);
 
+#if 1
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
                       w.outputW, 0, outputImageC, outputImageW, stride);
+#endif
 
   if (bias == NULL) {
     static float bias = 0.0f;
@@ -901,7 +895,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   config->myAccum.strideMinusOne = stride - 1;
 
-  EndAccelerator();
   StartAccelerator();
 }
 
@@ -913,8 +906,6 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           void *output, int index, ConvInfo *info) {
   forceDoubleLoop = true;
-
-  printf("[Versat Conv]\n");
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
@@ -1028,7 +1019,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         config->bias.enabled = 0;
         RunAccelerator(2);
 
-        clear_cache();
+        silent_clear_cache();
 
         // We obtain the result in NHWC format and we need to "concatenate" this
         // with the output that we are building.
@@ -1091,7 +1082,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       float *outputView = (float *)output;
       outputView += batch * outputSize;
 
-      clear_cache();
+      silent_clear_cache();
 
       // Convert NHWC to NCHW
       for (int c = 0; c < outputChannels; c++) {
@@ -1150,7 +1141,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
     }
   }
 
-  clear_cache();
+  silent_clear_cache();
 
   for (int y = 0; y < OH; y++) {
     for (int x = 0; x < OW; x++) {
@@ -1165,7 +1156,6 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 
       config->myAccum.strideMinusOne = AW - 1;
 
-      EndAccelerator();
       StartAccelerator();
     }
   }

@@ -258,12 +258,16 @@ module SimpleAXItoAXIWrite #(
                if(axi_bvalid_i) begin
                   axi_bready <= 1'b0;
 
-                  if (totalTransferLength == 0) begin
-                     state <= 3'h0;
-                  end else begin
-                     state <= 3'h1;
-                     first_transfer <= 1'b0;
-                  end
+                  // Ony cycle delay between transfers because we could be hitting a bug where the interconnect takes an extra cycle switching masters. 
+                  state <= 3'h5;
+               end
+            end
+            3'h5: begin
+               if (totalTransferLength == 0) begin
+                  state <= 3'h0;
+               end else begin
+                  state <= 3'h1;
+                  first_transfer <= 1'b0;
                end
             end
             default: begin

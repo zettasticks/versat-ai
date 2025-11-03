@@ -7,10 +7,11 @@ import subprocess as sp
 from enum import Enum, auto
 from dataclasses import dataclass
 
-sys.path.append('./scripts')
+sys.path.append("./scripts")
 
 from generateSimpleTests import GenerateSimpleTest
 from onnxMain import GenerateDebug
+
 
 class TestType(Enum):
     GENERATED = (auto(),)
@@ -23,15 +24,17 @@ class Test:
     path: str = None
     focusLayer: int | None = None
 
+
 def ValidateTest(test: Test):
     if test.type == TestType.FIXED:
         assert test.path != None
+
 
 def ParseTest(testJsonContent):
     try:
         testType = TestType[testJsonContent["type"]]
         path = testJsonContent.get("path", None)
-        focusLayer = testJsonContent.get("focusLayer",None)
+        focusLayer = testJsonContent.get("focusLayer", None)
 
         test = Test(testType, path, focusLayer)
         ValidateTest(test)
@@ -82,7 +85,8 @@ if __name__ == "__main__":
 
     if test.type == TestType.GENERATED:
         GenerateSimpleTest("./tests/generated/")
-        GenerateDebug("tests/generated/","model.onnx","software/","software/src")
+        GenerateDebug("tests/generated/", "model.onnx", "software/", "software/src")
     else:
-        GenerateDebug(test.path,"model.onnx","software/","software/src",test.focusLayer)
-
+        GenerateDebug(
+            test.path, "model.onnx", "software/", "software/src", test.focusLayer
+        )
