@@ -5,7 +5,6 @@
 // We expect this to be float
 module F_AccumMax #(
    parameter DATA_W = 32,
-   parameter STRIDE_W = 16,
    parameter DELAY_W = 7
 ) (
    //control
@@ -15,11 +14,11 @@ module F_AccumMax #(
    input run,
    input running,
 
-   input [STRIDE_W-1:0] strideMinusOne,
+   input [DELAY_W-1:0] strideMinusOne,
 
    input [DATA_W-1:0] in0,
 
-   (* versat_latency = 1 *) output [31:0] out0,
+   (* versat_latency = 1 *) output [DATA_W-1:0] out0,
 
    input [DELAY_W-1:0] delay0
 );

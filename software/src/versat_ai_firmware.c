@@ -25,6 +25,7 @@
 
 #ifdef PC
 #include <stdio.h>
+#include <unistd.h> // for sleep()
 long int GetFileSize(FILE *file) {
   long int mark = ftell(file);
 
