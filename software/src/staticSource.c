@@ -725,11 +725,12 @@ int64_t CalculateSizeOfDim(int64_t *dim, int dims) {
   return size;
 }
 
-void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
+void AssertAlmostEqual(void *toTest, void *correctValues, int index,
+                       LayerInfo *info) {
   float *test = (float *)toTest;
   float *correct = (float *)correctValues;
 
-  size_t outputSize = layers[index].outputSize / sizeof(float);
+  size_t outputSize = info->outputSize / sizeof(float);
 
   printf("Gonna check output of layer: %d\n", index);
 
@@ -750,7 +751,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
     if (absf(correct[i] - test[i]) > 0.001f) {
       if (incorrectFound == 0) {
         printf("\n");
-        printf("[%s] (Layer %d) FAIL:\n", layers[index].typeName, index);
+        printf("[%s] (Layer %d) FAIL:\n", info->typeName, index);
       }
       printf("  Index: %4d Different values %.4f %.4f\n", i, correct[i],
              test[i]);
@@ -768,7 +769,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index) {
   }
 
   if (printOk && incorrectFound == 0) {
-    printf("[%s] (Layer %d) - OK\n", layers[index].typeName, index);
+    printf("[%s] (Layer %d) - OK\n", info->typeName, index);
   }
 }
 

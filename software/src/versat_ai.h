@@ -161,8 +161,8 @@ typedef struct {
   int permSize;
 } TransposeInfo;
 
-extern LayerInfo layers[];
-extern int numberLayers;
+// extern LayerInfo layers[];
+// extern int numberLayers;
 
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
@@ -204,18 +204,31 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info);
 void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info);
 
-void AssertAlmostEqual(void *toTest, void *correctValues, int index);
+void AssertAlmostEqual(void *toTest, void *correctValues, int index,
+                       LayerInfo *info);
 
 int64_t CalculateSizeOfDim(int64_t *dim, int dims);
 
-// Output and Temporary memory must be allocated by the user. Call the
-// GetXXXMemorySize functions to obtain the amount of memory required. Model
-// memory is memory that contains a loaded model (provided by a binary file that
-// must be read at runtime).
-InferenceOutput RunInference(void *outputMemory, void *temporaryMemory,
-                             void **inputs, void *modelMemory);
-InferenceOutput DebugRunInference(void *outputMemory, void *temporaryMemory,
-                                  void **inputs, void *modelMemory,
-                                  void *correctInput);
+typedef InferenceOutput (*RunInferenceFunction)(void *outputMemory,
+                                                void *temporaryMemory,
+                                                void **inputs,
+                                                void *modelMemory,
+                                                void *correctInput);
+
+typedef struct {
+  int outputSize;
+  int tempSize;
+  int modelSize;
+  int correctSize;
+  int totalInputSize;
+
+  const char *namespace;
+
+  int inputCount;
+  const int *inputSizes;
+  const int *inputOffsets;
+
+  RunInferenceFunction debugInferenceFunction;
+} TestModelInfo;
 
 #endif // INCLUDED_VERSAT_AI

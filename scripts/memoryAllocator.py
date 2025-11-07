@@ -20,23 +20,18 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
     #       In fact, it is preferable since if we find a problem the problematic input can help us find out how best to approach this.
 
     def GetFirstValidPointAfter(layerIndex, pointToStart):
-        layer = layers[layerIndex]
-
-        currentPoint = pointToStart + 1
-
         def Collision(point, range):
             if point >= range[0] and point < range[1]:
                 return True
             return False
 
+        layer = layers[layerIndex]
+        currentPoint = pointToStart + 1
         for range in layer:
             if Collision(currentPoint, range):
                 currentPoint = range[1]
 
         return currentPoint
-
-    # Need to find the first point of collision between two rectangles
-    # The collision is always the left point of the rectangle, right?
 
     def FindCollision(layerIndex, point, size):
         layer = layers[layerIndex]
@@ -49,7 +44,11 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
         layer = layers[layerIndex]
         layer.append([point, point + size])
 
+        # Slow
         layer = list(sorted(layer, key=lambda x: x[0]))
+
+    if not memoryAllocations:
+        return 0, []
 
     # Layers are just a list of ordered ranges. No point making a proper struct for such simple use case
     totalCycles = max([x.lastCycle for x in memoryAllocations])

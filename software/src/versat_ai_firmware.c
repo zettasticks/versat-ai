@@ -17,11 +17,14 @@
 #include "iob_eth.h"
 #endif
 
-#include "modelInfo.h"
 #include "versat_ai.h"
 
 // Contains a set of defines for each test type.
 #include "testInfo.h"
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
+#endif
 
 #ifdef PC
 #include <stdio.h>
@@ -71,11 +74,15 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
 }
 #endif
 
-void FastReceiveFile(const char *path, void *buffer, int expectedSize) {
+void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
+                     int expectedSize) {
+  char fullPath[128];
+  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
+
 #ifdef PC
-  FILE *f = fopen(path, "r");
+  FILE *f = fopen(fullPath, "r");
   if (!f) {
-    printf("Problem opening file for reading: %s\n", path);
+    printf("Problem opening file for reading: %s\n", fullPath);
     return;
   }
 
@@ -83,7 +90,7 @@ void FastReceiveFile(const char *path, void *buffer, int expectedSize) {
   fread(buffer, sizeof(char), size, f);
   fclose(f);
 #else
-  ethernet_receive_file(path, buffer, expectedSize);
+  ethernet_receive_file(fullPath, buffer, expectedSize);
 #endif
 }
 
@@ -152,55 +159,69 @@ int main() {
 
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
-  int extra = 100;
+  int extra = 10;
 
-  void *output = Align4(malloc(VERSAT_AI_OUTPUT_SIZE + extra));
-  void *temp = Align4(malloc(VERSAT_AI_TEMP_SIZE + extra));
-  void *model = Align4(malloc(VERSAT_AI_MODEL_SIZE + extra));
-  void *correct = Align4(malloc(VERSAT_AI_CORRECT_SIZE + extra));
-  void *inputMemory = Align4(malloc(VERSAT_AI_ALL_INPUTS_SIZE + extra));
+  for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
+    TestModelInfo info = *testModels[i];
 
-  void *inputs[VERSAT_AI_N_INPUTS];
-  for (int i = 0; i < VERSAT_AI_N_INPUTS; i++) {
-    inputs[i] = OFFSET_PTR(inputMemory, VERSAT_AI_INPUT_OFFSET[i]);
+    printf("\n\n");
+    printf("\n==============================\n");
+    printf("Gonna run the full test named: %s", info.namespace);
+    printf("\n==============================\n");
+
+    // TODO: Arena stuff, using malloc so much is starting to scare me.
+
+    void *output = Align4(malloc(info.outputSize + extra));
+    void *temp = Align4(malloc(info.tempSize + extra));
+    void *model = Align4(malloc(info.modelSize + extra));
+    void *correct = Align4(malloc(info.correctSize + extra));
+    void *inputMemory = Align4(malloc(info.totalInputSize + extra));
+
+    void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
+    for (int i = 0; i < info.inputCount; i++) {
+      inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
+    }
+
+    printf("Output : %p\n", output);
+    printf("Temp   : %p\n", temp);
+    printf("Model  : %p\n", model);
+    printf("Correct: %p\n", correct);
+    printf("Input  : %p\n", inputMemory);
+
+    void *total = inputs[info.inputCount - 1];
+    printf("Total  : %p\n", total);
+
+    if (total > &stackVar) {
+      printf(
+          "Error, we run out of memory, increase the value of firm_w argument "
+          "and setup again\n");
+      uart_finish();
+      return 0;
+    }
+
+    FastReceiveFile(info.namespace, "correctOutputs.bin", correct,
+                    info.correctSize);
+    printf("Received correct outputs\n");
+    FastReceiveFile(info.namespace, "model.bin", model, info.modelSize);
+    printf("Received model\n");
+    FastReceiveFile(info.namespace, "inputs.bin", inputMemory,
+                    info.totalInputSize);
+    printf("Received inputs\n");
+
+    info.debugInferenceFunction(output, temp, inputs, model, correct);
+
+    free(output);
+    free(temp);
+    free(model);
+    free(correct);
+    free(inputMemory);
   }
-
-  printf("Output : %p\n", output);
-  printf("Temp   : %p\n", temp);
-  printf("Model  : %p\n", model);
-  printf("Correct: %p\n", correct);
-  printf("Input  : %p\n", inputMemory);
-
-  void *total = ((void *)((char *)inputMemory) + VERSAT_AI_ALL_INPUTS_SIZE);
-  printf("Total  : %p\n", total);
-
-  if (total > &stackVar) {
-    printf("Error, we run out of memory, increase the value of firm_w argument "
-           "and setup again\n");
-    uart_finish();
-    return 0;
-  }
-
-  FastReceiveFile("correctOutputs.bin", correct, VERSAT_AI_OUTPUT_SIZE);
-  printf("Received correct outputs\n");
-  FastReceiveFile("model.bin", model, VERSAT_AI_MODEL_SIZE);
-  printf("Received model\n");
-  FastReceiveFile("inputs.bin", inputMemory, VERSAT_AI_ALL_INPUTS_SIZE);
-  printf("Received inputs\n");
-
-  DebugRunInference(output, temp, inputs, model, correct);
 
 #ifdef PC
   sleep(1);
 #endif
 
   uart_sendfile("test.log", strlen(pass_string), pass_string);
-
-  free(output);
-  free(temp);
-  free(model);
-  free(correct);
-  free(inputMemory);
 
   // read current timer count, compute elapsed time
   unsigned long long elapsed = timer_get_count();

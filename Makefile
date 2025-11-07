@@ -163,11 +163,13 @@ lint-all-fus: clean $(VERSAT_ACCEL)
 FU?=iob_fp_clz
 lint-fu: clean $(VERSAT_ACCEL)
 	python3 ./setupTest.py Generated
+	$(MAKE) test-setup
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS) --fu $(FU)"
 	cat lint.rpt
 
 coverage-all-fus: clean $(VERSAT_ACCEL)
 	python3 ./setupTest.py Generated
+	$(MAKE) test-setup
 	nix-shell --run "make -C ../versat_ai_V0.8/hardware/simulation/coverage all"
 
 .PHONY: setup full-clean clean python-cache-clean

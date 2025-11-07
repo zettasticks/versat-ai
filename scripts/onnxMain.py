@@ -384,7 +384,7 @@ class CDataEmitter:
             data = tarray.data
 
             content += (
-                f"{dtype} temp_{index}[] = "
+                f"static {dtype} temp_{index}[] = "
                 + "{"
                 + ",".join(ItemRepr(x) for x in data)
                 + "};\n"
@@ -397,7 +397,7 @@ class CDataEmitter:
             amount = len(tarray.data)
 
             content += (
-                f"{dtype} {name}[{amount}] = "
+                f"static {dtype} {name}[{amount}] = "
                 + "{"
                 + ",".join(ItemRepr(x) for x in data)
                 + "};\n"
@@ -433,8 +433,20 @@ def GenerateDebug(
     modelName: str,
     binOutputLocation: str,
     sourceOutputLocation: str,
+    namespace: str,
     focusLayer: int = None,
 ):
+    # TODO: It would be better if we could check all the inputs for correctness.
+
+    if type(namespace) != str and not namespace.isidentifier():
+        print("Need a valid namespace name. Needs to follow identifier rules")
+        sys.exit(0)
+    if len(namespace) > 32:
+        print(
+            "Error, namespace cannot be larger than 32 bytes. Choose a more reasonable namespace name"
+        )
+        sys.exit(0)
+
     print(
         f"onnx.__version__={__version__!r}, opset={onnx_opset_version()}, IR_VERSION={IR_VERSION}"
     )
@@ -571,16 +583,13 @@ def GenerateDebug(
         if len(packedInputs.data) == 0:
             cModel.modelInputs = []
 
-    with open(os.path.join(sourceOutputLocation, "code.c"), "w") as f:
+    debugging = True
+    with open(os.path.join(sourceOutputLocation, f"{namespace}_code.c"), "w") as f:
         f.write('#include "versat_ai.h"\n')
         f.write('#include "stdint.h"\n\n')
-        f.write("#ifndef PC\n")
-        f.write('#include "iob_printf.h"\n')
-        f.write("#else\n")
-        f.write('#include "stdio.h"\n')
-        f.write("#endif\n\n")
+        f.write('#include "iob_printf.h"\n\n')
 
-        f.write(f"int numberLayers = {len(cModel.operations)};\n")
+        f.write(f"static int numberLayers = {len(cModel.operations)};\n")
 
         layerInfo = []
 
@@ -590,7 +599,7 @@ def GenerateDebug(
                 "{" + f'"{c.nodeName}","{OperationToLayerName(c)}",{outputSize}' + "}"
             )
 
-        f.write("LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
+        f.write("static LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
 
         opcodeToOperationList = {}
         for index, c in enumerate(cModel.operations):
@@ -634,10 +643,10 @@ def GenerateDebug(
             )
 
         f.write(
-            "\nInferenceOutput DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput){\n"
+            f"\nInferenceOutput {namespace}_DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput)"
+            + "{\n"
         )
 
-        debugging = True
         opSeen = {}
         for index, c in enumerate(cModel.operations):
             content = []
@@ -678,61 +687,87 @@ def GenerateDebug(
             )
             if debugging and (IsOperatorRegistered(c.opName)):
                 f.write(
-                    f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index});\n"
+                    f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
                 )
         f.write("  return (InferenceOutput){};\n")
         f.write("}\n")
 
-    with open(os.path.join(sourceOutputLocation, "modelInfo.h"), "w") as f:
+    correctDataSize = 0
+    inputSize = 0
+
+    if debugging:
+        correctDataSize = len(packedCorrectData.data)
+        inputSize = len(cModel.modelInputs)
+
+    with open(os.path.join(sourceOutputLocation, f"{namespace}_modelInfo.h"), "w") as f:
         f.write("#pragma once\n")
-        f.write(f"#define VERSAT_AI_OUTPUT_SIZE {cModel.outputMemoryNeeded}\n")
-        f.write(f"#define VERSAT_AI_TEMP_SIZE {cModel.tempMemoryNeeded}\n")
-        f.write(f"#define VERSAT_AI_MODEL_SIZE {len(packedInitializers.data)}\n")
-        f.write(f"#define VERSAT_AI_CORRECT_SIZE {len(packedCorrectData.data)}\n")
-        f.write(f"#define VERSAT_AI_N_INPUTS {len(cModel.modelInputs)}\n")
+
+        f.write('#include "versat_ai.h"\n\n')
+
+        totalInputSize = 0
+        inputOffsets = [0]
+        inputSizes = [0]
 
         if len(cModel.modelInputs) > 0:
             inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
             inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
 
-            for index, size in enumerate(inputSizes):
-                f.write(f"#define VERSAT_AI_INPUT_{index}_SIZE {size}\n")
+        f.write(f"const int {namespace}_INPUT_SIZE[] = " + "{")
+        f.write(",".join([str(x) for x in inputSizes]))
+        f.write("};\n")
 
-            f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE {totalInputSize}\n")
+        f.write(f"const int {namespace}_INPUT_OFFSET[] = " + "{")
+        f.write(",".join([str(x) for x in inputOffsets]))
+        f.write("};\n\n")
 
-            f.write("const int VERSAT_AI_INPUT_OFFSET[] = {")
-            f.write(",".join([str(x) for x in inputOffsets]))
-            f.write("};\n")
+        f.write(
+            f"InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
+        )
 
-        else:
-            # We output a fake 0 input size so that the C code does not need to changed based on this
-            f.write(f"#define VERSAT_AI_INPUT_0_SIZE 0\n")
-            f.write(f"#define VERSAT_AI_ALL_INPUTS_SIZE 0\n")
+        f.write(f"static TestModelInfo {namespace}_ModelInfo = " + "{\n")
+        f.write(f"  .outputSize = {cModel.outputMemoryNeeded},\n")
+        f.write(f"  .tempSize = {cModel.tempMemoryNeeded},\n")
+        f.write(f"  .modelSize = {len(packedInitializers.data)},\n")
+        f.write(f"  .correctSize = {correctDataSize},\n")
+        f.write(f"  .totalInputSize = {totalInputSize},\n")
+        f.write(f"  .inputCount = {inputSize},\n")
 
-            f.write("const int VERSAT_AI_INPUT_OFFSET[] = {0};")
+        f.write(f'  .namespace = "{namespace}",\n')
 
+        f.write(f"  .debugInferenceFunction = {namespace}_DebugRunInference,\n")
+
+        f.write(f"  .inputSizes = {namespace}_INPUT_SIZE,\n")
+        f.write(f"  .inputOffsets = {namespace}_INPUT_OFFSET\n")
+        f.write("};\n")
     try:
         os.makedirs(binOutputLocation)
     except:
         pass
 
-    with open(os.path.join(binOutputLocation, "inputs.bin"), "wb") as f:
-        f.write(packedInputs.data)
+    if debugging:
+        with open(
+            os.path.join(binOutputLocation, f"{namespace}_inputs.bin"), "wb"
+        ) as f:
+            f.write(packedInputs.data)
 
-    with open(os.path.join(binOutputLocation, "correctOutputs.bin"), "wb") as f:
-        f.write(packedCorrectData.data)
+        with open(
+            os.path.join(binOutputLocation, f"{namespace}_correctOutputs.bin"), "wb"
+        ) as f:
+            f.write(packedCorrectData.data)
 
-    with open(os.path.join(binOutputLocation, "model.bin"), "wb") as f:
+    with open(os.path.join(binOutputLocation, f"{namespace}_model.bin"), "wb") as f:
         f.write(packedInitializers.data)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
+    if len(sys.argv) < 6:
         print(
-            "Error, script requires 4 parameters, <testLocation> <modelName> <binOutputLocation> <sourceOutputLocation>"
+            "Error, script requires 5 parameters, <testLocation> <modelName> <binOutputLocation> <sourceOutputLocation> <namespaceName>"
         )
         sys.exit(0)
-    GenerateDebug(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    GenerateDebug(
+        sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], None, namespaceName
+    )
 
 # TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
 
