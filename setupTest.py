@@ -18,9 +18,14 @@ from onnxMain import GenerateDebug
 
 
 class TestType(Enum):
-    GENERATED = (auto(),)
+    GENERATED = auto()
     FIXED = auto()
     FIXED_LIST = auto()
+
+
+class TestMode(Enum):
+    SOFTWARE = auto()
+    VERSAT = auto()
 
 
 @dataclass
@@ -33,6 +38,7 @@ class SubTest:
 @dataclass
 class Test:
     type: TestType
+    mode: TestMode
     subTest: list[SubTest] = None
 
 
@@ -53,6 +59,11 @@ def ParseTest(testName, testInfo):
         testJsonContent = testInfo[testName]
 
         testType = TestType[testJsonContent["type"]]
+        try:
+            testMode = TestMode[testJsonContent["mode"]]
+        except:
+            testMode = TestMode.VERSAT
+
         path = testJsonContent.get("path", None)
         subTests = testJsonContent.get("subTests", None)
 
@@ -62,7 +73,7 @@ def ParseTest(testName, testInfo):
                 SubTest(x["name"], x["path"], focusLayer) for x in subTests
             ]
 
-        test = Test(testType, parsedSubTests)
+        test = Test(testType, testMode, parsedSubTests)
         ValidateTest(test)
 
         return test
@@ -128,7 +139,13 @@ if __name__ == "__main__":
     if test.type == TestType.GENERATED:
         GenerateSimpleTest("./tests/generated/")
         GenerateDebug(
-            "tests/generated/", "model.onnx", "software/", "software/src", testName
+            "tests/generated/",
+            "model.onnx",
+            "software/",
+            "software/src",
+            testName,
+            None,
+            test.mode == TestMode.SOFTWARE,
         )
     elif test.type == TestType.FIXED or test.type == TestType.FIXED_LIST:
         for subTest in test.subTest:

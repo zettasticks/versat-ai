@@ -19,11 +19,15 @@
 
 #include "versat_ai.h"
 
-// Contains a set of defines for each test type.
+// Contains info for each test.
 #include "testInfo.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
+#endif
+
+#ifndef OFFSET_PTR
+#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
 #endif
 
 #ifdef PC
@@ -103,6 +107,8 @@ void silent_clear_cache() {
 #endif
 }
 
+void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
+
 void clear_cache() {
 #ifndef PC
   // Delay to ensure all data is written to memory
@@ -149,12 +155,15 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-  ConfigCreateVCD(true);
+  ConfigCreateVCD(false);
+
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetPrintFunction(printf);
+  Versat_SetClearCache(silent_clear_cache_args);
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
   int stackVar;
-
   printf("Stack  : %p\n", &stackVar);
 
   // We allocate a little bit more just in case.
@@ -166,7 +175,7 @@ int main() {
 
     printf("\n\n");
     printf("\n==============================\n");
-    printf("Gonna run the full test named: %s", info.namespace);
+    printf("Gonna run the full test named: %s", info.nameSpace);
     printf("\n==============================\n");
 
     // TODO: Arena stuff, using malloc so much is starting to scare me.
@@ -176,12 +185,6 @@ int main() {
     void *model = Align4(malloc(info.modelSize + extra));
     void *correct = Align4(malloc(info.correctSize + extra));
     void *inputMemory = Align4(malloc(info.totalInputSize + extra));
-
-    *((int *)output) = 123;
-    *((int *)temp) = 123;
-    *((int *)model) = 123;
-    *((int *)correct) = 123;
-    *((int *)inputMemory) = 123;
 
     void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
     for (int i = 0; i < info.inputCount; i++) {
@@ -208,12 +211,12 @@ int main() {
       return 0;
     }
 
-    FastReceiveFile(info.namespace, "correctOutputs.bin", correct,
+    FastReceiveFile(info.nameSpace, "correctOutputs.bin", correct,
                     info.correctSize);
     printf("Received correct outputs\n");
-    FastReceiveFile(info.namespace, "model.bin", model, info.modelSize);
+    FastReceiveFile(info.nameSpace, "model.bin", model, info.modelSize);
     printf("Received model\n");
-    FastReceiveFile(info.namespace, "inputs.bin", inputMemory,
+    FastReceiveFile(info.nameSpace, "inputs.bin", inputMemory,
                     info.totalInputSize);
     printf("Received inputs\n");
 

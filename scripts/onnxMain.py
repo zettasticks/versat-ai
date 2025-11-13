@@ -428,6 +428,10 @@ def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
     return modified
 
 
+# TODO: We are starting to accumulate a bunch of config flags and stuff is starting to get out of control
+#       We probably want to make a struct that combines all this configuration into a single place and even offer some helper functions to simplify stuff otherwise
+#       it becomes clubersome to interact with this. Furthermore we are starting to generate more stuff than we care about and that is not good. Only generate what you need otherwise
+#       firmware starts becoming too large and sim time starts becoming problematic and all that stuff.
 def GenerateDebug(
     testLocation: str,
     modelName: str,
@@ -435,6 +439,7 @@ def GenerateDebug(
     sourceOutputLocation: str,
     namespace: str,
     focusLayer: int = None,
+    debugSoftware: bool = False,
 ):
     # TODO: It would be better if we could check all the inputs for correctness.
 
@@ -585,9 +590,8 @@ def GenerateDebug(
 
     debugging = True
     with open(os.path.join(sourceOutputLocation, f"{namespace}_code.c"), "w") as f:
-        f.write('#include "versat_ai.h"\n')
+        f.write('#include "versat_private.h"\n')
         f.write('#include "stdint.h"\n\n')
-        f.write('#include "iob_printf.h"\n\n')
 
         f.write(f"static int numberLayers = {len(cModel.operations)};\n")
 
@@ -596,7 +600,9 @@ def GenerateDebug(
         for index, c in enumerate(cModel.operations):
             outputSize = TensorSize(c.outputDimensions)
             layerInfo.append(
-                "{" + f'"{c.nodeName}","{OperationToLayerName(c)}",{outputSize}' + "}"
+                "{"
+                + f'"{OperationToLayerName(c,not debugSoftware)}",{outputSize}'
+                + "}"
             )
 
         f.write("static LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
@@ -642,55 +648,82 @@ def GenerateDebug(
                 + "};\n"
             )
 
-        f.write(
-            f"\nInferenceOutput {namespace}_DebugRunInference(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput)"
-            + "{\n"
-        )
+        f.write(f"uint64_t {namespace}_time[{len(cModel.operations) + 1}];\n")
 
-        opSeen = {}
-        for index, c in enumerate(cModel.operations):
-            content = []
-            for inp in c.inputs:
-                if inp.sourceType == DataSourceType.INITIALIZER:
-                    content.append(
-                        f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})"
-                    )
-                elif inp.sourceType == DataSourceType.MODEL_INPUT:
-                    content.append(f"inputs[{inp.index}]")
-                else:
-                    if debugging:
-                        content.append(
-                            f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})"
-                        )
-                    else:
-                        content.append(f"res_{inp.index}")
-
-            outputStr = ""
-            if c.outputMemoryAddress.memType == MemoryType.TEMP:
-                outputStr = (
-                    f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
+        def OutputFunction(debugging, fuctionName, useVersat, measureTime):
+            if debugging:
+                f.write(
+                    f"\nInferenceOutput {fuctionName}(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput)"
+                    + "{\n"
                 )
             else:
-                outputStr = f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
-
-            functionName = OperationToFunctionName(c)
-
-            opIndex = opSeen.get(c.opName, -1) + 1
-            opSeen[c.opName] = opIndex
-            f.write(f'  printf("Gonna run layer {index}\\n");\n')
-            f.write(
-                f"  void* res_{index} = "
-                + functionName
-                + "("
-                + ",".join(content)
-                + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"
-            )
-            if debugging and (IsOperatorRegistered(c.opName)):
                 f.write(
-                    f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
+                    f"\nInferenceOutput {fuctionName}(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory)"
+                    + "{\n"
                 )
-        f.write("  return (InferenceOutput){};\n")
-        f.write("}\n")
+
+            opSeen = {}
+            for index, c in enumerate(cModel.operations):
+                content = []
+                for inp in c.inputs:
+                    if inp.sourceType == DataSourceType.INITIALIZER:
+                        content.append(
+                            f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})"
+                        )
+                    elif inp.sourceType == DataSourceType.MODEL_INPUT:
+                        content.append(f"inputs[{inp.index}]")
+                    else:
+                        if debugging:
+                            content.append(
+                                f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})"
+                            )
+                        else:
+                            content.append(f"res_{inp.index}")
+
+                outputStr = ""
+                if c.outputMemoryAddress.memType == MemoryType.TEMP:
+                    outputStr = (
+                        f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
+                    )
+                else:
+                    outputStr = (
+                        f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
+                    )
+
+                functionName = OperationToFunctionName(c, useVersat)
+
+                opIndex = opSeen.get(c.opName, -1) + 1
+                opSeen[c.opName] = opIndex
+                if debugging:
+                    f.write(f'  versat_printf("Gonna run layer {index}\\n");\n')
+
+                if measureTime:
+                    f.write(f"  {namespace}_time[{index}] = versat_time();\n")
+
+                f.write(
+                    f"  void* res_{index} = "
+                    + functionName
+                    + "("
+                    + ",".join(content)
+                    + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"
+                )
+                if debugging and (IsOperatorRegistered(c.opName)):
+                    f.write(
+                        f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
+                    )
+
+            if measureTime:
+                f.write(
+                    f"  {namespace}_time[{len(cModel.operations)}] = versat_time();\n"
+                )
+
+            f.write("  return (InferenceOutput){};\n")
+            f.write("}\n")
+
+        #              debugging, fuctionName, useVersat, measureTime
+        OutputFunction(False, f"{namespace}_SoftwareRunInference", False, True)
+        OutputFunction(False, f"{namespace}_VersatRunInference", True, True)
+        OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
 
     correctDataSize = 0
     inputSize = 0
@@ -720,8 +753,12 @@ def GenerateDebug(
         f.write(",".join([str(x) for x in inputOffsets]))
         f.write("};\n\n")
 
+        f.write(f"extern uint64_t {namespace}_time[];\n")
+
         f.write(
-            f"static InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
+            f"InferenceOutput {namespace}_SoftwareRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory);\n"
+            f"InferenceOutput {namespace}_VersatRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory);\n"
+            f"InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
         )
 
         f.write(f"static TestModelInfo {namespace}_ModelInfo = " + "{\n")
@@ -730,14 +767,19 @@ def GenerateDebug(
         f.write(f"  .modelSize = {len(packedInitializers.data)},\n")
         f.write(f"  .correctSize = {correctDataSize},\n")
         f.write(f"  .totalInputSize = {totalInputSize},\n")
+
+        f.write(f'  .nameSpace = "{namespace}",\n')
+
         f.write(f"  .inputCount = {inputSize},\n")
-
-        f.write(f'  .namespace = "{namespace}",\n')
-
-        f.write(f"  .debugInferenceFunction = {namespace}_DebugRunInference,\n")
-
         f.write(f"  .inputSizes = {namespace}_INPUT_SIZE,\n")
-        f.write(f"  .inputOffsets = {namespace}_INPUT_OFFSET\n")
+        f.write(f"  .inputOffsets = {namespace}_INPUT_OFFSET,\n")
+
+        f.write(f"  .operatorCount = {len(cModel.operations)},\n")
+        f.write(f"  .timeMeasurements = {namespace}_time,\n")
+
+        f.write(f"  .softwareInferenceFunction = {namespace}_SoftwareRunInference,\n")
+        f.write(f"  .versatInferenceFunction = {namespace}_VersatRunInference,\n")
+        f.write(f"  .debugInferenceFunction = {namespace}_DebugRunInference\n")
         f.write("};\n")
     try:
         os.makedirs(binOutputLocation)

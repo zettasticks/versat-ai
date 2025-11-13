@@ -485,27 +485,22 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 
 
 def GenerateSimpleTest(outputPath):
-    testComplexity = 2
+    testComplexity = 0
 
     testAdd = False
     testRelu = False
     testReshape = False
-    testMatMul = False
-    testMaxPool = False
-    testConv = True
-    testAveragePool = False
     testSoftmax = False
     testTranspose = False
+    testMatMul = False
+
+    testMaxPool = True
+    testConv = False
+    testAveragePool = False
 
     testBig = False
 
-    generativeTests = True
-
-    CreateConvolution(
-        [1, 2, 2, 2], 3, [1, 1], [1, 1], [1, 1], 1, True, "NOTSET", [0, 0, 0, 0]
-    )
-    # if True:
-    #    CreateBinaryOpDynamicTest(["unk__0", 1], ["unk__1", 1], [1, 1], [1, 1])
+    generativeTests = False
 
     if testSoftmax:
         # Softmax axis come in pairs.
@@ -624,7 +619,8 @@ def GenerateSimpleTest(outputPath):
         if testBig:
             CreateBinaryOpTest("MatMul", [100, 200], [200, 300])
 
-    if testMaxPool:
+    CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+    if False and testMaxPool:
         # All padding posibilities, mostly to test the window generation
         # No padding                                           T  L  B  R
         CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])

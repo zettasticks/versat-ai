@@ -1,6 +1,11 @@
 {
   "Generated": {
-    "type": "GENERATED"
+    "type": "GENERATED",
+    "mode": "VERSAT"
+  },
+  "GeneratedPC": {
+    "type": "GENERATED",
+    "mode": "SOFTWARE"
   },
   "ToyCar":{
     "type": "FIXED",

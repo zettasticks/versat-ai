@@ -303,9 +303,10 @@ def GetOperatorSpec(opName):
     return operatorNameToSpec[opName]
 
 
-def OperationToFunctionName(op: Operation):
+def OperationToFunctionName(op: Operation, useVersat: bool):
     spec = GetOperatorSpec(op.opName)
-    decider = "Software" if not spec.generateVersatCode else "Versat"
+
+    decider = "Versat" if useVersat and spec.supportedByVersat else "Software"
 
     name = op.opName
     if op.opName == "Conv":
@@ -315,10 +316,10 @@ def OperationToFunctionName(op: Operation):
     return f"{decider}_{name}"
 
 
-def OperationToLayerName(op: Operation):
+def OperationToLayerName(op: Operation, useVersat: bool):
     spec = GetOperatorSpec(op.opName)
 
-    if spec.generateVersatCode:
+    if useVersat and spec.supportedByVersat:
         return f"Versat_{op.opName}"
     else:
         return op.opName

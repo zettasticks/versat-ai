@@ -1,10 +1,8 @@
-#include "versat_ai.h"
+#include "versat_private.h"
 
 #include "stdbool.h"
 #include "stdint.h"
 #include "stdlib.h" // REMOVE THIS AFTER REMOVING MALLOC AND FREE
-
-#include "iob_printf.h"
 
 #include "versat_accel.h"
 
@@ -22,6 +20,163 @@ iptr NoConvert(float f) {
   Convertor c = {};
   c.f = f;
   return c.i;
+}
+
+// ======================================
+// Arena stuff, which we will eventually remove since we do not want to allocate
+// memory while performing inference.
+
+unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
+
+typedef struct Arena_t {
+  void *mem;
+  int used;
+  int allocated;
+} Arena;
+
+void *PushBytes(Arena *arena, int size) {
+  int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
+                                // worry about alignment further
+
+  if (arena->used + size >= arena->allocated) {
+    for (int i = 0; i < 5; i++) {
+      versat_printf("\n\nArena overflow\n\n");
+    }
+  }
+
+  void *res = (void *)(((char *)arena->mem) + arena->used);
+  arena->used += size;
+
+  return res;
+}
+
+#define PushType(ARENA, TYPE) (TYPE *)PushBytes(ARENA, sizeof(TYPE))
+#define PushArray(ARENA, COUNT, TYPE)                                          \
+  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE))
+
+typedef struct {
+  unsigned int firstMarker;
+  unsigned int *secondMarkerPtr;
+} CanaryHeader;
+
+void CheckCanary(void *memory) {
+  CanaryHeader *asHeader = (CanaryHeader *)memory;
+  asHeader -= 1;
+
+  if (asHeader->firstMarker != 0x12345678) {
+    versat_printf("Canary check failed before allocation\n");
+  }
+
+  if (*asHeader->secondMarkerPtr != 0x87654321) {
+    versat_printf("Canary check failed after allocation\n");
+  }
+}
+
+void *PushBytesWithCanary(Arena *arena, int size) {
+  CanaryHeader *header = PushType(arena, CanaryHeader);
+  void *memory = PushBytes(arena, size);
+  unsigned int *last = PushType(arena, unsigned int);
+
+  header->firstMarker = 0x12345678;
+  header->secondMarkerPtr = last;
+
+  *last = 0x87654321;
+
+  CheckCanary(memory);
+
+  return memory;
+}
+
+#define PushTypeWithCanary(ARENA, TYPE)                                        \
+  (TYPE *)PushBytesWithCanary(ARENA, sizeof(TYPE))
+#define PushArrayWithCanary(ARENA, COUNT, TYPE)                                \
+  (TYPE *)PushBytesWithCanary(ARENA, (COUNT) * sizeof(TYPE))
+
+typedef struct {
+  Arena *arena;
+  int used;
+} ArenaMark;
+
+ArenaMark MarkArena(Arena *arena) {
+  ArenaMark mark = {};
+  mark.arena = arena;
+  mark.used = arena->used;
+  return mark;
+}
+
+void MarkPop(ArenaMark mark) { mark.arena->used = mark.used; }
+
+// TODO: All this memory allocation is very bad. We do not want to allocate
+// memory at all, and we would like to push as much memory stuff to the outside
+// code. We want memory to be allocated once by the user before calling
+Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
+  Tensor tensor = CreateTensor_NoAllocate(dims, numberDims);
+
+  int size = 1;
+  for (int i = 0; i < numberDims; i++) {
+    size *= dims[i];
+  }
+
+  tensor.data = PushArrayWithCanary(arena, size, float);
+  return tensor;
+}
+
+static void Tensor_CheckCanary(Tensor in) { CheckCanary(in.data); }
+
+Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
+  int size = input.dims.size;
+  int64_t *inDims = input.dims.data;
+
+  int64_t outDims[MAX_DIMS] = {};
+
+  for (int i = 0; i < size; i++) {
+    int index = transposeIndex[i];
+    outDims[i] = inDims[index];
+  }
+
+  Tensor res = PushTensor(arenaOut, outDims, size);
+
+  AddressGen in = StartAddress(inDims, inDims, size);
+  AddressGen out = StartAddress(outDims, outDims, size);
+
+  for (; Address_IsValid(&in); Address_Advance(&in)) {
+    int inAddr = Address_GetValue(&in);
+
+    for (int i = 0; i < size; i++) {
+      int index = transposeIndex[i];
+      out.addressVars[i] = in.addressVars[index];
+    }
+
+    int outAddr = Address_GetValue(&out);
+
+    res.data[outAddr] = input.data[inAddr];
+  }
+
+  return res;
+}
+
+Tensor Tensor_ExtractView(Tensor input, int dimIndex, int start, int size,
+                          Arena *arenaOut) {
+  AddressGen in =
+      StartAddress(input.dims.data, input.dims.data, input.dims.size);
+
+  in.offsetAddressVars[dimIndex] = start;
+  in.iterationDims[dimIndex] = (int64_t)size;
+
+  Dimensions outDims = input.dims;
+  outDims.data[dimIndex] = size;
+
+  Tensor output = PushTensor(arenaOut, outDims.data, outDims.size);
+  AddressGen out = StartAddress(outDims.data, outDims.data, outDims.size);
+
+  for (; Address_IsValid(&in); Address_Advance(&in), Address_Advance(&out)) {
+    int inIndex = Address_GetValue(&in);
+    int outIndex = Address_GetValue(&out);
+
+    output.data[outIndex] = input.data[inIndex];
+  }
+
+  return output;
 }
 
 static inline int64_t GetDim(int64_t *dimArray, int dimSize, int index) {
@@ -151,340 +306,6 @@ void *Versat_Reshape(void *data, void *shape, void *output, int index,
   return data;
 }
 
-typedef struct {
-  int strideW;
-  int strideH;
-
-  int kernelW;
-  int kernelH;
-
-  int inputImageW;
-  int inputImageH;
-  int inputImageC;
-
-  int outputImageW;
-  int outputImageH;
-  int outputImageC;
-
-  int leftPadW;
-  int leftPadH;
-  int rightPadW;
-  int rightPadH;
-
-  int padW;
-  int padH;
-} ExtraInfo;
-
-void ExtraInfo_Print(ExtraInfo e) {
-  printf("ExtraInfo:\n");
-  printf("strideW: %d\n", e.strideW);
-  printf("strideH: %d\n", e.strideH);
-  printf("kernelW: %d\n", e.kernelW);
-  printf("kernelH: %d\n", e.kernelH);
-  printf("inputImageW: %d\n", e.inputImageW);
-  printf("inputImageH: %d\n", e.inputImageH);
-  printf("inputImageC: %d\n", e.inputImageC);
-  printf("outputImageW: %d\n", e.outputImageW);
-  printf("outputImageH: %d\n", e.outputImageH);
-  printf("outputImageC: %d\n", e.outputImageC);
-  printf("leftPadW: %d\n", e.leftPadW);
-  printf("leftPadH: %d\n", e.leftPadH);
-  printf("rightPadW: %d\n", e.rightPadW);
-  printf("rightPadH: %d\n", e.rightPadH);
-  printf("padW: %d\n", e.padW);
-  printf("padH: %d\n", e.padH);
-  printf("\n");
-}
-
-typedef struct {
-  ExtraInfo *info;
-  int currentOutputC;
-  int currentOutputX;
-  int currentOutputY;
-  bool iterateC;
-  bool isNCHW; // Otherwise assume it is NHWC
-} WindowGen;
-
-typedef enum {
-  PaddingRegion_TOP = (1 << 1),
-  PaddingRegion_LEFT = (1 << 2),
-  PaddingRegion_RIGHT = (1 << 3),
-  PaddingRegion_BOTTOM = (1 << 4)
-} PaddingRegion;
-
-typedef struct {
-  int inputX;
-  int inputY;
-  int outputX;
-  int outputY;
-
-  int startC;
-  int inputSizeC; // This is mostly the same as inputImageC since Conv cannot
-                  // handle half sums. We must always process the entire input
-                  // channels, we cannot handle half sums.
-
-  int outputC;
-  int outputSizeC;
-
-  int actualKernelW;
-  int actualKernelH;
-
-  int kernelStartW;
-  int kernelStartH;
-
-  int outputW;
-  int outputH;
-
-  PaddingRegion padding;
-} AdvancedWindow;
-
-WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW) {
-  WindowGen res = {};
-  res.info = info;
-  res.iterateC = iterateC;
-  res.isNCHW = isNCHW;
-  return res;
-}
-
-void AdvancedWindow_Print(AdvancedWindow window) {
-  bool printedOnce = false;
-  if (window.padding & PaddingRegion_TOP) {
-    printf("Pad_TOP");
-    printedOnce = true;
-  }
-  if (window.padding & PaddingRegion_BOTTOM) {
-    if (printedOnce) {
-      printf(" | ");
-    }
-    printf("Pad_BOTTOM");
-    printedOnce = true;
-  }
-  if (window.padding & PaddingRegion_LEFT) {
-    if (printedOnce) {
-      printf(" | ");
-    }
-    printf("Pad_LEFT");
-    printedOnce = true;
-  }
-  if (window.padding & PaddingRegion_RIGHT) {
-    if (printedOnce) {
-      printf(" | ");
-    }
-    printf("Pad_RIGHT");
-    printedOnce = true;
-  }
-
-  printf("\n");
-
-  printf("Output pos: X:%d,Y:%d (C:%d)\n", window.outputX, window.outputY,
-         window.outputC);
-  printf("Input pos: (%d,%d)\n", window.inputX, window.inputY);
-  printf("WindowSize (Out view): %d %d %d\n", window.outputSizeC,
-         window.outputH, window.outputW);
-  printf("KernelSizeAndOffset: %d:%d - %d:%d\n", window.actualKernelW,
-         window.kernelStartW, window.actualKernelH, window.kernelStartH);
-}
-
-AdvancedWindow WindowGen_Get(WindowGen *gen) {
-  AdvancedWindow res = {};
-
-  res.outputX = gen->currentOutputX;
-  res.outputY = gen->currentOutputY;
-  res.outputC = gen->currentOutputC;
-
-  res.startC = gen->currentOutputC;
-  res.inputX = gen->currentOutputX * gen->info->strideW;
-  res.inputY = gen->currentOutputY * gen->info->strideH;
-
-  // Currently we assume a window size of 1, although need to add the better
-  // logic to suport more windows and improve performance.
-
-  // The only thing that we need to care about is the windows that are near
-  // padding regions the fact that the accelerator must contain enough memory to
-  // support a window and that we must make sure that the height of the window
-  // is stable. ( So that we iterate over all the pixels correctly).
-  res.outputW = 1;
-  res.outputH = 1;
-
-  // For now, just like the rest of the window, we only advance a single output
-  // channel
-  res.outputSizeC = 1;
-
-  // By default, input equals kernel size
-  res.actualKernelW = gen->info->kernelW;
-  res.actualKernelH = gen->info->kernelH;
-
-  res.inputX -= gen->info->leftPadW;
-  res.inputY -= gen->info->leftPadH;
-
-  // TODO: For the cases without padding, we can support bigger
-  //       windows. We mainly want to center the logic around
-  //       how much internal memory the accelerator supports (limiting factor
-  //       for window size) and of course the boundaries between padding, since
-  //       we cannot process different padding boundaries in the same run.
-
-  // NOTE: Any amount of padding basically shifts the kernel and changes the
-  // input window size.
-  //       Difference between left and right padding is wether we change the
-  //       start or not. The size of the kernel always changes.
-
-  // This logic only works if we make sure that we can have a one by one window
-  // size at the extreme points
-  if (res.inputX < 0) {
-    int offset = -res.inputX;
-    res.actualKernelW -= offset;
-    res.kernelStartW = offset;
-    res.padding |= PaddingRegion_LEFT;
-    res.inputX = 0;
-  }
-  if (res.inputX + res.actualKernelW > gen->info->inputImageW) {
-    int offset = (res.inputX + res.actualKernelW) - gen->info->inputImageW;
-    res.actualKernelW -= offset;
-    res.padding |= PaddingRegion_RIGHT;
-  }
-
-  if (res.inputY < 0) {
-    int offset = -res.inputY;
-    res.actualKernelH -= offset;
-    res.kernelStartH = offset;
-    res.padding |= PaddingRegion_TOP;
-    res.inputY = 0;
-  }
-  if (res.inputY + res.actualKernelH > gen->info->inputImageH) {
-    int offset = (res.inputY + res.actualKernelH) - gen->info->inputImageH;
-    res.actualKernelH -= offset;
-    res.padding |= PaddingRegion_BOTTOM;
-  }
-
-  return res;
-}
-
-void WindowGen_Advance(WindowGen *gen) {
-  AdvancedWindow window = WindowGen_Get(gen);
-
-  if (gen->iterateC) {
-    if (gen->isNCHW) {
-      gen->currentOutputX += window.outputW;
-      if (gen->currentOutputX >= gen->info->outputImageW) {
-        gen->currentOutputX = 0;
-        gen->currentOutputY += window.outputH;
-      }
-
-      if (gen->currentOutputY >= gen->info->outputImageH) {
-        gen->currentOutputY = 0;
-        gen->currentOutputC += window.outputSizeC;
-      }
-
-      if (gen->currentOutputC >= gen->info->outputImageC) {
-        gen->currentOutputC = -1;
-        gen->currentOutputX = -1;
-        gen->currentOutputY = -1;
-      }
-    } else {
-      // NHWC
-      gen->currentOutputC += window.outputSizeC;
-      if (gen->currentOutputC >= gen->info->outputImageC) {
-        gen->currentOutputC = 0;
-        gen->currentOutputX += window.outputW;
-      }
-
-      if (gen->currentOutputX >= gen->info->outputImageW) {
-        gen->currentOutputX = 0;
-        gen->currentOutputY += window.outputH;
-      }
-
-      if (gen->currentOutputY >= gen->info->outputImageH) {
-        gen->currentOutputC = -1;
-        gen->currentOutputX = -1;
-        gen->currentOutputY = -1;
-      }
-    }
-  } else {
-    gen->currentOutputX += window.outputW;
-    if (gen->currentOutputX >= gen->info->outputImageW) {
-      gen->currentOutputX = 0;
-      gen->currentOutputY += window.outputH;
-    }
-
-    if (gen->currentOutputY >= gen->info->outputImageH) {
-      gen->currentOutputX = -1;
-      gen->currentOutputY = -1;
-    }
-  }
-}
-
-bool WindowGen_Valid(WindowGen *gen) {
-  bool res = (gen->currentOutputX != -1 && gen->currentOutputY != -1);
-  return res;
-}
-
-ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
-  ExtraInfo res = {};
-
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
-
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
-
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
-
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
-
-  if (info->padding == PaddingType_NOTSET) {
-    // TODO: Need a better way of handling errors in this layer, I think.
-    if (info->padsSize != 4) {
-      printf("ERROR, pads size is not expected");
-      return (ExtraInfo){};
-    }
-
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
-
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
-
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
-  } else if (info->padding == PaddingType_SAME_LOWER ||
-             info->padding == PaddingType_SAME_UPPER) {
-    res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
-                          res.inputImageW);
-    res.padH = MAX(0, (res.outputImageH - 1) * res.strideH + res.kernelH -
-                          res.inputImageH);
-
-    int halfW = res.padW / 2;
-    int halfH = res.padH / 2;
-
-    res.leftPadW = halfW;
-    res.rightPadW = halfW;
-    res.leftPadH = halfH;
-    res.rightPadH = halfH;
-
-    if (res.padW % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadW += 1;
-      } else {
-        res.rightPadW += 1;
-      }
-    }
-
-    if (res.padH % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadH += 1;
-      } else {
-        res.rightPadH += 1;
-      }
-    }
-  }
-
-  return res;
-}
-
 static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
                                          void *input, void *output,
                                          MaxPoolInfo *info) {
@@ -547,75 +368,6 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   return output;
 }
 
-#if 1
-ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
-  ExtraInfo res = {};
-
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
-
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
-
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
-
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
-
-  if (info->padding == PaddingType_NOTSET) {
-    // TODO: Need a better way of handling errors in this layer, I think.
-
-    if (info->padsSize != 4) {
-      printf("ERROR, pads size is not expected");
-      return (ExtraInfo){};
-    }
-
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
-
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
-
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
-  } else if (info->padding == PaddingType_SAME_LOWER ||
-             info->padding == PaddingType_SAME_UPPER) {
-    res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
-                          res.inputImageW);
-    res.padH = MAX(0, (res.outputImageH - 1) * res.strideH + res.kernelH -
-                          res.inputImageH);
-
-    int halfW = res.padW / 2;
-    int halfH = res.padH / 2;
-
-    res.leftPadW = halfW;
-    res.rightPadW = halfW;
-    res.leftPadH = halfH;
-    res.rightPadH = halfH;
-
-    if (res.padW % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadW += 1;
-      } else {
-        res.rightPadW += 1;
-      }
-    }
-
-    if (res.padH % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadH += 1;
-      } else {
-        res.rightPadH += 1;
-      }
-    }
-  }
-
-  return res;
-}
-
 static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
                                              void *input, void *output,
                                              AveragePoolInfo *info) {
@@ -674,264 +426,6 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
   RunAccelerator(2);
 
   return output;
-}
-#endif
-
-Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims) {
-  Tensor tensor = {};
-  tensor.dims.size = numberDims;
-
-  int size = 1;
-  for (int i = 0; i < numberDims; i++) {
-    tensor.dims.data[i] = dims[i];
-    size *= dims[i];
-  }
-
-  return tensor;
-}
-
-unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
-
-typedef struct Arena_t {
-  void *mem;
-  int used;
-  int allocated;
-} Arena;
-
-void *PushBytes(Arena *arena, int size) {
-  int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
-                                // worry about alignment further
-
-  if (arena->used + size >= arena->allocated) {
-    for (int i = 0; i < 5; i++) {
-      printf("\n\nArena overflow\n\n");
-    }
-  }
-
-  void *res = (void *)(((char *)arena->mem) + arena->used);
-  arena->used += size;
-
-  return res;
-}
-
-#define PushType(ARENA, TYPE) (TYPE *)PushBytes(ARENA, sizeof(TYPE))
-#define PushArray(ARENA, COUNT, TYPE)                                          \
-  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE))
-
-typedef struct {
-  unsigned int firstMarker;
-  unsigned int *secondMarkerPtr;
-} CanaryHeader;
-
-void CheckCanary(void *memory) {
-  CanaryHeader *asHeader = (CanaryHeader *)memory;
-  asHeader -= 1;
-
-  if (asHeader->firstMarker != 0x12345678) {
-    printf("Canary check failed before allocation\n");
-  }
-
-  if (*asHeader->secondMarkerPtr != 0x87654321) {
-    printf("Canary check failed after allocation\n");
-  }
-}
-
-void *PushBytesWithCanary(Arena *arena, int size) {
-  CanaryHeader *header = PushType(arena, CanaryHeader);
-  void *memory = PushBytes(arena, size);
-  unsigned int *last = PushType(arena, unsigned int);
-
-  header->firstMarker = 0x12345678;
-  header->secondMarkerPtr = last;
-
-  *last = 0x87654321;
-
-  CheckCanary(memory);
-
-  return memory;
-}
-
-#define PushTypeWithCanary(ARENA, TYPE)                                        \
-  (TYPE *)PushBytesWithCanary(ARENA, sizeof(TYPE))
-#define PushArrayWithCanary(ARENA, COUNT, TYPE)                                \
-  (TYPE *)PushBytesWithCanary(ARENA, (COUNT) * sizeof(TYPE))
-
-typedef struct {
-  Arena *arena;
-  int used;
-} ArenaMark;
-
-ArenaMark MarkArena(Arena *arena) {
-  ArenaMark mark = {};
-  mark.arena = arena;
-  mark.used = arena->used;
-  return mark;
-}
-
-void MarkPop(ArenaMark mark) { mark.arena->used = mark.used; }
-
-// TODO: All this memory allocation is very bad. We do not want to allocate
-// memory at all, and we would like to push as much memory stuff to the outside
-// code. We want memory to be allocated once by the user before calling
-Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
-  Tensor tensor = CreateTensor_NoAllocate(dims, numberDims);
-
-  int size = 1;
-  for (int i = 0; i < numberDims; i++) {
-    size *= dims[i];
-  }
-
-  tensor.data = PushArrayWithCanary(arena, size, float);
-  return tensor;
-}
-
-static void Tensor_CheckCanary(Tensor in) { CheckCanary(in.data); }
-
-Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
-  int size = input.dims.size;
-  int64_t *inDims = input.dims.data;
-
-  int64_t outDims[MAX_DIMS] = {};
-
-  for (int i = 0; i < size; i++) {
-    int index = transposeIndex[i];
-    outDims[i] = inDims[index];
-  }
-
-  Tensor res = PushTensor(arenaOut, outDims, size);
-
-  AddressGen in = StartAddress(inDims, inDims, size);
-  AddressGen out = StartAddress(outDims, outDims, size);
-
-  for (; Address_IsValid(&in); Address_Advance(&in)) {
-    int inAddr = Address_GetValue(&in);
-
-    for (int i = 0; i < size; i++) {
-      int index = transposeIndex[i];
-      out.addressVars[i] = in.addressVars[index];
-    }
-
-    int outAddr = Address_GetValue(&out);
-
-    res.data[outAddr] = input.data[inAddr];
-  }
-
-  return res;
-}
-
-int Tensor_Size(Tensor tensor) {
-  int size = 1;
-  for (int i = 0; i < tensor.dims.size; i++) {
-    size *= tensor.dims.data[i];
-  }
-
-  return size;
-}
-
-void Tensor_Print(Tensor tensor) {
-  int size = Tensor_Size(tensor);
-
-  for (int i = 0; i < tensor.dims.size; i++) {
-    if (i != 0) {
-      printf("x ");
-    }
-    printf("%d ", tensor.dims.data[i]);
-  }
-  printf("\n");
-  for (int i = 0; i < size; i++) {
-    printf("%f\n", tensor.data[i]);
-  }
-}
-
-Tensor Tensor_ExtractView(Tensor input, int dimIndex, int start, int size,
-                          Arena *arenaOut) {
-  AddressGen in =
-      StartAddress(input.dims.data, input.dims.data, input.dims.size);
-
-  in.offsetAddressVars[dimIndex] = start;
-  in.iterationDims[dimIndex] = (int64_t)size;
-
-  Dimensions outDims = input.dims;
-  outDims.data[dimIndex] = size;
-
-  Tensor output = PushTensor(arenaOut, outDims.data, outDims.size);
-  AddressGen out = StartAddress(outDims.data, outDims.data, outDims.size);
-
-  for (; Address_IsValid(&in); Address_Advance(&in), Address_Advance(&out)) {
-    int inIndex = Address_GetValue(&in);
-    int outIndex = Address_GetValue(&out);
-
-    output.data[outIndex] = input.data[inIndex];
-  }
-
-  return output;
-}
-
-ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
-  ExtraInfo res = {};
-
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
-
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
-
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
-
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
-
-  if (info->padding == PaddingType_NOTSET) {
-    // TODO: Need a better way of handling errors in this layer, I think.
-    if (info->padsSize != 4) {
-      printf("ERROR, pads size is not expected");
-      return (ExtraInfo){};
-    }
-
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
-
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
-
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
-  } else if (info->padding == PaddingType_SAME_LOWER ||
-             info->padding == PaddingType_SAME_UPPER) {
-    res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
-                          res.inputImageW);
-    res.padH = MAX(0, (res.outputImageH - 1) * res.strideH + res.kernelH -
-                          res.inputImageH);
-
-    int halfW = res.padW / 2;
-    int halfH = res.padH / 2;
-
-    res.leftPadW = halfW;
-    res.rightPadW = halfW;
-    res.leftPadH = halfH;
-    res.rightPadH = halfH;
-
-    if (res.padW % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadW += 1;
-      } else {
-        res.rightPadW += 1;
-      }
-    }
-
-    if (res.padH % 2 == 1) {
-      if (info->padding == PaddingType_SAME_LOWER) {
-        res.leftPadH += 1;
-      } else {
-        res.rightPadH += 1;
-      }
-    }
-  }
-
-  return res;
 }
 
 void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
@@ -1085,8 +579,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       extra.inputImageC /= group;
       extra.outputImageC /= group;
 
-      // printf("%d %d\n",extra.inputImageC,extra.outputImageC);
-
       Dimensions dims = CreateDimensions(info->inputDims, 4);
       dims.data[1] /= group;
 
@@ -1142,13 +634,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         int transposeDims[] = {0, 3, 1, 2};
         Tensor transposed =
             Tensor_Transpose(tempGroupTensor, transposeDims, arena);
-
-#if 0
-        printf("Original:%d \n",g);
-        Tensor_Print(tempGroupTensor);
-        printf("Transposed:\n");
-        Tensor_Print(transposed);
-#endif
 
         float *outputView = (float *)output;
         outputView += batch * outputSize; // + g * (outputSize / group);
@@ -1233,7 +718,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int OW = info->outputDims[1];
 
   if (AW != BH) {
-    printf("Something very wrong is happening in MatMul\n");
+    versat_printf("Something very wrong is happening in MatMul\n");
   }
 
   // After transpose, matrix goes from size BH,BW to BW,BH

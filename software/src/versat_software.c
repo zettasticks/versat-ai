@@ -1,4 +1,4 @@
-#include "versat_ai.h"
+#include "versat_private.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -9,305 +9,80 @@
 #define exit(...) ((void)0)
 void clear_cache();
 
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-
 #define MIN(A, B) ((A < B ? A : B))
 #define MAX(A, B) ((A > B ? A : B))
 
 // Care when using this, when not debugging this just crashes the program
 #define DEBUG_BREAK() __asm__("int3")
 
-Dimensions CreateDimensions(int64_t *dims, int numberDims) {
-  Dimensions res = {};
-  res.size = numberDims;
-  for (int i = 0; i < numberDims; i++) {
-    res.data[i] = dims[i];
-  }
-  return res;
-}
-
-int Dimensions_Size(Dimensions dim) {
-  int size = 1;
-  for (int i = 0; i < dim.size; i++) {
-    size *= dim.data[i];
-  }
-  return size;
-}
-
-void Address_Print(AddressGen *gen) {
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (i != 0) {
-      printf(" x ");
-    }
-    printf("%d", gen->addressVars[i]);
-  }
-
-  printf(" [");
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (i != 0) {
-      printf(" x ");
-    }
-    printf("%ld", gen->iterationDims[i]);
-  }
-  printf("]\n");
-}
-
-int Address_GetValue(AddressGen *gen) {
-  int address = 0;
-  for (int i = 0; i < gen->numberDims; i++) {
-    int index = gen->addressVars[i] + gen->offsetAddressVars[i];
-
-    if (index >= gen->properDims[i]) {
-      index = 0;
-    }
-
-    if (i > 0) {
-      address *= gen->properDims[i];
-    }
-    address += index;
-  }
-
-  return address;
-}
-
-bool Address_IsValid(AddressGen *gen) {
-  // Because we allow out of order advances, we need to check every
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (gen->addressVars[i] >= gen->iterationDims[i]) {
-      return false;
-    }
-  }
-
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (gen->addressVars[i] >= gen->iterationDims[i]) {
-      continue;
-    } else {
-      return true;
-    }
-  }
-  return false;
-}
-
-void Address_Advance(AddressGen *gen) {
-  if (gen->addressVars[0] >= gen->iterationDims[0]) {
-    return;
-  }
-
-  for (int i = gen->numberDims - 1; i >= 0; i--) {
-    if (i != 0 && gen->addressVars[i] + 1 >= gen->iterationDims[i]) {
-      gen->addressVars[i] = 0;
-      continue;
-    } else {
-      gen->addressVars[i] += 1;
-      return;
-    }
-  }
-}
-
-void Address_AdvanceAxis(AddressGen *gen, int axisToAdvance) {
-  // Any negative axis just puts the address gen into an invalid state
-  if (axisToAdvance < 0) {
-    gen->addressVars[0] = gen->iterationDims[0] + 1;
-    return;
-  }
-
-  if (gen->addressVars[0] >= gen->iterationDims[0]) {
-    return;
-  }
-
-  for (int i = axisToAdvance; i >= 0; i--) {
-    if (i != 0 && gen->addressVars[i] + 1 >= gen->iterationDims[i]) {
-      gen->addressVars[i] = 0;
-      continue;
-    } else {
-      gen->addressVars[i] += 1;
-      return;
-    }
-  }
-}
-
-// Proper dims are the dims used to calculate an index.
-// Iteration dims are the iterations.
-AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
-                        int numberDims) {
-  AddressGen gen = {};
-
-  for (int i = 0; i < numberDims; i++) {
-    gen.iterationDims[i] = iterationDims[i];
-    gen.properDims[i] = properDims[i];
-  }
-  gen.numberDims = numberDims;
-
-  return gen;
-}
-
-AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
-  AddressGen gen = *in;
-
-  for (int i = 0; i < in->numberDims; i++) {
-    gen.addressVars[i] *= stride[i];
-    gen.iterationDims[i] = biggerDim[i];
-    gen.properDims[i] = biggerDim[i];
-  }
-
-#if 0
-  printf("here\n");
-  Address_Print(in);
-  Address_Print(&gen);
-#endif
-
-  return gen;
-}
-
-/*
-  A Kernel gen is basically a subiterator that starts from the position on the
-  parent AddressGen and iterates a subsection of a subsection of the dimensions.
-
-  If we have an AddressGen that iterates over A,B,C,D then as an example we can
-  create a KernelGen that iterates over C,D and the iteration can be bounded to
-  a smaller "rectangle" like a 3x3 area over the C,D dimensions. Note that the
-  KernelGen always starts from the AddressGen position. Furthermore, because the
-  KernelGen can "escape" over the given dimensions, we provide a
-  Kernel_IsInsidePad that returns true if the KernelGen is outside the
-  boundaries of the provided dimensions. In this case the Kernel_GetValue
-  function returns garbage and should not be used.
-
-  TODO: We probably can augment the AddressGen struct to support this usecase
-  so that we can return an AddressGen struct that returns the same indexes
-  that this would return. I do not think there is a need to have a separate
-  struct for this, altough not sure about it.
-*/
-
-typedef struct {
-  int kernelVars[MAX_DIMS]; // Current state
-
-  // Kernel Info
-  AddressGen *address;
-  int kernelDims[MAX_DIMS];
-  int kernelDilations[MAX_DIMS]; // NOTE: Not properly tested, do not rely on
-                                 // dilations being correct
-  int numberDims;
-} KernelGen;
-
-// KernelDims are the bounds of the dimensions that the KernelGen iterates over
-// Example, if we have a layer of dim A,B,C,D and kernelSize of 2, then
-// the kernel only iterates over the C and D dimensions, never A or B.
-// kernelDims has kernelSize size and defines the boundary of the iteration
-KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
-  KernelGen gen = {};
-  gen.address = address;
-
-  int nonKernelDims = address->numberDims - kernelSize;
-
-  for (int i = 0; i < nonKernelDims; i++) {
-    gen.kernelDims[i] = 1;
-  }
-  gen.numberDims = address->numberDims;
-
-  for (int i = 0; i < MAX_DIMS; i++) {
-    gen.kernelDilations[i] = 1;
-  }
-
-  for (int i = 0; i < kernelSize; i++) {
-    gen.kernelDims[nonKernelDims + i] = kernelDims[i];
-  }
-
-  return gen;
-}
-
-void Kernel_Print(KernelGen *gen) {
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (i != 0) {
-      printf(" x ");
-    }
-    printf("%d", gen->kernelVars[i]);
-  }
-
-  printf(" [");
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (i != 0) {
-      printf(" x ");
-    }
-    printf("%ld", gen->kernelDims[i]);
-  }
-  printf("]\n");
-}
-
-int Kernel_GetValue(KernelGen *gen) {
-  int properVars[MAX_DIMS];
-
-  for (int i = 0; i < gen->numberDims; i++) {
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
-                    gen->address->addressVars[i];
-  }
-
-  int address = 0;
-  for (int i = 0; i < gen->numberDims; i++) {
-    int index = properVars[i];
-
-    if (index >= gen->address->iterationDims[i]) {
-      index = 0;
-    }
-
-    if (i > 0) {
-      address *= gen->address->iterationDims[i];
-    }
-    address += index;
-  }
-
-  return address;
-}
-
-bool Kernel_IsValid(KernelGen *gen) {
-  // Is this the only thing that we need?
-  if (gen->kernelVars[0] >= gen->kernelDims[0]) {
-    return false;
-  }
-
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (gen->kernelVars[i] >= gen->kernelDims[i]) {
-      continue;
-    } else {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool Kernel_IsInsidePad(KernelGen *gen) {
-  int properVars[MAX_DIMS];
-
-  for (int i = 0; i < gen->numberDims; i++) {
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
-                    gen->address->addressVars[i];
-  }
-
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (properVars[i] >= gen->address->properDims[i]) {
-      return true;
-    }
-  }
-
-  return false;
-}
-void Kernel_Advance(KernelGen *gen) {
-  if (gen->kernelVars[0] >= gen->kernelDims[0]) {
-    return;
-  }
-
-  for (int i = gen->numberDims - 1; i >= 0; i--) {
-    if (i != 0 && gen->kernelVars[i] + 1 >= gen->kernelDims[i]) {
-      gen->kernelVars[i] = 0;
-      continue;
-    } else {
-      gen->kernelVars[i] += 1;
-      return;
-    }
-  }
-}
-
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info) {
+  int batchSize = info->inputDims[0];
+  int inChannels = info->inputDims[1];
+  int inW = info->inputDims[3];
+  int inH = info->inputDims[2];
+
+  int strideW = info->strideDims[1];
+  int strideH = info->strideDims[0];
+
+  int featureMaps = info->featureMaps;
+
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  int outChannels = info->outputDims[1]; // Should be equal to feature maps.
+  int outW = info->outputDims[3];
+  int outH = info->outputDims[2];
+
+  float *input = (float *)inputX;
+  float *kernel = (float *)inputW;
+  float *outView = (float *)output;
+
+  for (int outC = 0; outC < outChannels; outC++) {
+    for (int y = 0; y < outH; y++) {
+      for (int x = 0; x < outW; x++) {
+        float accum = 0.0f;
+        for (int inC = 0; inC < inChannels; inC++) {
+          for (int ky = 0; ky < kernelH; ky++) {
+            for (int kx = 0; kx < kernelW; kx++) {
+              int deltaX = x + kx;
+              int deltaY = y + ky;
+              int inIndex = inC * inW * inH + deltaY * inW + deltaX;
+              float inputVal;
+
+              if (deltaX < 0 || deltaY < 0 || deltaX >= inW || deltaY >= inH) {
+                inputVal = 0.0f;
+              } else {
+                inputVal = input[inIndex];
+              }
+
+              int inK = outC * inChannels * kernelW * kernelH;
+              inK += inC * kernelW * kernelH;
+              inK += ky * kernelW;
+              inK += kx;
+
+              float kernelVal = kernel[inK];
+              accum += inputVal * kernelVal;
+            }
+          }
+        }
+        int outPos = outC * outW * outH;
+        outPos += y * outW;
+        outPos += x;
+
+        outView[outPos] = accum;
+      }
+    }
+  }
+
+  return output;
+}
+
+void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
+                            void *output, int index, ConvInfo *info) {
+  // NOT IMPLEMENTED YET
+  return output;
+#if 0
   int batchSize = info->inputDims[0];
   int inChannels = info->inputDims[1];
   int inW = info->inputDims[3];
@@ -332,16 +107,11 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
   float *kernel = (float *)inputW;
   float *outView = (float *)output;
 
-  bool print = false;
-
   for (int outC = 0; outC < outChannels; outC++) {
     for (int y = 0; y < outH; y++) {
       for (int x = 0; x < outW; x++) {
         float accum = 0.0f;
         for (int inC = 0; inC < inChannels; inC++) {
-          if (print)
-            printf("Going to accumulate: %d %d\n", y, x);
-
           for (int ky = 0; ky < kernelH; ky++) {
             for (int kx = 0; kx < kernelW; kx++) {
               int deltaX = x + kx;
@@ -360,9 +130,6 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
               inK += ky * kernelW;
               inK += kx;
 
-              if (print)
-                printf("%d %f %d %f\n", inIndex, inputVal, inK, kernel[inK]);
-
               float kernelVal = kernel[inK];
               accum += inputVal * kernelVal;
             }
@@ -373,14 +140,12 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
         outPos += x;
 
         outView[outPos] = accum;
-
-        if (print)
-          exit(0);
       }
     }
   }
 
   return output;
+#endif
 }
 
 void *Software_Reshape(void *data, void *shape, void *output, int index,
@@ -403,8 +168,6 @@ void *Software_Reshape(void *data, void *shape, void *output, int index,
 
     Address_Advance(&in);
     Address_Advance(&out);
-
-    // printf("%d %d\n",outAddr,inAddr);
 
     outView[outAddr] = inView[inAddr];
   }
@@ -470,8 +233,6 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
     int indexB = Address_GetValue(&inB);
     int indexO = Address_GetValue(&outGen);
 
-    // printf("%d %d %d\n",indexA,indexB,indexO);
-
     Address_Advance(&inA);
     Address_Advance(&inB);
     Address_Advance(&outGen);
@@ -480,7 +241,6 @@ void *Software_Add(void *inputA, void *inputB, void *output, int index,
     float valB = viewB[indexB];
 
     out[indexO] = valA + valB;
-    // printf("%f   %f   %f\n",viewA[indexA],viewB[indexB],out[indexO]);
   }
 
   return output;
@@ -504,6 +264,8 @@ void *Software_MaxPool(void *inputX, void *output, int index,
                        MaxPoolInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
+
+  ExtraInfo extra = CalculateExtraInfo_MaxPool(info);
 
   AddressGen outGenInst =
       StartAddress(info->outputDims, info->outputDims, info->dims);
@@ -604,15 +366,27 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
   float *viewB = (float *)inputB;
   float *viewOut = (float *)output;
 
-  for (int y = 0; y < info->outputDims[0]; y++) {
-    for (int x = 0; x < info->outputDims[1]; x++) {
-      int indexOut = info->outputDims[0] * y + x;
+  int AH = info->inputADims[0];
+  int AW = info->inputADims[1];
+
+  int BH = info->inputBDims[0];
+  int BW = info->inputBDims[1];
+
+  int OH = info->outputDims[0];
+  int OW = info->outputDims[1];
+
+  if (AW != BH) {
+    versat_printf("Something very wrong is happening in MatMul\n");
+  }
+
+  for (int y = 0; y < OH; y++) {
+    for (int x = 0; x < OW; x++) {
+      int indexOut = y * OW + x;
 
       viewOut[indexOut] = 0.0f;
-      for (int c = 0; c < 256;
-           c++) { // 256 is being hardcoded for the mnist example.
-        int indexA = info->inputADims[1] * y + c;
-        int indexB = info->inputBDims[1] * c + x;
+      for (int c = 0; c < AW; c++) {
+        int indexA = y * AW + c;
+        int indexB = c * BW + x;
 
         float valA = viewA[indexA];
         float valB = viewB[indexB];
@@ -707,73 +481,4 @@ void *Software_Softmax(void *input, void *output, int index,
   }
 
   return output;
-}
-
-static inline float absf(float a) {
-  if (a < 0.0f) {
-    return -a;
-  }
-  return a;
-}
-
-int64_t CalculateSizeOfDim(int64_t *dim, int dims) {
-  int64_t size = 1;
-  for (int i = 0; i < dims; i++) {
-    size *= dim[i];
-  }
-
-  return size;
-}
-
-void AssertAlmostEqual(void *toTest, void *correctValues, int index,
-                       LayerInfo *info) {
-  float *test = (float *)toTest;
-  float *correct = (float *)correctValues;
-
-  size_t outputSize = info->outputSize / sizeof(float);
-
-  printf("Gonna check output of layer: %d\n", index);
-
-  if (outputSize == 0) {
-    printf("Error, AssertAlmostEqual with output size of 0. Should not be "
-           "possible\n");
-    return;
-  }
-
-  int maxIncorrect = 10;
-  bool printOk = true;
-
-  // Make sure that cache is not affecting the verification process
-  clear_cache();
-
-  int incorrectFound = 0;
-  for (int i = 0; i < outputSize; i++) {
-    if (absf(correct[i] - test[i]) > 0.001f) {
-      if (incorrectFound == 0) {
-        printf("\n");
-        printf("[%s] (Layer %d) FAIL:\n", info->typeName, index);
-      }
-      printf("  Index: %4d Different values %.4f %.4f\n", i, correct[i],
-             test[i]);
-      if (i > 0) {
-        printf("    PreviousValue: %.4f\n", test[i - 1]);
-      }
-      incorrectFound += 1;
-    }
-
-    if (incorrectFound >= maxIncorrect) {
-      printf("More than %d incorrect found, quitting early\n", maxIncorrect);
-      printf("\n");
-      break;
-    }
-  }
-
-  if (printOk && incorrectFound == 0) {
-    printf("[%s] (Layer %d) - OK\n", info->typeName, index);
-  }
-}
-
-InferenceOutput RunInference(void *outputMemory, void *temporaryMemory,
-                             void **input, void *modelMemory) {
-  return (InferenceOutput){};
 }

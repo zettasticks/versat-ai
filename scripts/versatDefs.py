@@ -114,7 +114,7 @@ class OnnxOperatorSpec:
     name: str
     emitFunction: Callable
     attributesDict: dict[str, OnnxAttribute] = field(default_factory=dict)
-    generateVersatCode: bool = False
+    supportedByVersat: bool = False
     broadcastType: BroadcastType = BroadcastType.NO_BROADCAST
 
 
