@@ -530,11 +530,6 @@ def GenerateDebug(
 
         cModel = RestrictModelFreeParameter(cModel, freeParameterValue)
 
-    CalculateMemoryAllocations(cModel)
-
-    for c in cModel.operations:
-        print(c.opName, c.inputDimensions)
-
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
     # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
     result = RunModel(cModel, inputs)
@@ -544,7 +539,7 @@ def GenerateDebug(
     packedCorrectData = PackMultipleArrays(correctData)
     packedInitializers = PackMultipleArrays(cModel.initializers)
 
-    if focusLayer:
+    if focusLayer != None and focusLayer >= 0:
         op = cModel.operations[focusLayer]
         cModel.operations = [op]
 
@@ -582,6 +577,11 @@ def GenerateDebug(
 
         if len(packedInputs.data) == 0:
             cModel.modelInputs = []
+
+    CalculateMemoryAllocations(cModel)
+
+    for c in cModel.operations:
+        print(c.opName, c.inputDimensions)
 
     debugging = True
     with open(os.path.join(sourceOutputLocation, f"{namespace}_code.c"), "w") as f:
@@ -712,16 +712,16 @@ def GenerateDebug(
             inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
             inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
 
-        f.write(f"const int {namespace}_INPUT_SIZE[] = " + "{")
+        f.write(f"static const int {namespace}_INPUT_SIZE[] = " + "{")
         f.write(",".join([str(x) for x in inputSizes]))
         f.write("};\n")
 
-        f.write(f"const int {namespace}_INPUT_OFFSET[] = " + "{")
+        f.write(f"static const int {namespace}_INPUT_OFFSET[] = " + "{")
         f.write(",".join([str(x) for x in inputOffsets]))
         f.write("};\n\n")
 
         f.write(
-            f"InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
+            f"static InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
         )
 
         f.write(f"static TestModelInfo {namespace}_ModelInfo = " + "{\n")

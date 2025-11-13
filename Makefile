@@ -133,7 +133,7 @@ clean:
 	@rm -rf ./hardware/simulation/*.bin
 	@rm -rf ./hardware/fpga/*.bin
 	@rm -rf ./software/*.bin
-	@rm -f  ./software/src/code.c ./software/src/modelInfo.h ./software/src/testInfo.h 
+	@rm -f  ./software/src/*_code.c ./software/src/*_modelInfo.h ./software/src/testInfo.h 
 	@rm -rf ../*.summary ../*.rpt
 	@rm -rf ./*.rpt
 	@find . -name \*~ -delete

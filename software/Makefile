@@ -49,7 +49,7 @@ INCLUDES ?=-I. -Isrc
 #########################################
 
 # compiler flags
-EMUL_CFLAGS ?=-std=gnu99 -g -DPC #-fsanitize=address -static-libasan
+EMUL_CFLAGS ?=-std=gnu99 -O0 -g -DPC #-fsanitize=address -static-libasan
 
 CONSOLE_CMD :=rm -f soc2cnsl cnsl2soc; ../scripts/console.py -L
 

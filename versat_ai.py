@@ -85,9 +85,9 @@ def setup(py_params: dict):
         "title": "Versat-AI System",
         "description": "Accelerate AI Applications with Versat-AI.",
         "board_list": [
-            "iob_aes_ku040_db_g",
-            "iob_cyclonev_gt_dk",
-            "iob_zybo_z7",
+            "iob_aes_ku040_db_g"
+            # "iob_cyclonev_gt_dk",
+            # "iob_zybo_z7",
         ],
         "confs": [
             # {   TODO: is this needed?

@@ -276,8 +276,8 @@ void AdvancedWindow_Print(AdvancedWindow window) {
 
   printf("\n");
 
-  printf("Output pos: %d:(%d,%d)\n", window.outputC, window.outputX,
-         window.outputY);
+  printf("Output pos: X:%d,Y:%d (C:%d)\n", window.outputX, window.outputY,
+         window.outputC);
   printf("Input pos: (%d,%d)\n", window.inputX, window.inputY);
   printf("WindowSize (Out view): %d %d %d\n", window.outputSizeC,
          window.outputH, window.outputW);
@@ -292,6 +292,7 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
   res.outputY = gen->currentOutputY;
   res.outputC = gen->currentOutputC;
 
+  res.startC = gen->currentOutputC;
   res.inputX = gen->currentOutputX * gen->info->strideW;
   res.inputY = gen->currentOutputY * gen->info->strideH;
 
@@ -689,10 +690,90 @@ Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims) {
   return tensor;
 }
 
+unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
+
+typedef struct Arena_t {
+  void *mem;
+  int used;
+  int allocated;
+} Arena;
+
+void *PushBytes(Arena *arena, int size) {
+  int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
+                                // worry about alignment further
+
+  if (arena->used + size >= arena->allocated) {
+    for (int i = 0; i < 5; i++) {
+      printf("\n\nArena overflow\n\n");
+    }
+  }
+
+  void *res = (void *)(((char *)arena->mem) + arena->used);
+  arena->used += size;
+
+  return res;
+}
+
+#define PushType(ARENA, TYPE) (TYPE *)PushBytes(ARENA, sizeof(TYPE))
+#define PushArray(ARENA, COUNT, TYPE)                                          \
+  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE))
+
+typedef struct {
+  unsigned int firstMarker;
+  unsigned int *secondMarkerPtr;
+} CanaryHeader;
+
+void CheckCanary(void *memory) {
+  CanaryHeader *asHeader = (CanaryHeader *)memory;
+  asHeader -= 1;
+
+  if (asHeader->firstMarker != 0x12345678) {
+    printf("Canary check failed before allocation\n");
+  }
+
+  if (*asHeader->secondMarkerPtr != 0x87654321) {
+    printf("Canary check failed after allocation\n");
+  }
+}
+
+void *PushBytesWithCanary(Arena *arena, int size) {
+  CanaryHeader *header = PushType(arena, CanaryHeader);
+  void *memory = PushBytes(arena, size);
+  unsigned int *last = PushType(arena, unsigned int);
+
+  header->firstMarker = 0x12345678;
+  header->secondMarkerPtr = last;
+
+  *last = 0x87654321;
+
+  CheckCanary(memory);
+
+  return memory;
+}
+
+#define PushTypeWithCanary(ARENA, TYPE)                                        \
+  (TYPE *)PushBytesWithCanary(ARENA, sizeof(TYPE))
+#define PushArrayWithCanary(ARENA, COUNT, TYPE)                                \
+  (TYPE *)PushBytesWithCanary(ARENA, (COUNT) * sizeof(TYPE))
+
+typedef struct {
+  Arena *arena;
+  int used;
+} ArenaMark;
+
+ArenaMark MarkArena(Arena *arena) {
+  ArenaMark mark = {};
+  mark.arena = arena;
+  mark.used = arena->used;
+  return mark;
+}
+
+void MarkPop(ArenaMark mark) { mark.arena->used = mark.used; }
+
 // TODO: All this memory allocation is very bad. We do not want to allocate
 // memory at all, and we would like to push as much memory stuff to the outside
 // code. We want memory to be allocated once by the user before calling
-Tensor CreateTensor(int64_t *dims, int numberDims) {
+Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
   Tensor tensor = CreateTensor_NoAllocate(dims, numberDims);
 
   int size = 1;
@@ -700,11 +781,13 @@ Tensor CreateTensor(int64_t *dims, int numberDims) {
     size *= dims[i];
   }
 
-  tensor.data = (float *)calloc(sizeof(float), size);
+  tensor.data = PushArrayWithCanary(arena, size, float);
   return tensor;
 }
 
-Tensor Tensor_Transpose(Tensor input, int *transposeIndex) {
+static void Tensor_CheckCanary(Tensor in) { CheckCanary(in.data); }
+
+Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
   int size = input.dims.size;
   int64_t *inDims = input.dims.data;
 
@@ -715,7 +798,7 @@ Tensor Tensor_Transpose(Tensor input, int *transposeIndex) {
     outDims[i] = inDims[index];
   }
 
-  Tensor res = CreateTensor(outDims, size);
+  Tensor res = PushTensor(arenaOut, outDims, size);
 
   AddressGen in = StartAddress(inDims, inDims, size);
   AddressGen out = StartAddress(outDims, outDims, size);
@@ -735,8 +818,6 @@ Tensor Tensor_Transpose(Tensor input, int *transposeIndex) {
 
   return res;
 }
-
-void FreeTensor(Tensor tensor) { free(tensor.data); }
 
 int Tensor_Size(Tensor tensor) {
   int size = 1;
@@ -762,7 +843,8 @@ void Tensor_Print(Tensor tensor) {
   }
 }
 
-Tensor Tensor_ExtractView(Tensor input, int dimIndex, int start, int size) {
+Tensor Tensor_ExtractView(Tensor input, int dimIndex, int start, int size,
+                          Arena *arenaOut) {
   AddressGen in =
       StartAddress(input.dims.data, input.dims.data, input.dims.size);
 
@@ -772,8 +854,7 @@ Tensor Tensor_ExtractView(Tensor input, int dimIndex, int start, int size) {
   Dimensions outDims = input.dims;
   outDims.data[dimIndex] = size;
 
-  Tensor output = CreateTensor(outDims.data, outDims.size);
-
+  Tensor output = PushTensor(arenaOut, outDims.data, outDims.size);
   AddressGen out = StartAddress(outDims.data, outDims.data, outDims.size);
 
   for (; Address_IsValid(&in); Address_Advance(&in), Address_Advance(&out)) {
@@ -872,25 +953,35 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int convChannelSize = inputImageC;
   int kernelChannelSize = inputImageC;
   int group = info->group;
-  int convStartC = w.startC;
+
+  int convStartC = 0; // We must always process the entire input channels.
+  int outputStartC = w.startC;
+
+  // outputImageC = 1;
+  // convStartC = w.startC;
+
+  int featuresComputedPerRun = 1;
 
   Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
                     w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
-                    convChannelSize, outputImageC, convStartC);
+                    convChannelSize, featuresComputedPerRun, convStartC);
+
   Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
                  w.actualKernelW, w.actualKernelH, kernelW, kernelH,
-                 inputImageC, kernelChannelSize, outputImageC, convStartC);
+                 inputImageC, kernelChannelSize, featuresComputedPerRun,
+                 convStartC, outputStartC);
 
-#if 1
+  // Only outputs one now.
   Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
-                      w.outputW, 0, outputImageC, outputImageW, stride);
-#endif
+                      w.outputW, w.startC, outputC, featuresComputedPerRun,
+                      outputImageW, stride);
 
   if (bias == NULL) {
     static float bias = 0.0f;
     LinearStrided_VRead(&config->bias, &bias, 1, 1);
   } else {
-    LinearStrided_VRead(&config->bias, bias, outputImageC, stride);
+    LinearStrided_VRead(&config->bias, bias + outputStartC,
+                        featuresComputedPerRun, stride);
   }
 
   config->myAccum.strideMinusOne = stride - 1;
@@ -908,6 +999,12 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   forceDoubleLoop = true;
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
+
+  Arena arenaInst = {};
+  Arena *arena = &arenaInst;
+
+  arena->allocated = 1024 * 1024 * 16;
+  arena->mem = malloc(arena->allocated); // 16 Megabytes
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
 
@@ -928,6 +1025,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   inputTensor.data = inputX;
 
   for (int batch = 0; batch < batches; batch++) {
+    ArenaMark mark = MarkArena(arena);
+
     // TODO: This technically depends on batch because we have group related
     // operations
     //       that change these values. If we remove them we can then push this
@@ -938,13 +1037,20 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     int64_t NHWCDims[] = {info->inputDims[0], info->inputDims[2],
                           info->inputDims[3], info->inputDims[1]};
 
-    Tensor tempInputTensor = CreateTensor(NHWCDims, 4);
-    Tensor tempOutputTensor = CreateTensor(info->outputDims, 4);
+    Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
+
+    Tensor_CheckCanary(tempInputTensor);
+
+    Tensor tempOutputTensor = PushTensor(arena, info->outputDims, 4);
+
+    Tensor_CheckCanary(tempInputTensor);
 
     int64_t kernelDims[] = {outputChannels, inputChannels / group,
                             info->kernelDims[1], info->kernelDims[0]};
-    Tensor kernel = CreateTensor_NoAllocate(kernelDims, 4);
-    kernel.data = inputW;
+    // Tensor kernel = CreateTensor_NoAllocate(kernelDims, 4);
+    // kernel.data = inputW;
+
+    Tensor_CheckCanary(tempInputTensor);
 
     int kernelSize = Dimensions_Size(CreateDimensions(kernelDims, 4));
 
@@ -955,6 +1061,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     float *biasView = (float *)inputB;
 
     inputView += batch * inputSize;
+
+    Tensor_CheckCanary(tempInputTensor);
 
     // Convert NCHW to NHWC
     for (int y = 0; y < inputImageH; y++) {
@@ -969,6 +1077,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         }
       }
     }
+
+    Tensor_CheckCanary(tempInputTensor);
 
     // Extract the channel
     if (group != 1) {
@@ -987,16 +1097,17 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2],
                                 outDims.data[3], outDims.data[1]};
-      Tensor tempGroupTensor = CreateTensor(NHWCOutDims, 4);
+      Tensor tempGroupTensor = PushTensor(arena, NHWCOutDims, 4);
       float *tempGroupOutput = tempGroupTensor.data;
 
       int index = 0;
       for (int g = 0; g < group; g++) {
         int s = extra.inputImageC;
         int o = extra.outputImageC;
-        Tensor extracted = Tensor_ExtractView(tempInputTensor, 3, g * s, s);
+        Tensor extracted =
+            Tensor_ExtractView(tempInputTensor, 3, g * s, s, arena);
 
-        WindowGen genInst = StartWindowGen(&extra, true, true);
+        WindowGen genInst = StartWindowGen(&extra, true, false);
         WindowGen *gen = &genInst;
 
         float *trueBias = biasView;
@@ -1029,7 +1140,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
         //
         int transposeDims[] = {0, 3, 1, 2};
-        Tensor transposed = Tensor_Transpose(tempGroupTensor, transposeDims);
+        Tensor transposed =
+            Tensor_Transpose(tempGroupTensor, transposeDims, arena);
 
 #if 0
         printf("Original:%d \n",g);
@@ -1044,29 +1156,18 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
           outputView[index++] = transposed.data[i];
         }
 
-        FreeTensor(extracted);
-        FreeTensor(transposed);
+        Tensor_CheckCanary(extracted);
+        Tensor_CheckCanary(transposed);
       }
 
-      FreeTensor(tempGroupTensor);
+      Tensor_CheckCanary(tempGroupTensor);
     } else {
 
-      WindowGen genInst = StartWindowGen(&extra, true, true);
+      WindowGen genInst = StartWindowGen(&extra, true, false);
       WindowGen *gen = &genInst;
-
-#if 0
-      printf("NCHW Input:\n");
-      Tensor_Print(inputTensor);
-
-      printf("NHWC Input:\n");
-      Tensor_Print(tempInputTensor);
-      printf("Kernel:\n");
-      Tensor_Print(kernel);
-#endif
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
-        // AdvancedWindow_Print(w);
         ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
                                    info, info->inputDims[1],
                                    info->outputDims[1]);
@@ -1099,8 +1200,10 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       }
     }
 
-    FreeTensor(tempInputTensor);
-    FreeTensor(tempOutputTensor);
+    Tensor_CheckCanary(tempInputTensor);
+    Tensor_CheckCanary(tempOutputTensor);
+
+    MarkPop(mark);
   }
 
   return output;
@@ -1114,7 +1217,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 
   int totalBSize = info->inputBDims[0] * info->inputBDims[1];
 
-  float *tempB = malloc(sizeof(float) * totalBSize);
+  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
 
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;

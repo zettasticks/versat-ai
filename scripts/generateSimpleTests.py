@@ -262,10 +262,12 @@ def CreateConvolution(
 
     if outputChannels % group != 0:
         print("First", outputChannels, group)
-        assert False
+        return False
+        # assert False
     if group != 1 and (outputChannels * group) % inputChannels != 0:
         print("Second", outputChannels, group, inputChannels)
-        assert False
+        return False
+        # assert False
 
     test = Test()
     test.shapes = [shape]
@@ -322,11 +324,34 @@ def CreateConvolution(
     randomArray0 = np.random.randn(*shape).astype(np.float32)
     randomArray1 = np.random.randn(*kernelShape).astype(np.float32)
 
+    linear = False
+
+    val = 1.0
+    if linear:
+        randomArray0 = np.zeros(shape).astype(np.float32)
+        for i, x in np.ndenumerate(randomArray0):
+            randomArray0[i] = val
+            val += 1.0
+
+        randomArray1 = np.zeros(kernelShape).astype(np.float32)
+        for i, x in np.ndenumerate(randomArray1):
+            randomArray1[i] = val
+            val += 1.0
+
     test.randomArrays = [randomArray0, randomArray1]
 
     if bias:
-        randomBias = np.random.randn(*[features]).astype(np.float32)
+        randomBias = np.random.randn(features).astype(np.float32)
+
+        if linear:
+            randomBias = np.zeros([features]).astype(np.float32)
+            for i, x in np.ndenumerate(randomBias):
+                randomBias[i] = val
+                val += 1.0
+
         test.randomArrays.append(randomBias)
+
+    # print(test.randomArrays)
 
     tests.append(test)
 
@@ -460,7 +485,7 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 
 
 def GenerateSimpleTest(outputPath):
-    testComplexity = 0
+    testComplexity = 2
 
     testAdd = False
     testRelu = False
@@ -474,9 +499,11 @@ def GenerateSimpleTest(outputPath):
 
     testBig = False
 
-    # CreateConvolution(
-    #    [1, 3, 32, 32], 16, [3, 3], [1, 1], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
-    # )
+    generativeTests = True
+
+    CreateConvolution(
+        [1, 2, 2, 2], 3, [1, 1], [1, 1], [1, 1], 1, True, "NOTSET", [0, 0, 0, 0]
+    )
     # if True:
     #    CreateBinaryOpDynamicTest(["unk__0", 1], ["unk__1", 1], [1, 1], [1, 1])
 
@@ -752,7 +779,7 @@ def GenerateSimpleTest(outputPath):
 
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
-        if testComplexity == 2 or False:
+        if generativeTests or False:
             nP = [1, 2]
             aP = [[3, 3], [5, 5], [7, 7]]
             cP = [1, 3, 4, 6, 8]
@@ -809,7 +836,7 @@ def GenerateSimpleTest(outputPath):
             # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
             if False:
-                ind = 48
+                ind = 84
 
                 lastGood = args[ind - 1]
                 fail = args[ind]
@@ -841,18 +868,18 @@ def GenerateSimpleTest(outputPath):
             # CreateConvolution([1, 4, 2, 2], 3, [2, 2], [2, 2], [1, 1], 4)
             # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 3)
 
+        n = 1
+        c = 3
+        f = 16
+
+        k = [3, 3]
+        s = [3, 3]
+        d = [1, 1]
+        b = False
+        p = "NOTSET"
+        g = 1
+
         if testComplexity == 1 or False:
-            n = 1
-            c = 3
-            f = 16
-
-            k = [3, 3]
-            s = [3, 3]
-            d = [1, 1]
-            b = False
-            p = "NOTSET"
-            g = 1
-
             #                                                  T  L  B  R
             CreateConvolution([n, c, 6, 6], f, k, s, d, g, b, p, [0, 0, 0, 0])
             CreateConvolution([n, c, 5, 6], f, k, s, d, g, b, p, [1, 0, 0, 0])
@@ -953,8 +980,8 @@ def GenerateSimpleTest(outputPath):
             CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d, g, True)
             CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d, g, True)
 
-        if testComplexity == 2 or testBig:
-            CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, g, True)
+        # if testComplexity == 2 or testBig or False:
+        #    CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, g, True)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

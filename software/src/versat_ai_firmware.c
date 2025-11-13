@@ -149,7 +149,7 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-  ConfigCreateVCD(false);
+  ConfigCreateVCD(true);
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
@@ -159,7 +159,7 @@ int main() {
 
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
-  int extra = 10;
+  int extra = 16;
 
   for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
     TestModelInfo info = *testModels[i];
@@ -177,6 +177,12 @@ int main() {
     void *correct = Align4(malloc(info.correctSize + extra));
     void *inputMemory = Align4(malloc(info.totalInputSize + extra));
 
+    *((int *)output) = 123;
+    *((int *)temp) = 123;
+    *((int *)model) = 123;
+    *((int *)correct) = 123;
+    *((int *)inputMemory) = 123;
+
     void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
     for (int i = 0; i < info.inputCount; i++) {
       inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
@@ -189,6 +195,9 @@ int main() {
     printf("Input  : %p\n", inputMemory);
 
     void *total = inputs[info.inputCount - 1];
+    if (info.inputCount == 0) {
+      total = OFFSET_PTR(correct, info.correctSize);
+    }
     printf("Total  : %p\n", total);
 
     if (total > &stackVar) {

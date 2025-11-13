@@ -26,21 +26,6 @@
       {"name" : "Keyword", "path": "./tests/keyword"},
       {"name" : "VisualWake", "path": "./tests/visual_wake"}
     ]
-  },
-  "Keyword22": {
-    "type": "FIXED",
-    "path": "./tests/keyword",
-    "focusLayer": 22
-  },
-  "Image3": {
-    "type": "FIXED",
-    "path": "./tests/image",
-    "focusLayer": 3
-  },
-  "Image22": {
-    "type": "FIXED",
-    "path": "./tests/image",
-    "focusLayer": 22
   }
 }
 
