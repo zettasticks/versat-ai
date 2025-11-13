@@ -174,6 +174,19 @@ AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   return gen;
 }
 
+AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,int* offset) {
+  AddressGen gen = *in;
+
+  for (int i = 0; i < in->numberDims; i++) {
+    gen.addressVars[i] *= stride[i];
+    gen.addressVars[i] -= offset[i];
+    gen.iterationDims[i] = biggerDim[i];
+    gen.properDims[i] = biggerDim[i];
+  }
+
+  return gen;
+}
+
 // ======================================
 // KernelGen
 
@@ -271,7 +284,7 @@ bool Kernel_IsInsidePad(KernelGen *gen) {
   }
 
   for (int i = 0; i < gen->numberDims; i++) {
-    if (properVars[i] >= gen->address->properDims[i]) {
+    if (properVars[i] < 0 || properVars[i] >= gen->address->properDims[i]) {
       return true;
     }
   }

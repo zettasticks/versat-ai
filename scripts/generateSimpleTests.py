@@ -493,10 +493,10 @@ def GenerateSimpleTest(outputPath):
     testSoftmax = False
     testTranspose = False
     testMatMul = False
-
-    testMaxPool = True
-    testConv = False
+    testMaxPool = False
     testAveragePool = False
+
+    testConv = True
 
     testBig = False
 
@@ -619,10 +619,11 @@ def GenerateSimpleTest(outputPath):
         if testBig:
             CreateBinaryOpTest("MatMul", [100, 200], [200, 300])
 
-    CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
-    if False and testMaxPool:
+    # No padding                                           T  L  B  R
+    #CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+    if testMaxPool:
         # All padding posibilities, mostly to test the window generation
-        # No padding                                           T  L  B  R
+        # Padding                                              T  L  B  R
         CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
         CreateMaxPool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])
         CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])

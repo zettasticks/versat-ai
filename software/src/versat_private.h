@@ -46,7 +46,11 @@ void Address_Advance(AddressGen *gen);
 void Address_AdvanceAxis(AddressGen *gen, int axisToAdvance);
 AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
                         int numberDims);
+
 AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride);
+
+// TODO: Need to standardize this stuff eventually.
+AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,int* offset);
 
 // ======================================
 // KernelGen

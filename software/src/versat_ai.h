@@ -42,9 +42,12 @@ typedef InferenceOutput (*DebugInferenceFunction)(void *outputMemory,
                                                   void *modelMemory,
                                                   void *correctInput);
 
-// TODO: Remember, we do not want to force user to have to deal with this stuff at runtime (unless it is mandatory somewhat).
-//       We want stuff to be inside defines and compile time expressions so that user side can instantiate this stuff at compile time if needed.
-//       Even when implementing models with parameters, we want to use function defines rather than force user to calculate this stuff at compile time.
+// TODO: Remember, we do not want to force user to have to deal with this stuff
+// at runtime (unless it is mandatory somewhat).
+//       We want stuff to be inside defines and compile time expressions so that
+//       user side can instantiate this stuff at compile time if needed. Even
+//       when implementing models with parameters, we want to use function
+//       defines rather than force user to calculate this stuff at compile time.
 typedef struct {
   int outputSize;
   int tempSize;
