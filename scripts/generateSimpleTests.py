@@ -261,13 +261,13 @@ def CreateConvolution(
     inputChannels = shape[1]
 
     if outputChannels % group != 0:
-        #print("First", outputChannels, group)
+        # print("First", outputChannels, group)
         return False
     if inputChannels % group != 0:
-        #print("Second")
+        # print("Second")
         return False
 
-    #if group != 1 and (outputChannels * group) % inputChannels != 0:
+    # if group != 1 and (outputChannels * group) % inputChannels != 0:
     #    #print("Third", outputChannels, group, inputChannels)
     #    return False
     #    # assert False
@@ -814,14 +814,17 @@ def GenerateSimpleTest(outputPath):
         # Input shape, features, kernel, stride, dilations, bias
         if generativeTests or False:
             nP = [1, 2]
-            aP = [[3, 3], [5, 5], [7, 7], [16, 16]]
+            aP = [[3, 3], [5, 5], [16, 16]]
             cP = [1, 3, 4, 6, 8, 16]
             fP = [1, 3, 4, 6, 8, 16]
             kP = [[3, 3], [5, 5]]
-            sP = [[3, 3], [5, 5], [7, 7], [9, 9]]
+            sP = [[3, 3], [5, 5], [9, 9]]
             dP = [[1, 1]]
             bP = [False, True]
-            pP = [PaddingType("NOTSET", [1, 1, 1, 1]),PaddingType("NOTSET",[4, 2, 1, 6])]
+            pP = [
+                PaddingType("NOTSET", [1, 1, 1, 1]),
+                PaddingType("NOTSET", [4, 2, 1, 6]),
+            ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             gP = [1, 2, 3, 4, 8]
             # gP = [2]

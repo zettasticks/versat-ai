@@ -108,13 +108,14 @@ def ParseTests(testInfoJson):
 def SubTestName(subTest):
     name = str(subTest.name)
 
-    if(subTest.config.mode == TestMode.SOFTWARE):
+    if subTest.config.mode == TestMode.SOFTWARE:
         name = name + "_PC"
 
     if subTest.config.focusLayer:
         name = name + "_" + str(subTest.config.focusLayer)
 
     return name
+
 
 if __name__ == "__main__":
     testInfoJson = None
@@ -155,11 +156,7 @@ if __name__ == "__main__":
 
     boolStr = "true" if createVCD else "false"
     with open("./software/src/testInfo.h", "w") as f:
-        f.write(
-            "\n".join(
-                [f'#include "{x.name}_modelInfo.h"' for x in test.subTest]
-            )
-        )
+        f.write("\n".join([f'#include "{x.name}_modelInfo.h"' for x in test.subTest]))
         f.write("\n\n")
 
         f.write(f'#define TEST_NAME "{properName}"\n')

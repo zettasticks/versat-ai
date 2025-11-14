@@ -330,7 +330,8 @@ bool Kernel_IsInsidePad(KernelGen *gen) {
 
   for (int i = 0; i < gen->numberDims; i++) {
     if (properVars[i] < 0 || properVars[i] >= gen->addressProperDims[i]) {
-      //versat_printf("Bad: %d %d %d\n",i,properVars[i],gen->addressProperDims[i]);
+      // versat_printf("Bad: %d %d
+      // %d\n",i,properVars[i],gen->addressProperDims[i]);
       return true;
     }
   }

@@ -127,6 +127,17 @@ void *Align4(void *in) {
   return (void *)asInt;
 }
 
+void PrintU64InHex(uint64_t n){
+  union {
+    uint64_t u64;
+    uint32_t u32[2];
+  } conv;
+
+  conv.u64 = n;
+
+  printf("%08x%08x\n",conv.u32[1],conv.u32[0]);
+}
+
 int main() {
   char pass_string[] = "Test passed!";
   char fail_string[] = "Test failed!";
@@ -154,6 +165,16 @@ int main() {
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
+  
+  PrintU64InHex(1ull << 0);
+  PrintU64InHex(1ull << 8);
+  PrintU64InHex(1ull << 16);
+  PrintU64InHex(1ull << 24);
+  PrintU64InHex(1ull << 32);
+  PrintU64InHex(1ull << 40);
+  PrintU64InHex(1ull << 48);
+  PrintU64InHex(1ull << 56);
+  PrintU64InHex(1ull << 63);
 
   ConfigCreateVCD(false);
 
@@ -220,7 +241,22 @@ int main() {
                     info.totalInputSize);
     printf("Received inputs\n");
 
-    info.debugInferenceFunction(output, temp, inputs, model, correct);
+    uint64_t start = timer_get_count();
+    info.versatInferenceFunction(output, temp, inputs, model);
+    uint64_t end = timer_get_count();
+    
+    printf("start:       ");
+    PrintU64InHex(start);
+    printf("end:         ");
+    PrintU64InHex(end);
+    printf("diff:        ");
+    PrintU64InHex(end - start);
+
+    uint64_t elapsed = (end - start) / (IOB_BSP_FREQ / 1000000);
+    printf("elapsed(us): ");
+    PrintU64InHex(elapsed);
+
+    printf("Elapsed: %d (@%dMHz)\n",(int) elapsed,IOB_BSP_FREQ / 1000000);
 
     free(output);
     free(temp);

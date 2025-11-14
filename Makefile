@@ -65,6 +65,7 @@ fpga-build: $(VERSAT_ACCEL)
 	python3 ./setupTest.py $(TEST)
 	$(MAKE) test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
+	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-build BOARD=$(BOARD)
 
 # Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime

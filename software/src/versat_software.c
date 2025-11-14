@@ -13,12 +13,8 @@ void clear_cache();
 // Care when using this, when not debugging this just crashes the program
 #define DEBUG_BREAK() __asm__("int3")
 
-void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
-                     int index, ConvInfo *info) {
-  bool print = false;
-  if (print)
-    versat_printf("Inside layer\n");
-
+void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
+                            void *output, int index, ConvInfo *info) {
   int batchSize = info->inputDims[0];
   int inChannels = info->inputDims[1];
   int inW = info->inputDims[3];
@@ -33,11 +29,6 @@ void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
   int kernelH = info->kernelDims[0];
 
   int group = info->group;
-  if (print)
-    versat_printf("KernelSize: %d\n",
-                  featureMaps * (inChannels / group) * kernelW * kernelH);
-  if (print)
-    versat_printf("TotalImageSize: %d\n", batchSize * inChannels * inW * inH);
 
   int outChannels = info->outputDims[1]; // Should be equal to feature maps.
   int outW = info->outputDims[3];
@@ -77,9 +68,6 @@ void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
   for (; Address_IsValid(outGen); Address_Advance(outGen)) {
     int outPos = Address_GetValue(outGen);
 
-    if (print)
-      versat_printf("Out: %d\n", outPos);
-
     AddressGen inputPos = Address_Map2(outGen, info->inputDims, stride, offset);
 
     // KernelGen does not know about the indexes used to access the kernel
@@ -93,38 +81,25 @@ void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
     int inChannelsPerGroup = inChannels / group;
     int outChannelsPerGroup = outChannels / group;
 
-    if (print)
-      versat_printf("Channels per group: %d\n", outChannelsPerGroup);
-
     if (group == 1) {
       kern->addressGenVars[1] = 0;
     } else {
-      kern->addressGenVars[1] = (outC / outChannelsPerGroup) * inChannelsPerGroup;
-      //versat_printf("%d %d %d\n",kern->addressGenVars[1],inChannels,group);
+      kern->addressGenVars[1] =
+          (outC / outChannelsPerGroup) * inChannelsPerGroup;
     }
     kern->kernelDims[1] = inChannels / group;
 
-    if (print)
-      versat_printf("kernelAddressGenVar: %d\n", (outC / group) * outChannels);
-
-    for (int inC = outC / outChannelsPerGroup; inC < inChannels / inChannelsPerGroup; inC++) {
+    for (int inC = outC / outChannelsPerGroup;
+         inC < inChannels / inChannelsPerGroup; inC++) {
       int kernelIndex =
           outC * (inChannels / group) * extra.kernelW * extra.kernelH;
 
-      //Kernel_PrintShort(kern);
-      
       for (; Kernel_IsValid(kern); Kernel_Advance(kern), kernelIndex += 1) {
         bool isPadded = Kernel_IsInsidePad(kern);
         if (isPadded) {
           continue;
         }
         int index = Kernel_GetValue(kern);
-
-#if 1
-        if (print)
-          versat_printf("KernelIndex: %d | InputIndex: %d\n", kernelIndex,
-                        index);
-#endif
 
         float kernelVal = kernel[kernelIndex];
         float inputVal = inputView[index];
@@ -133,9 +108,6 @@ void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
     }
 
     if (bias) {
-      if (print)
-        versat_printf("%d %d %d\n", outPos, outPos, outC);
-
       outView[outPos] = accum + bias[outC];
     } else {
       outView[outPos] = accum;
@@ -145,80 +117,9 @@ void *Software_Conv2(void *inputX, void *inputW, void *inputB, void *output,
   return output;
 }
 
-void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
-                            void *output, int index, ConvInfo *info) {
-  return Software_Conv2(inputX, inputW, inputB, output, index, info);
-
-  int batchSize = info->inputDims[0];
-  int inChannels = info->inputDims[1];
-  int inW = info->inputDims[3];
-  int inH = info->inputDims[2];
-
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
-
-  int featureMaps = info->featureMaps;
-
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
-
-  int outChannels = info->outputDims[1]; // Should be equal to feature maps.
-  int outW = info->outputDims[3];
-  int outH = info->outputDims[2];
-
-  float *input = (float *)inputX;
-  float *kernel = (float *)inputW;
-  float *bias = (float *)inputB;
-  float *outView = (float *)output;
-
-  for (int outC = 0; outC < outChannels; outC++) {
-    for (int y = 0; y < outH; y++) {
-      for (int x = 0; x < outW; x++) {
-        float accum = 0.0f;
-        for (int inC = 0; inC < inChannels; inC++) {
-          for (int ky = 0; ky < kernelH; ky++) {
-            for (int kx = 0; kx < kernelW; kx++) {
-              int deltaX = x + kx;
-              int deltaY = y + ky;
-              int inIndex = inC * inW * inH + deltaY * inW + deltaX;
-              float inputVal;
-
-              if (deltaX < 0 || deltaY < 0 || deltaX >= inW || deltaY >= inH) {
-                inputVal = 0.0f;
-              } else {
-                inputVal = input[inIndex];
-              }
-
-              int inK = outC * inChannels * kernelW * kernelH;
-              inK += inC * kernelW * kernelH;
-              inK += ky * kernelW;
-              inK += kx;
-
-              float kernelVal = kernel[inK];
-              accum += inputVal * kernelVal;
-            }
-          }
-        }
-        int outPos = outC * outW * outH;
-        outPos += y * outW;
-        outPos += x;
-
-        if (bias) {
-          outView[outPos] = accum + bias[outC];
-        } else {
-          outView[outPos] = accum;
-        }
-      }
-    }
-  }
-
-  return output;
-}
-
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info) {
-  return Software_Conv2(inputX, inputW, NULL, output, index, info);
-  // return Software_ConvWithBias(inputX,inputW,NULL,output,index,info);
+  return Software_ConvWithBias(inputX, inputW, NULL, output, index, info);
 }
 
 void *Software_Reshape(void *data, void *shape, void *output, int index,
