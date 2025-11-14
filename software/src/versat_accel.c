@@ -451,9 +451,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int convStartC = 0; // We must always process the entire input channels.
   int outputStartC = w.startC;
 
-  // outputImageC = 1;
-  // convStartC = w.startC;
-
   int featuresComputedPerRun = 1;
 
   Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,

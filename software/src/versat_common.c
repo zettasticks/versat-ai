@@ -174,7 +174,8 @@ AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   return gen;
 }
 
-AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,int* offset) {
+AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,
+                        int *offset) {
   AddressGen gen = *in;
 
   for (int i = 0; i < in->numberDims; i++) {
@@ -196,7 +197,7 @@ AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,int* off
 // kernelDims has kernelSize size and defines the boundary of the iteration
 KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
   KernelGen gen = {};
-  gen.address = address;
+  // gen.address = address;
 
   int nonKernelDims = address->numberDims - kernelSize;
 
@@ -213,7 +214,32 @@ KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
     gen.kernelDims[nonKernelDims + i] = kernelDims[i];
   }
 
+  for (int i = 0; i < address->numberDims; i++) {
+    gen.addressGenVars[i] = address->addressVars[i];
+  }
+  for (int i = 0; i < address->numberDims; i++) {
+    gen.addressIterDims[i] = address->iterationDims[i];
+  }
+  for (int i = 0; i < address->numberDims; i++) {
+    gen.addressProperDims[i] = address->properDims[i];
+  }
+
   return gen;
+}
+
+void Kernel_PrintShort(KernelGen *gen) {
+  versat_printf(
+      "Kernel is gonna iterate the base tensor in the following coordinates:");
+
+  versat_printf(" [");
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (i != 0) {
+      versat_printf(" x ");
+    }
+    versat_printf("%ld - %ld", gen->addressGenVars[i],
+                  gen->addressGenVars[i] + gen->kernelDims[i]);
+  }
+  versat_printf("]\n");
 }
 
 void Kernel_Print(KernelGen *gen) {
@@ -231,6 +257,25 @@ void Kernel_Print(KernelGen *gen) {
     }
     versat_printf("%ld", gen->kernelDims[i]);
   }
+  versat_printf("]");
+
+  versat_printf(" [");
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (i != 0) {
+      versat_printf(" x ");
+    }
+    versat_printf("%ld", gen->kernelDims[i]);
+  }
+  versat_printf("]\n");
+
+  versat_printf(" [");
+  for (int i = 0; i < gen->numberDims; i++) {
+    if (i != 0) {
+      versat_printf(" x ");
+    }
+    versat_printf("%ld - %ld", gen->addressGenVars[i],
+                  gen->addressGenVars[i] + gen->kernelDims[i]);
+  }
   versat_printf("]\n");
 }
 
@@ -238,20 +283,20 @@ int Kernel_GetValue(KernelGen *gen) {
   int properVars[MAX_DIMS];
 
   for (int i = 0; i < gen->numberDims; i++) {
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
-                    gen->address->addressVars[i];
+    properVars[i] =
+        gen->kernelVars[i] * gen->kernelDilations[i] + gen->addressGenVars[i];
   }
 
   int address = 0;
   for (int i = 0; i < gen->numberDims; i++) {
     int index = properVars[i];
 
-    if (index >= gen->address->iterationDims[i]) {
+    if (index >= gen->addressIterDims[i]) {
       index = 0;
     }
 
     if (i > 0) {
-      address *= gen->address->iterationDims[i];
+      address *= gen->addressIterDims[i];
     }
     address += index;
   }
@@ -279,12 +324,13 @@ bool Kernel_IsInsidePad(KernelGen *gen) {
   int properVars[MAX_DIMS];
 
   for (int i = 0; i < gen->numberDims; i++) {
-    properVars[i] = gen->kernelVars[i] * gen->kernelDilations[i] +
-                    gen->address->addressVars[i];
+    properVars[i] =
+        gen->kernelVars[i] * gen->kernelDilations[i] + gen->addressGenVars[i];
   }
 
   for (int i = 0; i < gen->numberDims; i++) {
-    if (properVars[i] < 0 || properVars[i] >= gen->address->properDims[i]) {
+    if (properVars[i] < 0 || properVars[i] >= gen->addressProperDims[i]) {
+      //versat_printf("Bad: %d %d %d\n",i,properVars[i],gen->addressProperDims[i]);
       return true;
     }
   }

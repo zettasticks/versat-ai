@@ -261,13 +261,16 @@ def CreateConvolution(
     inputChannels = shape[1]
 
     if outputChannels % group != 0:
-        print("First", outputChannels, group)
+        #print("First", outputChannels, group)
         return False
-        # assert False
-    if group != 1 and (outputChannels * group) % inputChannels != 0:
-        print("Second", outputChannels, group, inputChannels)
+    if inputChannels % group != 0:
+        #print("Second")
         return False
-        # assert False
+
+    #if group != 1 and (outputChannels * group) % inputChannels != 0:
+    #    #print("Third", outputChannels, group, inputChannels)
+    #    return False
+    #    # assert False
 
     test = Test()
     test.shapes = [shape]
@@ -485,7 +488,7 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 
 
 def GenerateSimpleTest(outputPath):
-    testComplexity = 0
+    testComplexity = -1
 
     testAdd = False
     testRelu = False
@@ -499,8 +502,41 @@ def GenerateSimpleTest(outputPath):
     testConv = True
 
     testBig = False
+    generativeTests = True
 
-    generativeTests = False
+    if False:
+        n = 1  # Batches
+        c = 1  # Input channels
+        f = 1  # Output channels
+        hw = [4, 4]  # Image height and width
+        k = [2, 2]  # 2D Kernel
+        s = [2, 2]  # 2D Stride
+        d = [1, 1]  # 2D Dilations
+        g = 1  # Groups
+        b = False  # Use bias
+        p = "NOTSET"  # Padding Kind
+        pd = [0, 0, 0, 0]  # Actual padding used when NOTSET
+
+        # 0
+        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
+        # 1
+        CreateConvolution([2, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
+        # 2
+        CreateConvolution([n, 2, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
+        # 3
+        CreateConvolution([n, c, hw[0], hw[1]], 2, k, s, d, g, b, p, pd)
+        # 4
+        CreateConvolution([n, c, hw[0], hw[1]], f, [4, 4], s, d, g, b, p, pd)
+        # 5
+        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
+        # 6
+        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
+        # 7
+        CreateConvolution([n, 2, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
+        # 8
+        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, True, p, pd)
+        # 9
+        CreateConvolution([n, 2, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
 
     if testSoftmax:
         # Softmax axis come in pairs.
@@ -620,7 +656,7 @@ def GenerateSimpleTest(outputPath):
             CreateBinaryOpTest("MatMul", [100, 200], [200, 300])
 
     # No padding                                           T  L  B  R
-    #CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
+    # CreateMaxPool([1, 1, 4, 3], [2, 2], [2, 2], "NOTSET", [0, 1, 0, 0])
     if testMaxPool:
         # All padding posibilities, mostly to test the window generation
         # Padding                                              T  L  B  R
@@ -778,16 +814,16 @@ def GenerateSimpleTest(outputPath):
         # Input shape, features, kernel, stride, dilations, bias
         if generativeTests or False:
             nP = [1, 2]
-            aP = [[3, 3], [5, 5], [7, 7]]
-            cP = [1, 3, 4, 6, 8]
-            fP = [1, 3, 4, 6, 8]
+            aP = [[3, 3], [5, 5], [7, 7], [16, 16]]
+            cP = [1, 3, 4, 6, 8, 16]
+            fP = [1, 3, 4, 6, 8, 16]
             kP = [[3, 3], [5, 5]]
-            sP = [[3, 3], [5, 5], [7, 7]]
+            sP = [[3, 3], [5, 5], [7, 7], [9, 9]]
             dP = [[1, 1]]
             bP = [False, True]
-            pP = [PaddingType("NOTSET", [1, 1, 1, 1])]
+            pP = [PaddingType("NOTSET", [1, 1, 1, 1]),PaddingType("NOTSET",[4, 2, 1, 6])]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
-            gP = [1, 2, 3, 4]
+            gP = [1, 2, 3, 4, 8]
             # gP = [2]
 
             args = []
@@ -833,7 +869,7 @@ def GenerateSimpleTest(outputPath):
             # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
 
             if False:
-                ind = 84
+                ind = 72
 
                 lastGood = args[ind - 1]
                 fail = args[ind]

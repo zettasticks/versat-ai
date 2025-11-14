@@ -50,7 +50,8 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
 AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride);
 
 // TODO: Need to standardize this stuff eventually.
-AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,int* offset);
+AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,
+                        int *offset);
 
 // ======================================
 // KernelGen
@@ -78,7 +79,15 @@ typedef struct {
   int kernelVars[MAX_DIMS]; // Current state
 
   // Kernel Info
-  AddressGen *address;
+  // AddressGen *address;
+  int addressGenVars[MAX_DIMS]; // The value of the address vars at the start of
+                                // the kernel iteration.
+  int addressIterDims[MAX_DIMS];   // The original iteration dimensions. Kernel
+                                   // does not iterate outside of the original
+                                   // address gen space.
+  int addressProperDims[MAX_DIMS]; // The original dimensions. Need to figure
+                                   // out if we are inside pad or not.
+
   int kernelDims[MAX_DIMS];
   int kernelDilations[MAX_DIMS]; // NOTE: Not properly tested, do not rely on
                                  // dilations being correct
@@ -86,6 +95,7 @@ typedef struct {
 } KernelGen;
 
 KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize);
+void Kernel_PrintShort(KernelGen *gen);
 void Kernel_Print(KernelGen *gen);
 int Kernel_GetValue(KernelGen *gen);
 bool Kernel_IsValid(KernelGen *gen);

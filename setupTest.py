@@ -4,6 +4,8 @@ import sys
 import json
 import argparse
 import subprocess as sp
+import copy
+from pprint import pprint
 from enum import Enum, auto
 from dataclasses import dataclass
 
@@ -24,70 +26,95 @@ class TestType(Enum):
 
 
 class TestMode(Enum):
+    DEFAULT = auto()
     SOFTWARE = auto()
     VERSAT = auto()
+
+
+def OverrideTestMode(stronger, weaker):
+    if stronger == TestMode.DEFAULT:
+        return weaker
+
+    return stronger
+
+
+@dataclass
+class TestConfiguraton:
+    focusLayer: int | None = None
+    mode: TestMode = TestMode.DEFAULT
 
 
 @dataclass
 class SubTest:
     name: str
-    path: str
-    focusLayer: int | None = None
+    config: TestConfiguraton
 
 
 @dataclass
 class Test:
     type: TestType
-    mode: TestMode
+    path: str
     subTest: list[SubTest] = None
 
 
-def ValidateTest(test: Test):
-    if test.type == TestType.FIXED:
-        assert test.subTest[0].path != None
+def ParseTestName(testName):
+    splitted = testName.split("_")
 
+    originalName = splitted[0]
 
-def ParseTest(testName, testInfo):
-    try:
-        splitted = testName.split("_")
-        focusLayer = None
+    config = TestConfiguraton()
+    for x in splitted[1:]:
+        if x == "PC":
+            config.mode = TestMode.SOFTWARE
+        elif x == "VERSAT":
+            config.mode = TestMode.VERSAT
 
-        if len(splitted) >= 2:
-            focusLayer = int(splitted[-1])
-            testName = "".join(splitted[:-1])
-
-        testJsonContent = testInfo[testName]
-
-        testType = TestType[testJsonContent["type"]]
         try:
-            testMode = TestMode[testJsonContent["mode"]]
+            asInt = int(x)
+            config.focusLayer = asInt
         except:
-            testMode = TestMode.VERSAT
+            pass
 
-        path = testJsonContent.get("path", None)
-        subTests = testJsonContent.get("subTests", None)
+    return originalName, config
 
-        parsedSubTests = [SubTest(testName, path, focusLayer)]
-        if subTests:
-            parsedSubTests = [
-                SubTest(x["name"], x["path"], focusLayer) for x in subTests
-            ]
 
-        test = Test(testType, testMode, parsedSubTests)
-        ValidateTest(test)
+def ParseTest(testName, testInfo, allTests):
+    testType = TestType[testInfo["type"]]
+    path = testInfo.get("path", None)
+    subTests = testInfo.get("subTests", None)
 
-        return test
-    except Exception as e:
-        print(f"Error parsing the json: {e}")
-        sys.exit(-1)
+    parsedSubTests = [SubTest(testName, TestConfiguraton())]
+    if subTests:
+        parsedSubTests = []
+        for name in subTests:
+            subTestName, subTestConfigs = ParseTestName(name)
+            sub = SubTest(subTestName, subTestConfigs)
+            parsedSubTests.append(sub)
+
+    test = Test(testType, path, parsedSubTests)
+
+    return test
+
+
+def ParseTests(testInfoJson):
+    tests = {}
+    for name in testInfoJson:
+        test = ParseTest(name, testInfoJson[name], tests)
+        tests[name] = test
+
+    return tests
 
 
 def SubTestName(subTest):
-    if subTest.focusLayer:
-        return subTest.name + "_" + str(subTest.focusLayer)
-    else:
-        return subTest.name
+    name = str(subTest.name)
 
+    if(subTest.config.mode == TestMode.SOFTWARE):
+        name = name + "_PC"
+
+    if subTest.config.focusLayer:
+        name = name + "_" + str(subTest.config.focusLayer)
+
+    return name
 
 if __name__ == "__main__":
     testInfoJson = None
@@ -99,7 +126,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error parsing json file that should contain tests info: {e}")
         sys.exit(-1)
-
     testNames = [x for x in testInfoJson.keys()]
 
     print(testNames)
@@ -110,8 +136,15 @@ if __name__ == "__main__":
         )
         sys.exit(-1)
 
-    testName = sys.argv[1]
-    test = ParseTest(testName, testInfoJson)
+    allTests = ParseTests(testInfoJson)
+    properName, configs = ParseTestName(sys.argv[1])
+
+    test = allTests[properName]
+
+    for subTest in test.subTest:
+        subTest.config.mode = OverrideTestMode(subTest.config.mode, configs.mode)
+        if configs.focusLayer:
+            subTest.config.focusLayer = configs.focusLayer
 
     # NOTE: We run from the makefile since we need to enter the python environment but we do not want to run this script from inside the environment.
     # TODO: Can we run from inside the environment and call nix? We cannot do the inverse I think but I do not know if we tried nix from inside python env.
@@ -124,16 +157,16 @@ if __name__ == "__main__":
     with open("./software/src/testInfo.h", "w") as f:
         f.write(
             "\n".join(
-                [f'#include "{SubTestName(x)}_modelInfo.h"' for x in test.subTest]
+                [f'#include "{x.name}_modelInfo.h"' for x in test.subTest]
             )
         )
         f.write("\n\n")
 
-        f.write(f'#define TEST_NAME "{testName}"\n')
+        f.write(f'#define TEST_NAME "{properName}"\n')
         f.write(f"#define CREATE_VCD {boolStr}\n\n")
 
         f.write(f"static TestModelInfo* testModels[] = " + "{\n")
-        f.write(",\n".join([f"  &{SubTestName(x)}_ModelInfo" for x in test.subTest]))
+        f.write(",\n".join([f"  &{x.name}_ModelInfo" for x in test.subTest]))
         f.write("\n};\n")
 
     if test.type == TestType.GENERATED:
@@ -143,17 +176,19 @@ if __name__ == "__main__":
             "model.onnx",
             "software/",
             "software/src",
-            testName,
-            None,
-            test.mode == TestMode.SOFTWARE,
+            properName,
+            test.subTest[0].config.focusLayer,
+            test.subTest[0].config.mode == TestMode.SOFTWARE,
         )
     elif test.type == TestType.FIXED or test.type == TestType.FIXED_LIST:
         for subTest in test.subTest:
+            properTest = allTests[subTest.name]
             GenerateDebug(
-                subTest.path,
+                properTest.path,
                 "model.onnx",
                 "software/",
                 "software/src",
-                SubTestName(subTest),
-                subTest.focusLayer,
+                subTest.name,
+                subTest.config.focusLayer,
+                subTest.config.mode == TestMode.SOFTWARE,
             )

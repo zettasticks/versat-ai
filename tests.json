@@ -1,11 +1,6 @@
 {
   "Generated": {
-    "type": "GENERATED",
-    "mode": "VERSAT"
-  },
-  "GeneratedPC": {
-    "type": "GENERATED",
-    "mode": "SOFTWARE"
+    "type": "GENERATED"
   },
   "ToyCar":{
     "type": "FIXED",
@@ -25,12 +20,7 @@
   },
   "All": {
     "type": "FIXED_LIST",
-    "subTests": [
-      {"name" : "ToyCar", "path": "./tests/toycar"},
-      {"name" : "Image", "path": "./tests/image"},
-      {"name" : "Keyword", "path": "./tests/keyword"},
-      {"name" : "VisualWake", "path": "./tests/visual_wake"}
-    ]
+    "subTests": ["ToyCar","Image","Keyword","VisualWake"]
   }
 }
 
