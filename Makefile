@@ -9,7 +9,7 @@ SYNTHESIZER ?= yosys
 LINTER ?= spyglass
 BOARD ?= iob_aes_ku040_db_g
 
-TEST := Generated # Run setupTest.py to see the possible values for this
+TEST := All # Run setupTest.py to see the possible values for this
 
 PYTHON_ENV := ../python_env
 VERSAT_ACCEL := ./submodules/iob_versat/iob_versat.py
