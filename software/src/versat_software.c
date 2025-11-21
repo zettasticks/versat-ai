@@ -89,8 +89,9 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
     }
     kern->kernelDims[1] = inChannels / group;
 
-    for (int inC = outC / outChannelsPerGroup;
-         inC < inChannels / inChannelsPerGroup; inC++) {
+    int currentGroup = outC / outChannelsPerGroup;
+    for (int inC = currentGroup * inChannelsPerGroup;
+         inC < (currentGroup + 1) * inChannelsPerGroup; inC++) {
       int kernelIndex =
           outC * (inChannels / group) * extra.kernelW * extra.kernelH;
 

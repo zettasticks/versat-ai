@@ -499,12 +499,12 @@ def GenerateSimpleTest(outputPath):
     testMaxPool = False
     testAveragePool = False
 
-    testConv = True
+    testConv = False
 
     testBig = False
     generativeTests = False
 
-    if False:
+    if True:
         n = 1  # Batches
         c = 1  # Input channels
         f = 1  # Output channels
@@ -537,6 +537,20 @@ def GenerateSimpleTest(outputPath):
         CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, True, p, pd)
         # 9
         CreateConvolution([n, 2, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
+        # 10
+        CreateConvolution([n, 4, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
+        CreateConvolution([n, 8, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
+        CreateConvolution([n, 8, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
+        CreateConvolution([n, 16, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
+        CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 2, b, p, pd)
+        CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
+        CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 8, b, p, pd)
+        CreateConvolution([n, 8, hw[0], hw[1]], 16, k, s, d, 8, b, p, pd)
+        CreateConvolution([n, 4, hw[0], hw[1]], 16, k, s, d, 4, b, p, pd)
+        CreateConvolution([n, 4, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
+        CreateConvolution([n, 4, hw[0], hw[1]], 12, k, s, d, 4, b, p, pd)
+        CreateConvolution([n, 12, hw[0], hw[1]], 12, k, s, d, 4, b, p, pd)
+        CreateConvolution([n, 12, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
 
     if testSoftmax:
         # Softmax axis come in pairs.

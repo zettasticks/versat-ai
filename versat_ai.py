@@ -5,7 +5,7 @@
 
 def setup(py_params: dict):
     # Py2hwsw dictionary describing current core
-    mem_addr_w = 26  #
+    mem_addr_w = 26
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32

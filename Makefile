@@ -126,10 +126,6 @@ clean:
 	@rm -rf ./*.rpt
 	@find . -name \*~ -delete
 
-full-clean: clean
-	@rm -rf ./tests
-	@rm -rf $(PYTHON_ENV)
-
 # Remove all __pycache__ folders with python bytecode
 python-cache-clean:
 	find . -name "*__pycache__" -exec rm -rf {} \; -prune

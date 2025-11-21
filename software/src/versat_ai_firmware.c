@@ -225,9 +225,11 @@ int main() {
       inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
     }
 
-    void *total = inputs[info.inputCount - 1];
+    void *total;
     if (info.inputCount == 0) {
       total = OFFSET_PTR(correct, info.correctSize);
+    } else {
+      total = inputs[info.inputCount - 1];
     }
 
 #ifdef DEBUG
@@ -254,7 +256,7 @@ int main() {
                     info.totalInputSize);
 
     uint64_t start = timer_get_count();
-    info.versatInferenceFunction(output, temp, inputs, model);
+    info.softwareInferenceFunction(output, temp, inputs, model);
     uint64_t end = timer_get_count();
 
     PrintTimeElapsed("\nTest individual time", start, end);
