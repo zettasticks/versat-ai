@@ -443,7 +443,7 @@ def GenerateDebug(
 ):
     # TODO: It would be better if we could check all the inputs for correctness.
 
-    if type(namespace) != str and not namespace.isidentifier():
+    if type(namespace) != str or not namespace.isidentifier():
         print("Need a valid namespace name. Needs to follow identifier rules")
         sys.exit(0)
     if len(namespace) > 32:

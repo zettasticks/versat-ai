@@ -3,14 +3,11 @@
 // Since Simple interface expects to write N transfers regardless of anything else (does not care about alignment or axi boundary)
 // it becomes simpler to just have a module that performs N transfers from 
 module TransferNFromSimpleM #(
-   parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
-   parameter LEN_W = 8,
    parameter MAX_TRANSF_W = 32
    ) (
       input [MAX_TRANSF_W-1:0] transferCount_i,
       input                    initiateTransfer_i,
-      output                   done_o,
 
       // NOTE: Because axi is divided into bursts (meaning that the transfer is paused temporarely)
       //       while this unit is always working after starting, that means that we need to
@@ -37,7 +34,6 @@ module TransferNFromSimpleM #(
 reg [MAX_TRANSF_W-1:0] count;
 reg working;
 
-assign done_o = !working;
 assign m_wready_o = working && data_ready_i;
 assign data_valid_o = working && m_wvalid_i;
 assign data_o = m_wdata_i;
@@ -115,7 +111,7 @@ module SimpleAXItoAXIWrite #(
    // Time == 1
    reg [31:0] total_symbols_to_transfer;
    reg [8:0]  true_symbols_to_transfer;
-   reg [8:0]  true_axi_awlen_temp;
+   reg [7:0]  true_axi_awlen_temp;
    reg [7:0]  true_axi_awlen;
 
    // Depends on totalTransferLength
@@ -128,7 +124,7 @@ module SimpleAXItoAXIWrite #(
          true_symbols_to_transfer = 9'h100;
       end
       true_axi_awlen_temp = true_symbols_to_transfer - 1;
-      true_axi_awlen = true_axi_awlen_temp[7:0];
+      true_axi_awlen = true_axi_awlen_temp;
    end
 
    wire [31:0] length_to_transfer = {21'b0,true_symbols_to_transfer,2'b00};
@@ -152,13 +148,10 @@ module SimpleAXItoAXIWrite #(
    //assign axi_wdata_o = totalTransferLength;
 
    TransferNFromSimpleM #(
-      .AXI_ADDR_W(AXI_ADDR_W),
-      .AXI_DATA_W(AXI_DATA_W),
-      .LEN_W(LEN_W)
+      .AXI_DATA_W(AXI_DATA_W)
    ) transferN (
       .transferCount_i(total_symbols_to_transfer),
       .initiateTransfer_i(state == 2 && axi_awready_i && first_transfer),
-      .done_o(),
 
       // Connect directly to simple axi 
       .m_wvalid_i(m_wvalid_i),
