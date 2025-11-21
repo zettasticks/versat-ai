@@ -143,21 +143,16 @@ VLINT_FLAGS += -d ../versat_ai_V0.8/hardware/src
 VLINT_FLAGS += -c ./hardware/lint
 VLINT_FLAGS += -c ./submodules/VERSAT/hardware/lint
 VLINT_FLAGS += -o lint.rpt
-lint-all-fus: clean $(VERSAT_ACCEL)
-	python3 ./setupTest.py Generated
+lint-all-fus: clean test-setup
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS)"
 	cat lint.rpt
 
 FU?=iob_fp_clz
-lint-fu: clean $(VERSAT_ACCEL)
-	python3 ./setupTest.py Generated
-	$(MAKE) test-setup
+lint-fu: clean test-setup
 	nix-shell --run "./scripts/verilog_linter.py $(VLINT_FLAGS) --fu $(FU)"
 	cat lint.rpt
 
-coverage-all-fus: clean $(VERSAT_ACCEL)
-	python3 ./setupTest.py Generated
-	$(MAKE) test-setup
+coverage-all-fus: clean test-setup
 	nix-shell --run "make -C ../versat_ai_V0.8/hardware/simulation/coverage all"
 
 .PHONY: make-python-env make-versat-accel setup full-clean clean python-cache-clean
