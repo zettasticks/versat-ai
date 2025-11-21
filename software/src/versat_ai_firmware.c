@@ -127,7 +127,19 @@ void *Align4(void *in) {
   return (void *)asInt;
 }
 
-void PrintU64InHex(uint64_t n){
+void PrintTimeElapsed(const char *message, uint64_t start, uint64_t end) {
+  uint64_t freqInMhz = IOB_BSP_FREQ / 1000000ull;
+
+  uint64_t elapsed = (end - start) / freqInMhz;
+
+  uint64_t secondsElapsed = elapsed / 1000000;
+  uint64_t remainingTime = elapsed % 1000000;
+
+  printf("%s: %d.%06d (@%dMHz)\n\n", message, (int)secondsElapsed,
+         (int)remainingTime, IOB_BSP_FREQ / 1000000);
+}
+
+void PrintU64InHex(uint64_t n) {
   union {
     uint64_t u64;
     uint32_t u32[2];
@@ -135,7 +147,7 @@ void PrintU64InHex(uint64_t n){
 
   conv.u64 = n;
 
-  printf("%08x%08x\n",conv.u32[1],conv.u32[0]);
+  printf("%08x%08x\n", conv.u32[1], conv.u32[0]);
 }
 
 int main() {
@@ -165,7 +177,8 @@ int main() {
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
-  
+
+#ifdef DEBUG
   PrintU64InHex(1ull << 0);
   PrintU64InHex(1ull << 8);
   PrintU64InHex(1ull << 16);
@@ -175,6 +188,7 @@ int main() {
   PrintU64InHex(1ull << 48);
   PrintU64InHex(1ull << 56);
   PrintU64InHex(1ull << 63);
+#endif
 
   ConfigCreateVCD(false);
 
@@ -184,8 +198,10 @@ int main() {
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
+#ifdef DEBUG
   int stackVar;
   printf("Stack  : %p\n", &stackVar);
+#endif
 
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
@@ -194,12 +210,9 @@ int main() {
   for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
     TestModelInfo info = *testModels[i];
 
-    printf("\n\n");
     printf("\n==============================\n");
     printf("Gonna run the full test named: %s", info.nameSpace);
-    printf("\n==============================\n");
-
-    // TODO: Arena stuff, using malloc so much is starting to scare me.
+    printf("\n==============================\n\n\n");
 
     void *output = Align4(malloc(info.outputSize + extra));
     void *temp = Align4(malloc(info.tempSize + extra));
@@ -212,51 +225,39 @@ int main() {
       inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
     }
 
+    void *total = inputs[info.inputCount - 1];
+    if (info.inputCount == 0) {
+      total = OFFSET_PTR(correct, info.correctSize);
+    }
+
+#ifdef DEBUG
     printf("Output : %p\n", output);
     printf("Temp   : %p\n", temp);
     printf("Model  : %p\n", model);
     printf("Correct: %p\n", correct);
     printf("Input  : %p\n", inputMemory);
-
-    void *total = inputs[info.inputCount - 1];
-    if (info.inputCount == 0) {
-      total = OFFSET_PTR(correct, info.correctSize);
-    }
     printf("Total  : %p\n", total);
 
-    if (total > &stackVar) {
+    if (((void *)total) > ((void *)&stackVar)) {
       printf(
           "Error, we run out of memory, increase the value of firm_w argument "
           "and setup again\n");
       uart_finish();
       return 0;
     }
+#endif
 
     FastReceiveFile(info.nameSpace, "correctOutputs.bin", correct,
                     info.correctSize);
-    printf("Received correct outputs\n");
     FastReceiveFile(info.nameSpace, "model.bin", model, info.modelSize);
-    printf("Received model\n");
     FastReceiveFile(info.nameSpace, "inputs.bin", inputMemory,
                     info.totalInputSize);
-    printf("Received inputs\n");
 
     uint64_t start = timer_get_count();
     info.versatInferenceFunction(output, temp, inputs, model);
     uint64_t end = timer_get_count();
-    
-    printf("start:       ");
-    PrintU64InHex(start);
-    printf("end:         ");
-    PrintU64InHex(end);
-    printf("diff:        ");
-    PrintU64InHex(end - start);
 
-    uint64_t elapsed = (end - start) / (IOB_BSP_FREQ / 1000000);
-    printf("elapsed(us): ");
-    PrintU64InHex(elapsed);
-
-    printf("Elapsed: %d (@%dMHz)\n",(int) elapsed,IOB_BSP_FREQ / 1000000);
+    PrintTimeElapsed("\nTest individual time", start, end);
 
     free(output);
     free(temp);
@@ -275,8 +276,7 @@ int main() {
   unsigned long long elapsed = timer_get_count();
   unsigned int elapsedu = elapsed / (IOB_BSP_FREQ / 1000000);
 
-  printf("\nExecution time: %d clock cycles\n", (unsigned int)elapsed);
-  printf("\nExecution time: %dus @%dMHz\n\n", elapsedu, IOB_BSP_FREQ / 1000000);
+  PrintTimeElapsed("\nTotal time elasped", 0, elapsed);
 
   uart_finish();
 

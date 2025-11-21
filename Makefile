@@ -14,8 +14,6 @@ TEST := Generated # Run setupTest.py to see the possible values for this
 PYTHON_ENV := ../python_env
 VERSAT_ACCEL := ./submodules/iob_versat/iob_versat.py
 VERSAT_SUBMODULE := ./submodules/VERSAT
-GENERATED_TEST := ./tests/generated/model.onnx
-DOWNLOADED_TEST := ./tests/mnist_v7/model.onnx
 ALL_SCRIPTS := $(wildcard ./scripts/*.py)
 
 BUILD_DIR ?= $(shell nix-shell --run "py2hwsw $(CORE) print_build_dir")
@@ -30,40 +28,41 @@ ifneq ($(DEBUG),)
 EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
 
-# Resources that are generated as they are needed. Mostly the generated tests and Versat
-$(VERSAT_ACCEL): versatSpec.txt
-	@rm -f $(VERSAT_SUBMODULE)/iob_versat.py
-	nix-shell --run "python3 ./scripts/versatGenerate.py"
+make-python-env: $(PYTHON_ENV)
 
 $(PYTHON_ENV):
 	./scripts/makePythonEnv.sh
 
-$(GENERATED_TEST): $(PYTHON_ENV) $(ALL_SCRIPTS)
-	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./scripts/generateSimpleTests.py ./tests/generated/"
+# Resources that are generated as they are needed. Mostly the generated tests and Versat
+make-versat-accel: $(VERSAT_ACCEL)
 
-$(DOWNLOADED_TEST): $(PYTHON_ENV)
-	./scripts/downloadTests.sh
+$(VERSAT_ACCEL): versatSpec.txt
+	@rm -f $(VERSAT_SUBMODULE)/iob_versat.py
+	nix-shell --run "python3 ./scripts/versatGenerate.py"
 
-pc-emul-run: $(VERSAT_ACCEL)
-	python3 ./setupTest.py $(TEST)
-	$(MAKE) test-setup
+generate-test:
+	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py $(TEST)"
+
+test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
+	mkdir -p hardware/simulation
+	cp software/*.bin hardware/simulation
+	cp software/*.bin hardware/fpga
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
+
+pc-emul-run: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ pc-emul-run"
 
-sim-run: $(VERSAT_ACCEL)
-	python3 ./setupTest.py $(TEST)
-	$(MAKE) test-setup
+sim-run: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
-fpga-run: $(VERSAT_ACCEL)
-	python3 ./setupTest.py $(TEST)
-	$(MAKE) test-setup
+# For some reason the vivado build.tcl is being overwritten by py2. Need to copy it before 
+fpga-run: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
-fpga-build: $(VERSAT_ACCEL)
-	python3 ./setupTest.py $(TEST)
-	$(MAKE) test-setup
+fpga-build: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-build BOARD=$(BOARD)
@@ -107,26 +106,14 @@ fast-fpga:
 	make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
-# Rules to force certain files to be build, mostly for debugging and to support the runTest.py script
-# Do not call them directly unless you know what you are doing
-do-test:
-	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py $(TEST_PATH) model.onnx software/ software/src"
-
-test-generate: 
-	rm -f $(GENERATED_TEST)
-	$(MAKE) $(GENERATED_TEST) 
-	bash -c "source $(PYTHON_ENV)/bin/activate; python3 ./scripts/onnxMain.py tests/generated/ model.onnx software/ software/src"
-
-test-setup:
-	mkdir -p hardware/simulation
-	cp software/*.bin hardware/simulation
-	cp software/*.bin hardware/fpga
-	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
-	cp -r submodules/iob_versat/software ../versat_ai_V0.8/ # Since python file was not being copied and we need a python script from inside software
-
 versat-generate:
 	rm -f $(VERSAT_ACCEL)
 	$(MAKE) $(VERSAT_ACCEL)
+
+clean-test:
+	@rm -rf ./software/*.bin
+	@rm -f  ./software/src/*_code.c ./software/src/*_modelInfo.h ./software/src/testInfo.h 
+	@rm -f  ../$(CORE)_V$(VERSION)/software/src/*_code.c ../$(CORE)_V$(VERSION)/software/src/*_modelInfo.h ../$(CORE)_V$(VERSION)/software/src/testInfo.h 
 
 clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
@@ -173,4 +160,4 @@ coverage-all-fus: clean $(VERSAT_ACCEL)
 	$(MAKE) test-setup
 	nix-shell --run "make -C ../versat_ai_V0.8/hardware/simulation/coverage all"
 
-.PHONY: setup full-clean clean python-cache-clean
+.PHONY: make-python-env make-versat-accel setup full-clean clean python-cache-clean

@@ -488,7 +488,7 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 
 
 def GenerateSimpleTest(outputPath):
-    testComplexity = -1
+    testComplexity = 0
 
     testAdd = False
     testRelu = False
@@ -502,7 +502,7 @@ def GenerateSimpleTest(outputPath):
     testConv = True
 
     testBig = False
-    generativeTests = True
+    generativeTests = False
 
     if False:
         n = 1  # Batches
