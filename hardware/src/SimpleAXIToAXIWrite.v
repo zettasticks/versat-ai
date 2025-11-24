@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module SimpleAXItoAXIWrite #(
+module SimpleAXIToAXIWrite #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter AXI_LEN_W  = 8,
