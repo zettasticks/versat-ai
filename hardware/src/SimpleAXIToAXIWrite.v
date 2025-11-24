@@ -51,7 +51,6 @@ module SimpleAXIToAXIWrite #(
    // Time == 1
    reg [31:0] total_symbols_to_transfer;
    reg [8:0]  true_symbols_to_transfer;
-   reg [7:0]  true_axi_awlen_temp;
    reg [7:0]  true_axi_awlen;
 
    // Depends on totalTransferLength
@@ -63,8 +62,7 @@ module SimpleAXIToAXIWrite #(
       end else begin
          true_symbols_to_transfer = 9'h100;
       end
-      true_axi_awlen_temp = true_symbols_to_transfer - 1;
-      true_axi_awlen = true_axi_awlen_temp;
+      true_axi_awlen = true_symbols_to_transfer - 1;
    end
 
    wire [31:0] length_to_transfer = {21'b0,true_symbols_to_transfer,2'b00};
