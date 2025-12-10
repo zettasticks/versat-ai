@@ -206,7 +206,7 @@ def EmitReshape(emitter, op: Operation):
 def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
-    res = [op0[0], op1[1]]
+    res = op.outputDimensions
 
     aux_0 = emitter.EmitArray("int64_t", op0)
     aux_1 = emitter.EmitArray("int64_t", op1)

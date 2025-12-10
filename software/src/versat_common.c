@@ -2,6 +2,8 @@
 
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 
+//#define LOW_OUTPUT
+
 // ======================================
 // Global stuff (versat side)
 
@@ -32,6 +34,16 @@ ClearCache Versat_SetClearCache(ClearCache func) {
   return old;
 }
 
+void Assert_(bool cond,const char* msg,int line,const char* file){
+  if(!cond){
+    versat_printf("Assertion failed!\n");
+    versat_printf("In file %s:%d\n",file,line);
+    versat_printf("%s",msg);
+  }
+}
+
+#define Assert(COND,MSG) Assert_(COND,MSG,__LINE__,__FILE__)
+
 // ======================================
 // Dimensions
 
@@ -44,7 +56,22 @@ Dimensions CreateDimensions(int64_t *dims, int numberDims) {
   return res;
 }
 
-int Dimensions_Size(Dimensions dim) {
+void Dimensions_PrependInPlace(Dimensions* dim,int value){
+  Assert(dim->size + 1 < MAX_DIMS,"MAX_DIMS overflow");
+  for(int i = 0; i < dim->size; i++){
+    dim->data[i+1] = dim->data[i];
+  }
+  dim->data[0] = value;
+  dim->size += 1;
+}
+
+void Dimensions_AppendInPlace(Dimensions* dim,int value){
+  Assert(dim->size + 1 < MAX_DIMS,"MAX_DIMS overflow");
+  dim->data[dim->size] = value;
+  dim->size += 1;
+}
+
+int Dimensions_TotalSize(Dimensions dim) {
   int size = 1;
   for (int i = 0; i < dim.size; i++) {
     size *= dim.data[i];
@@ -54,6 +81,37 @@ int Dimensions_Size(Dimensions dim) {
 
 // ======================================
 // Address
+
+// Proper dims are the dims used to calculate an index.
+// Iteration dims are the iterations.
+AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
+                        int numberDims) {
+  AddressGen gen = {};
+
+  for (int i = 0; i < numberDims; i++) {
+    gen.iterationDims[i] = iterationDims[i];
+    gen.properDims[i] = properDims[i];
+  }
+  gen.numberDims = numberDims;
+
+  return gen;
+}
+
+AddressGen StartAddressFromDims(Dimensions dims, int iterDims){
+  AddressGen gen = {};
+
+  for (int i = 0; i < dims.size; i++) {
+    gen.properDims[i] = dims.data[i];
+    gen.iterationDims[i] = dims.data[i];
+
+    if(i >= iterDims){
+      gen.iterationDims[i] = 1;
+    }
+  }
+  gen.numberDims = dims.size;
+
+  return gen;  
+}
 
 void Address_Print(AddressGen *gen) {
   for (int i = 0; i < gen->numberDims; i++) {
@@ -147,21 +205,6 @@ void Address_AdvanceAxis(AddressGen *gen, int axisToAdvance) {
   }
 }
 
-// Proper dims are the dims used to calculate an index.
-// Iteration dims are the iterations.
-AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
-                        int numberDims) {
-  AddressGen gen = {};
-
-  for (int i = 0; i < numberDims; i++) {
-    gen.iterationDims[i] = iterationDims[i];
-    gen.properDims[i] = properDims[i];
-  }
-  gen.numberDims = numberDims;
-
-  return gen;
-}
-
 AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride) {
   AddressGen gen = *in;
 
@@ -186,6 +229,12 @@ AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,
   }
 
   return gen;
+}
+
+void Address_Restart(AddressGen* gen){
+  for(int i = 0; i < gen->numberDims; i++){
+    gen->addressVars[i] = 0;
+  }
 }
 
 // ======================================
@@ -381,7 +430,9 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
 
   size_t outputSize = info->outputSize / sizeof(float);
 
-  versat_printf("Gonna check output of layer: %d\n", index);
+#ifndef LOW_OUTPUT
+  //versat_printf("Gonna check output of layer: %d\n", index);
+#endif
 
   if (outputSize == 0) {
     versat_printf(
@@ -420,9 +471,11 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
     }
   }
 
+#ifndef LOW_OUTPUT
   if (printOk && incorrectFound == 0) {
     versat_printf("[%s] (Layer %d) - OK\n", info->typeName, index);
   }
+#endif
 }
 
 // ======================================

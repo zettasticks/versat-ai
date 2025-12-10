@@ -256,7 +256,7 @@ int main() {
                     info.totalInputSize);
 
     uint64_t start = timer_get_count();
-    info.softwareInferenceFunction(output, temp, inputs, model);
+    info.debugInferenceFunction(output, temp, inputs, model, correct);
     uint64_t end = timer_get_count();
 
     PrintTimeElapsed("\nTest individual time", start, end);

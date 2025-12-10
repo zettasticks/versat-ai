@@ -25,7 +25,10 @@ typedef struct {
 } Dimensions;
 
 Dimensions CreateDimensions(int64_t *dims, int numberDims);
-int Dimensions_Size(Dimensions dim);
+void Dimensions_PrependInPlace(Dimensions* dim,int value); // A bit slow, do not abuse if possible
+void Dimensions_AppendInPlace(Dimensions* dim,int value);
+
+int Dimensions_TotalSize(Dimensions dim);
 
 // ======================================
 // AddressGen
@@ -39,16 +42,22 @@ typedef struct {
   int numberDims;
 } AddressGen;
 
+AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
+                        int numberDims);
+
+// If dims is A x B x C and iterDims = 1 then A is iterated and B x C are not iterated.
+// If iterDims = 2 then A x B are iterated and C is not and so on.
+// iterDims = 0 means no iteration.
+AddressGen StartAddressFromDims(Dimensions dims, int iterDims);
+
 void Address_Print(AddressGen *gen);
 int Address_GetValue(AddressGen *gen);
 bool Address_IsValid(AddressGen *gen);
 void Address_Advance(AddressGen *gen);
 void Address_AdvanceAxis(AddressGen *gen, int axisToAdvance);
-AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
-                        int numberDims);
+void Address_Restart(AddressGen* gen);
 
 AddressGen Address_Map(AddressGen *in, int64_t *biggerDim, int *stride);
-
 // TODO: Need to standardize this stuff eventually.
 AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,
                         int *offset);

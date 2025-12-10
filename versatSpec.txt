@@ -125,6 +125,46 @@ module Top_Conv(){
 
    {myAccum,bias} -> addBias:0..1;
    addBias -> output;
+##
+   config Features(addr,startX,startY,sizeW,sizeH,inputImageW,inputImageC,sizeC,features,startC){
+      for d 0..features {
+         for c 0..sizeC {
+            for ky 0..sizeH {
+               for kx 0..sizeW { 
+                  features = addr[(startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + (c + startC)];
+               }
+            }
+         }
+      }
+   }
+
+   config Weight2D(addr,startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,sizeC,features,startC,startD){
+      for d 0..features {
+         for c 0..sizeC {
+            for y 0..sizeH {
+               for x 0..sizeW {
+                  weights = addr[(d + startD) * inputChannels * kernelW * kernelH + (c + startC) * kernelW * kernelH + (y + startY) * kernelW + (x + startX)];
+               }
+            }
+         }
+      }
+   }
+
+   config Bias(addr,size,stride){
+      for x 0..size {
+         bias = addr[x / stride];
+      }
+   }
+
+   config Output(addr,startX,startY,height,width,startC,outputChannels,outputSize,outputWidth,stride){
+      for y 0..height {
+         for x 0..width {
+            for c 0..outputSize {
+              output = addr[((y + startY) * outputWidth * outputChannels + (x + startX) * outputChannels + startC + c) / stride];
+            }
+         }
+      }
+   }
 }
 
 module Top_MatMul(){
