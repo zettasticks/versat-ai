@@ -13,7 +13,14 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
-#ifndef PC
+// ETHERNET disabled for now
+//#define USE_ETHERNET
+
+#ifdef PC
+#undef USE_ETHERNET
+#endif
+
+#ifdef USE_ETHERNET
 #include "iob_eth.h"
 #endif
 
@@ -45,7 +52,7 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#ifndef PC
+#ifdef USE_ETHERNET
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
   uart_puts(UART_PROGNAME);
   uart_puts(": requesting to receive file by ethernet\n");
@@ -93,7 +100,10 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   long int size = GetFileSize(f);
   fread(buffer, sizeof(char), size, f);
   fclose(f);
-#else
+  return;
+#endif
+
+#ifdef USE_ETHERNET
   ethernet_receive_file(fullPath, buffer, expectedSize);
 #endif
 }
@@ -168,7 +178,7 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#ifndef PC
+#ifdef USE_ETHERNET
   uart_puts("\nGonna init ethernet\n");
   eth_init(ETH0_BASE, &silent_clear_cache);
   eth_wait_phy_rst();

@@ -484,7 +484,7 @@ def GetInitializerTrueName(testIndex):
     return f"A{testIndex}"
 
 
-def CreateBinaryOpTest(op, leftShape, rightShape, forcedOutputShape = None):
+def CreateBinaryOpTest(op, leftShape, rightShape, forcedOutputShape=None):
     global testList
     testList.append(BinaryOpArgs(op, leftShape, rightShape, forcedOutputShape))
 
@@ -762,7 +762,7 @@ def GenerateSimpleTest():
         CreateTranspose([2, 3, 4], [2, 1, 0])
 
     if testMatMul:
-        # Matrices of sizes different than 2 are supported by ONNX by broadcasting the inner 2 dimensions 
+        # Matrices of sizes different than 2 are supported by ONNX by broadcasting the inner 2 dimensions
         CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
         CreateBinaryOpTest("MatMul", [2, 1, 1, 3], [3, 4])
         CreateBinaryOpTest("MatMul", [2, 2, 1, 3], [3, 4])

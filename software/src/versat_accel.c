@@ -724,23 +724,23 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int AS = info->numberInputADims;
   int AH;
   int AW;
-  if(AS == 1){
+  if (AS == 1) {
     AH = 1;
     AW = info->inputADims[0];
   } else {
-    AH = info->inputADims[AS-2];
-    AW = info->inputADims[AS-1];
+    AH = info->inputADims[AS - 2];
+    AW = info->inputADims[AS - 1];
   }
 
   int BS = info->numberInputBDims;
   int BH;
   int BW;
-  if(BS == 1){
+  if (BS == 1) {
     BH = 1;
     BW = info->inputBDims[0];
   } else {
-    BH = info->inputBDims[BS-2];
-    BW = info->inputBDims[BS-1];
+    BH = info->inputBDims[BS - 2];
+    BW = info->inputBDims[BS - 1];
   }
 
   int totalBSize = BH * BW;
@@ -749,49 +749,50 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int OS = info->numberOutputDims;
   int OH;
   int OW;
-  if(OS == 1){
+  if (OS == 1) {
     OH = 1;
     OW = info->outputDims[0];
   } else {
-    OH = info->outputDims[OS-2];
-    OW = info->outputDims[OS-1];
+    OH = info->outputDims[OS - 2];
+    OW = info->outputDims[OS - 1];
   }
 
   if (AW != BH) {
     versat_printf("Something very wrong is happening in MatMul\n");
   }
 
-  Dimensions dimA = CreateDimensions(info->inputADims,info->numberInputADims);
-  Dimensions dimB = CreateDimensions(info->inputBDims,info->numberInputBDims);
-  Dimensions dimO = CreateDimensions(info->outputDims,info->numberOutputDims);
+  Dimensions dimA = CreateDimensions(info->inputADims, info->numberInputADims);
+  Dimensions dimB = CreateDimensions(info->inputBDims, info->numberInputBDims);
+  Dimensions dimO = CreateDimensions(info->outputDims, info->numberOutputDims);
 
-  if(dimA.size == 1){
-    Dimensions_PrependInPlace(&dimA,1);
+  if (dimA.size == 1) {
+    Dimensions_PrependInPlace(&dimA, 1);
   }
-  if(dimB.size == 1){
-    Dimensions_PrependInPlace(&dimB,1);
+  if (dimB.size == 1) {
+    Dimensions_PrependInPlace(&dimB, 1);
   }
-  if(dimO.size == 1){
-    Dimensions_PrependInPlace(&dimO,1);
+  if (dimO.size == 1) {
+    Dimensions_PrependInPlace(&dimO, 1);
   }
 
   int dimsToPreserve = 2;
-  int dimsToIterateA = MAX(0,dimA.size - dimsToPreserve);
-  int dimsToIterateB = MAX(0,dimB.size - dimsToPreserve);
-  int dimsToIterateO = MAX(0,dimO.size - dimsToPreserve);
+  int dimsToIterateA = MAX(0, dimA.size - dimsToPreserve);
+  int dimsToIterateB = MAX(0, dimB.size - dimsToPreserve);
+  int dimsToIterateO = MAX(0, dimO.size - dimsToPreserve);
 
-  AddressGen addrA = StartAddressFromDims(dimA,dimsToIterateA);
-  AddressGen addrB = StartAddressFromDims(dimB,dimsToIterateB);
-  AddressGen addrO = StartAddressFromDims(dimO,dimsToIterateO);
+  AddressGen addrA = StartAddressFromDims(dimA, dimsToIterateA);
+  AddressGen addrB = StartAddressFromDims(dimB, dimsToIterateB);
+  AddressGen addrO = StartAddressFromDims(dimO, dimsToIterateO);
 
-  while(Address_IsValid(&addrA) || Address_IsValid(&addrB) || Address_IsValid(&addrO)){
-    if(!Address_IsValid(&addrA)){
+  while (Address_IsValid(&addrA) || Address_IsValid(&addrB) ||
+         Address_IsValid(&addrO)) {
+    if (!Address_IsValid(&addrA)) {
       Address_Restart(&addrA);
     }
-    if(!Address_IsValid(&addrB)){
+    if (!Address_IsValid(&addrB)) {
       Address_Restart(&addrB);
-    } 
-    if(!Address_IsValid(&addrO)){
+    }
+    if (!Address_IsValid(&addrO)) {
       Address_Restart(&addrO);
     }
 

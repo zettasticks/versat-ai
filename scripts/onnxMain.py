@@ -585,7 +585,7 @@ def GenerateDebug(
 
     CalculateMemoryAllocations(cModel)
 
-    for i,c in enumerate(cModel.operations):
+    for i, c in enumerate(cModel.operations):
         print(i, c.opName, c.inputDimensions)
 
     debugging = True
@@ -694,7 +694,7 @@ def GenerateDebug(
 
                 opIndex = opSeen.get(c.opName, -1) + 1
                 opSeen[c.opName] = opIndex
-                #if debugging:
+                # if debugging:
                 #    f.write(f'  versat_printf("Gonna run layer {index}\\n");\n')
 
                 if measureTime:
