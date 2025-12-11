@@ -366,5 +366,5 @@ operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
     "Transpose", EmitTranspose, transposeAttributes, False
 )
 operatorNameToSpec["BatchNormalization"] = OnnxOperatorSpec(
-    "BatchNormalization",EmitBatchNormalization,batchNormalizationAttributes,False
+    "BatchNormalization",EmitBatchNormalization,batchNormalizationAttributes,True
 )

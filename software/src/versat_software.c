@@ -403,7 +403,7 @@ float my_exp(float x) {
 }
 
 // Based on quake fast inverse square root function.
-float my_invsqrt(float number){
+static float my_invsqrt(float number){
   long i;
   float x2, y;
   const float threehalfs = 1.5F;
@@ -478,6 +478,10 @@ void *Software_Softmax(void *input, void *output, int index,
   return output;
 }
 
+// TODO: While this is the approach that directly matches what ONNX requires, it is also slower for the average case. (Where the statistic values are usually initializers and not inputs.)
+//       A lot of the logic can be simplified by precomputing values (ex: the invsqrt routine is not needed since it only cares about values that we already know about)
+//       This of course can only be perform if the values are initializers and not inputs. (Which I assume is the default case for a great deal of these.)
+//       That means there is a possibility of using a much faster routine by pushing logic to the onnx converter and have it collapse all the initializers into a simpler operation.
 void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
                        BatchNormalizationInfo *info){
 

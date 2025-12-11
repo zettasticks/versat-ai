@@ -10,7 +10,7 @@ from onnx.helper import (
 from onnx.checker import check_model
 from skl2onnx.helpers.onnx_helper import save_onnx_model
 from onnx import numpy_helper
-from dataclasses import dataclass
+from dataclasses import dataclass,fields
 from onnxOperators import BroadCastShape, ExtendShape
 
 import sys
@@ -462,7 +462,7 @@ class SoftmaxArgs:
 
         tests.append(test)
 
-@dataclass
+@dataclass(frozen=True)
 class BatchNormalizationArgs:
     shape: list[int]
     epsilon: float
@@ -625,11 +625,11 @@ def GenerateSimpleTest():
     testReshape = False
     testSoftmax = False
     testTranspose = False
-    testMaxPool = False
-    testAveragePool = False
-    testMatMul = False
+    testMaxPool = True
+    testAveragePool = True
+    testMatMul = True
     testConv = False
-    testBatchNormalization = True
+    testBatchNormalization = False
 
     testBig = False
     generativeTests = False
@@ -1213,6 +1213,10 @@ def GenerateSimpleTest():
         # if testComplexity == 2 or testBig or False:
         #    CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, g, True)
 
+def MakeHashable(val):
+    if(type(val) == list):
+        val = tuple(MakeHashable(x) for x in val)
+    return val
 
 def GenerateTest(outputPath):
     global testList
@@ -1221,12 +1225,20 @@ def GenerateTest(outputPath):
     GenerateSimpleTest()
 
     if False:
-        testToFocus = 16
+        testToFocus = 1
         testList = [testList[testToFocus]]
         print(testList[0])
 
+    # TODO: Make the seed be an hash of the test, thus ensuring it is reproducible if we end up changing things in the future.
     for test in testList:
-        np.random.seed(0)
+        hashable = {}
+        for field in fields(test):
+            val = getattr(test, field.name)
+            val = MakeHashable(val)
+            hashable[field.name] = val
+
+        h = hash(frozenset(hashable.items())) % 2**31
+        np.random.seed(h)
         test.Create()
 
     """

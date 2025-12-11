@@ -845,3 +845,94 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
   return Software_Softmax(inputA, output, index, info);
 }
+
+// Based on quake fast inverse square root function.
+static float my_invsqrt(float number){
+  long i;
+  float x2, y;
+  const float threehalfs = 1.5F;
+
+  x2 = number * 0.5F;
+  y  = number;
+  i  = * ( long * ) &y;
+  i  = 0x5f3759df - ( i >> 1 );
+  y  = * ( float * ) &i;
+  y  = y * ( threehalfs - ( x2 * y * y ) );
+  y  = y * ( threehalfs - ( x2 * y * y ) );
+
+  return y;
+}
+
+void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
+                       BatchNormalizationInfo *info){
+
+  ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
+
+  float* x = (float*) inputX;
+  float* s = (float*) scale;
+  float* b = (float*) inputB;
+  float* m = (float*) mean;
+  float* v = (float*) var;
+  float* o = (float*) output;
+
+  Dimensions dim = CreateDimensions(info->inputDims,info->numberInputDims);
+
+  if(dim.size <= 1){
+    Dimensions_AppendInPlace(&dim,1);
+  }
+
+  int totalC = dim.data[1];
+
+  float* A = (float*) malloc(sizeof(float) * totalC);
+  float* B = (float*) malloc(sizeof(float) * totalC);
+  for(int c = 0; c < totalC; c++){
+    float inv = my_invsqrt(v[c] + info->epsilon);
+    A[c] = s[c] * inv;
+    B[c] = (-m[c] * inv) * s[c] + b[c];
+  }  
+
+  AddressGen addrInst = StartAddressFromDims(dim,2);
+  AddressGen* addr = &addrInst;
+
+  // TODO: We probably can also do this using the Kernel stuff.
+  //       But I kinda want a better interface when using kernel stuff.
+  Dimensions leftover = Dimensions_Cut_GetRight(dim,2);
+  int size = Dimensions_TotalSize(leftover);
+
+  while(Address_IsValid(addr)){
+    int c = Address_GetDim(addr,1);
+    
+    int index = Address_GetValue(addr);
+
+#if 0    
+    for(int i = 0; i < size; i++){
+      o[index + i] = x[index + i] * A[c] + B[c];
+    }
+#endif
+
+    union {
+      int i;
+      float f;
+    } a,b;
+
+    a.f = A[c];
+    b.f = B[c];
+
+    Top_BatchNormalization_Simple(x,o,index,size,a.i,b.i);
+    StartAccelerator();
+
+    Address_Advance(addr);
+  }
+
+  EndAccelerator();
+
+  volatile Top_BatchNormalizationConfig *config = &accelConfig->Top_BatchNormalization;
+  config->x.enabled = 0;
+  config->o.enabled = 0;
+  RunAccelerator(2);
+
+  free(A);
+  free(B);
+
+  return o;
+}

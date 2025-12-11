@@ -295,6 +295,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info);
 void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info);
+void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
+                       BatchNormalizationInfo *info);
 
 // ======================================
 // Misc
