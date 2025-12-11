@@ -29,6 +29,9 @@ void Dimensions_PrependInPlace(
     Dimensions *dim, int value); // A bit slow, do not abuse if possible
 void Dimensions_AppendInPlace(Dimensions *dim, int value);
 
+Dimensions Dimensions_Cut_GetLeft(Dimensions dim,int amount);
+Dimensions Dimensions_Cut_GetRight(Dimensions dim,int amount);
+
 int Dimensions_TotalSize(Dimensions dim);
 
 // ======================================
@@ -51,6 +54,7 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
 // iterDims = 0 means no iteration.
 AddressGen StartAddressFromDims(Dimensions dims, int iterDims);
 
+int Address_GetDim(AddressGen *gen,int index);
 void Address_Print(AddressGen *gen);
 int Address_GetValue(AddressGen *gen);
 bool Address_IsValid(AddressGen *gen);
@@ -243,6 +247,13 @@ typedef struct {
   int permSize;
 } TransposeInfo;
 
+typedef struct {
+  int64_t *inputDims;
+  int numberInputDims;
+  float epsilon;
+  float momentum;
+} BatchNormalizationInfo;
+
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info);
@@ -263,6 +274,8 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
                       MatMulInfo *info);
 void *Software_Softmax(void *inputA, void *output, int index,
                        SoftmaxInfo *info);
+void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
+                       BatchNormalizationInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,

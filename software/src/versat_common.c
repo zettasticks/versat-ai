@@ -1,6 +1,7 @@
 #include "versat_private.h"
 
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
 
 //#define LOW_OUTPUT
 
@@ -71,6 +72,43 @@ void Dimensions_AppendInPlace(Dimensions *dim, int value) {
   dim->size += 1;
 }
 
+Dimensions Dimensions_Cut_GetLeft(Dimensions dim,int amount){
+  Dimensions res = {};
+
+  if(amount == 0){
+    res.data[0] = 1;
+    res.size = 1;
+    return res;
+  }
+  
+  int size = MIN(dim.size,amount);
+  
+  for(int i = 0; i < size; i++){
+    res.data[i] = dim.data[i];
+  }
+  res.size = size;
+
+  return res;
+}
+
+Dimensions Dimensions_Cut_GetRight(Dimensions dim,int amount){
+  Dimensions res = {};
+
+  if(amount == dim.size){
+    res.data[0] = 1;
+    res.size = 1;
+    return res;
+  }
+
+  int size = MAX(dim.size - amount,0);
+  for(int i = 0; i < size; i++){
+    res.data[i] = dim.data[amount + i];
+  }
+  res.size = size;
+
+  return res;
+}
+
 int Dimensions_TotalSize(Dimensions dim) {
   int size = 1;
   for (int i = 0; i < dim.size; i++) {
@@ -111,6 +149,11 @@ AddressGen StartAddressFromDims(Dimensions dims, int iterDims) {
   gen.numberDims = dims.size;
 
   return gen;
+}
+
+int Address_GetDim(AddressGen *gen,int index){
+  Assert(index < gen->numberDims,"Index greater than dimensions of Address");
+  return gen->addressVars[index];
 }
 
 void Address_Print(AddressGen *gen) {
