@@ -309,7 +309,7 @@ transposeAttributes = {
 }
 
 batchNormalizationAttributes = {
-    "epsilon": MakeAttrFloat(1e-05),
+    "epsilon": MakeAttrFloat(1e-5),
     "momentum": MakeAttrFloat(0.9),
     "training_mode": MakeAttrInteger(0)
 }

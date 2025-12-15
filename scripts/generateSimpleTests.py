@@ -478,7 +478,7 @@ class BatchNormalizationArgs:
         outputShape = [None] * maxDims
 
         C = 1
-        if(len(self.shape) > 1):
+        if len(self.shape) > 1:
             C = self.shape[1]
 
         test = Test()
@@ -575,7 +575,7 @@ def CreateSoftmax(shape, axis=-1):
     global testList
     testList.append(SoftmaxArgs(shape, axis))
 
-def CreateBatchNormalization(shape, epsilon = None,momentum = None):
+def CreateBatchNormalization(shape, epsilon=None,momentum=None):
     global testList
     testList.append(BatchNormalizationArgs(shape,epsilon,momentum))
 

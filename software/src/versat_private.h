@@ -119,7 +119,7 @@ void Kernel_Advance(KernelGen *gen);
 // ======================================
 // Arena (Temporary)
 // TODO: All arena stuff eventually must be removed. Do not want to allocate
-// stuff mid inference.
+// stuff mid inference if possible.
 
 struct Arena_t;
 typedef struct Arena_t Arena;
@@ -305,6 +305,8 @@ int64_t CalculateSizeOfDim(int64_t *dim, int dims);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index,
                        LayerInfo *info);
+
+float my_invsqrt(float number);
 
 // ======================================
 // Extra Info

@@ -58,7 +58,7 @@ Dimensions CreateDimensions(int64_t *dims, int numberDims) {
 }
 
 void Dimensions_PrependInPlace(Dimensions *dim, int value) {
-  Assert(dim->size + 1 < MAX_DIMS, "MAX_DIMS overflow");
+  Assert(dim->size + 1 <= MAX_DIMS, "MAX_DIMS overflow");
   for (int i = 0; i < dim->size; i++) {
     dim->data[i + 1] = dim->data[i];
   }
@@ -67,7 +67,7 @@ void Dimensions_PrependInPlace(Dimensions *dim, int value) {
 }
 
 void Dimensions_AppendInPlace(Dimensions *dim, int value) {
-  Assert(dim->size + 1 < MAX_DIMS, "MAX_DIMS overflow");
+  Assert(dim->size + 1 <= MAX_DIMS, "MAX_DIMS overflow");
   dim->data[dim->size] = value;
   dim->size += 1;
 }
@@ -519,6 +519,23 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
     versat_printf("[%s] (Layer %d) - OK\n", info->typeName, index);
   }
 #endif
+}
+
+// Based on quake fast inverse square root function.
+float my_invsqrt(float number){
+  long i;
+  float x2, y;
+  const float threehalfs = 1.5F;
+
+  x2 = number * 0.5F;
+  y  = number;
+  i  = * ( long * ) &y;
+  i  = 0x5f3759df - ( i >> 1 );
+  y  = * ( float * ) &i;
+  y  = y * ( threehalfs - ( x2 * y * y ) );
+  y  = y * ( threehalfs - ( x2 * y * y ) );
+
+  return y;
 }
 
 // ======================================
