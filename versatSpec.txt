@@ -126,8 +126,8 @@ module Top_Conv(){
    {myAccum,bias} -> addBias:0..1;
    addBias -> output;
 ##
-   config Features(addr,startX,startY,sizeW,sizeH,inputImageW,inputImageC,sizeC,features,startC){
-      for d 0..features {
+   config Features(addr : Address,startX,startY,sizeW,sizeH,inputImageW,inputImageC,sizeC,featuresAmount,startC){
+      for d 0..featuresAmount {
          for c 0..sizeC {
             for ky 0..sizeH {
                for kx 0..sizeW { 
@@ -138,7 +138,7 @@ module Top_Conv(){
       }
    }
 
-   config Weight2D(addr,startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,sizeC,features,startC,startD){
+   config Weight2D(addr : Address,startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,sizeC,features,startC,startD){
       for d 0..features {
          for c 0..sizeC {
             for y 0..sizeH {
@@ -150,13 +150,13 @@ module Top_Conv(){
       }
    }
 
-   config Bias(addr,size,stride){
+   config Bias(addr : Address,size,stride){
       for x 0..size {
          bias = addr[x / stride];
       }
    }
 
-   config Output(addr,startX,startY,height,width,startC,outputChannels,outputSize,outputWidth,stride){
+   config Output(addr : Address,startX,startY,height,width,startC,outputChannels,outputSize,outputWidth,stride){
       for y 0..height {
          for x 0..width {
             for c 0..outputSize {
@@ -196,7 +196,7 @@ module Top_BatchNormalization(){
 
    add -> o;
 ##
-   config Simple(input,output,index,size,aVal,bVal) {
+   config Simple(input : Address,output : Address,index,size : Dyn,aVal,bVal) {
       A.constant = aVal;
       B.constant = bVal;
       for i 0..size {

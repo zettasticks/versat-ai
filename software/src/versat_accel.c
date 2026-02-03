@@ -457,41 +457,18 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
                     w.actualKernelH, inputImageW, inputImageC, convChannelSize,
                     featuresComputedPerRun, convStartC);
 
-#if 0
-  Conv2D_NHWC_VRead(&config->features, inputX, w.inputX, w.inputY,
-                    w.actualKernelW, w.actualKernelH, inputImageW, inputImageC,
-                    convChannelSize, featuresComputedPerRun, convStartC);
-#endif
-
   Top_Conv_Weight2D(inputW, w.kernelStartW, w.kernelStartH, w.actualKernelW,
                     w.actualKernelH, kernelW, kernelH, inputImageC,
                     kernelChannelSize, featuresComputedPerRun, convStartC,
                     outputStartC);
 
-#if 0
-  Weight2D_VRead(&config->weights, inputW, w.kernelStartW, w.kernelStartH,
-                 w.actualKernelW, w.actualKernelH, kernelW, kernelH,
-                 inputImageC, kernelChannelSize, featuresComputedPerRun,
-                 convStartC, outputStartC);
-#endif
-
   Top_Conv_Output(output, w.outputX, w.outputY, w.outputH, w.outputW, w.startC,
                   outputC, featuresComputedPerRun, outputImageW, stride);
 
-#if 0
-  // Only outputs one now.
-  Linear2_NHWC_VWrite(&config->output, output, w.outputX, w.outputY, w.outputH,
-                      w.outputW, w.startC, outputC, featuresComputedPerRun,
-                      outputImageW, stride);
-#endif
-
   if (bias == NULL) {
     static float bias = 0.0f;
-    // LinearStrided_VRead(&config->bias, &bias, 1, 1);
     Top_Conv_Bias(&bias, 1, 1);
   } else {
-    // LinearStrided_VRead(&config->bias, bias + outputStartC,
-    // featuresComputedPerRun, stride);
     Top_Conv_Bias(bias + outputStartC, featuresComputedPerRun, stride);
   }
 
@@ -626,9 +603,18 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
         for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
           AdvancedWindow w = WindowGen_Get(gen);
+
+        if(w.entireWindowInsidePadding){
+          float bias = 0.0f;
+          if(trueBias){
+            bias = trueBias[w.outputC];
+          }
+          tempGroupOutput[w.outputY * extra.outputImageC * outputImageW + w.outputX * extra.outputImageC + w.outputC] = bias;
+        } else {
           ConvWithBias_ProcessWindow(
               w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
               tempGroupOutput, trueBias, info, s, o);
+          } 
         }
 
         // Flush the remaining data from the accelerator
@@ -670,9 +656,19 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
-        ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
-                                   info, info->inputDims[1],
-                                   info->outputDims[1]);
+
+        if(w.entireWindowInsidePadding){
+          float bias = 0.0f;
+          if(biasView){
+            bias = biasView[w.outputC];
+          }
+
+          tempOutput[w.outputY * outputChannels * outputImageW + w.outputX * outputChannels + w.outputC] = bias;
+        } else {
+          ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
+                                     info, info->inputDims[1],
+                                     info->outputDims[1]);
+        }
       }
 
       // Flush the remaining data from the accelerator
@@ -847,86 +843,93 @@ void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
 }
 
 // Based on quake fast inverse square root function.
-static float my_invsqrt(float number){
+static float my_invsqrt(float number) {
   long i;
   float x2, y;
   const float threehalfs = 1.5F;
 
   x2 = number * 0.5F;
-  y  = number;
-  i  = * ( long * ) &y;
-  i  = 0x5f3759df - ( i >> 1 );
-  y  = * ( float * ) &i;
-  y  = y * ( threehalfs - ( x2 * y * y ) );
-  y  = y * ( threehalfs - ( x2 * y * y ) );
+  y = number;
+  i = *(long *)&y;
+  i = 0x5f3759df - (i >> 1);
+  y = *(float *)&i;
+  y = y * (threehalfs - (x2 * y * y));
+  y = y * (threehalfs - (x2 * y * y));
 
   return y;
 }
 
-void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
-                       BatchNormalizationInfo *info){
+void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
+                                void *mean, void *var, void *output, int index,
+                                BatchNormalizationInfo *info) {
 
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
 
-  float* x = (float*) inputX;
-  float* s = (float*) scale;
-  float* b = (float*) inputB;
-  float* m = (float*) mean;
-  float* v = (float*) var;
-  float* o = (float*) output;
+  float *x = (float *)inputX;
+  float *s = (float *)scale;
+  float *b = (float *)inputB;
+  float *m = (float *)mean;
+  float *v = (float *)var;
+  float *o = (float *)output;
 
-  Dimensions dim = CreateDimensions(info->inputDims,info->numberInputDims);
+  Dimensions dim = CreateDimensions(info->inputDims, info->numberInputDims);
 
-  if(dim.size <= 1){
-    Dimensions_AppendInPlace(&dim,1);
+  if (dim.size <= 1) {
+    Dimensions_AppendInPlace(&dim, 1);
   }
 
   int totalC = dim.data[1];
 
-  float* A = (float*) malloc(sizeof(float) * totalC);
-  float* B = (float*) malloc(sizeof(float) * totalC);
-  for(int c = 0; c < totalC; c++){
+  float *A = (float *)malloc(sizeof(float) * totalC);
+  float *B = (float *)malloc(sizeof(float) * totalC);
+  for (int c = 0; c < totalC; c++) {
     float inv = my_invsqrt(v[c] + info->epsilon);
     A[c] = s[c] * inv;
     B[c] = (-m[c] * inv) * s[c] + b[c];
-  }  
+  }
 
-  AddressGen addrInst = StartAddressFromDims(dim,2);
-  AddressGen* addr = &addrInst;
+  AddressGen addrInst = StartAddressFromDims(dim, 2);
+  AddressGen *addr = &addrInst;
 
   // TODO: We probably can also do this using the Kernel stuff.
   //       But I kinda want a better interface when using kernel stuff.
-  Dimensions leftover = Dimensions_Cut_GetRight(dim,2);
+  Dimensions leftover = Dimensions_Cut_GetRight(dim, 2);
   int size = Dimensions_TotalSize(leftover);
 
-  while(Address_IsValid(addr)){
-    int c = Address_GetDim(addr,1);
-    
-    int index = Address_GetValue(addr);
+  VersatVarSpec sizeSpec;
+  sizeSpec.min = 1;
+  sizeSpec.max = size;
+  int bytesTransferPerRun =
+      Top_BatchNormalization_Simple_Size(index, &sizeSpec, 0, 0);
 
-#if 0    
-    for(int i = 0; i < size; i++){
-      o[index + i] = x[index + i] * A[c] + B[c];
-    }
-#endif
+  int transferSize = sizeSpec.value;
+
+  while (Address_IsValid(addr)) {
+    int c = Address_GetDim(addr, 1);
+
+    int index = Address_GetValue(addr);
 
     union {
       int i;
       float f;
-    } a,b;
+    } a, b;
 
     a.f = A[c];
     b.f = B[c];
 
-    Top_BatchNormalization_Simple(x,o,index,size,a.i,b.i);
-    StartAccelerator();
+    for (int i = 0; i < size; i += transferSize) {
+      int trueSize = MIN(size - i, transferSize);
+      Top_BatchNormalization_Simple(x, o, index + i, trueSize, a.i, b.i);
+      StartAccelerator();
+    }
 
     Address_Advance(addr);
   }
 
   EndAccelerator();
 
-  volatile Top_BatchNormalizationConfig *config = &accelConfig->Top_BatchNormalization;
+  volatile Top_BatchNormalizationConfig *config =
+      &accelConfig->Top_BatchNormalization;
   config->x.enabled = 0;
   config->o.enabled = 0;
   RunAccelerator(2);

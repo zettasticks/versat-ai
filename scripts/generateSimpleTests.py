@@ -10,7 +10,7 @@ from onnx.helper import (
 from onnx.checker import check_model
 from skl2onnx.helpers.onnx_helper import save_onnx_model
 from onnx import numpy_helper
-from dataclasses import dataclass,fields
+from dataclasses import dataclass, fields
 from onnxOperators import BroadCastShape, ExtendShape
 
 import sys
@@ -30,6 +30,7 @@ class Test:
     node: any = None
     randomArrays: list[any] = None
     initializerArrays: list[any] = None
+
 
 @dataclass
 class PaddingType:
@@ -189,12 +190,13 @@ class BinaryOpArgs:
             outputShape = self.forcedOutputShape
 
         numberInputs = 2
-        shapes = [self.leftShape,self.rightShape]
+        shapes = [self.leftShape, self.rightShape]
 
         inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
-        test.tensors = [make_tensor_value_info(
-            x, TensorProto.FLOAT, shapes[i]
-        ) for i,x in enumerate(inputs)]            
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
 
         test.outputTensor = make_tensor_value_info(
             GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
@@ -230,9 +232,10 @@ class UnaryOpArgs:
         shapes = [self.shape]
 
         inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
-        test.tensors = [make_tensor_value_info(
-            x, TensorProto.FLOAT, shapes[i]
-        ) for i,x in enumerate(inputs)]            
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
 
         test.outputTensor = make_tensor_value_info(
             GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
@@ -242,7 +245,7 @@ class UnaryOpArgs:
             inputs,
             [GetOutputTrueName(testIndex)],
         )
-        
+
         test.randomArrays = [np.random.randn(*x).astype(np.float32) for x in shapes]
 
         tests.append(test)
@@ -462,6 +465,7 @@ class SoftmaxArgs:
 
         tests.append(test)
 
+
 @dataclass(frozen=True)
 class BatchNormalizationArgs:
     shape: list[int]
@@ -478,18 +482,19 @@ class BatchNormalizationArgs:
         outputShape = [None] * maxDims
 
         C = 1
-        if(len(self.shape) > 1):
+        if len(self.shape) > 1:
             C = self.shape[1]
 
         test = Test()
 
         numberInputs = 5
-        shapes = [self.shape,[C],[C],[C],[C]]
+        shapes = [self.shape, [C], [C], [C], [C]]
 
         inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
-        test.tensors = [make_tensor_value_info(
-            x, TensorProto.FLOAT, shapes[i]
-        ) for i,x in enumerate(inputs)]            
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
 
         test.outputTensor = make_tensor_value_info(
             GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
@@ -499,12 +504,13 @@ class BatchNormalizationArgs:
             inputs,
             [GetOutputTrueName(testIndex)],
             epsilon=self.epsilon,
-            momentum=self.momentum
+            momentum=self.momentum,
         )
-        
+
         test.randomArrays = [np.random.randn(*x).astype(np.float32) for x in shapes]
 
         tests.append(test)
+
 
 def GetInputTrueName(testIndex, inputIndex):
     VARS = "XYZABC"
@@ -575,9 +581,11 @@ def CreateSoftmax(shape, axis=-1):
     global testList
     testList.append(SoftmaxArgs(shape, axis))
 
-def CreateBatchNormalization(shape, epsilon = None,momentum = None):
+
+def CreateBatchNormalization(shape, epsilon=None, momentum=None):
     global testList
-    testList.append(BatchNormalizationArgs(shape,epsilon,momentum))
+    testList.append(BatchNormalizationArgs(shape, epsilon, momentum))
+
 
 def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
     global tests
@@ -625,14 +633,15 @@ def GenerateSimpleTest():
     testReshape = False
     testSoftmax = False
     testTranspose = False
-    testMaxPool = True
-    testAveragePool = True
-    testMatMul = True
-    testConv = False
+    testMaxPool = False
+    testAveragePool = False
+    testMatMul = False
+
+    testConv = True
     testBatchNormalization = False
+    generativeTests = True
 
     testBig = False
-    generativeTests = False
 
     if False:
         n = 1  # Batches
@@ -699,27 +708,27 @@ def GenerateSimpleTest():
         # CreateConvolution([n, 12, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
 
     if testBatchNormalization:
-        for t in [2,10]:
-            CreateBatchNormalization([1,1,1,1])
-            CreateBatchNormalization([1,1,1,t])
-            CreateBatchNormalization([1,1,t,1])
-            CreateBatchNormalization([1,t,1,1])
-            CreateBatchNormalization([t,1,1,1])
-            CreateBatchNormalization([1,1,t,t])
-            CreateBatchNormalization([1,t,1,t])
-            CreateBatchNormalization([t,1,1,t])
-            CreateBatchNormalization([1,t,t,1])
-            CreateBatchNormalization([2,1,t,1])
-            CreateBatchNormalization([t,t,1,1])
-            CreateBatchNormalization([t,t,1,1])
-            CreateBatchNormalization([1,t,t,t])
-            CreateBatchNormalization([t,1,t,t])
-            CreateBatchNormalization([t,t,1,t])
-            CreateBatchNormalization([t,t,t,1])
-            CreateBatchNormalization([t,t,t,t])
+        for t in [2, 10]:
+            CreateBatchNormalization([1, 1, 1, 1])
+            CreateBatchNormalization([1, 1, 1, t])
+            CreateBatchNormalization([1, 1, t, 1])
+            CreateBatchNormalization([1, t, 1, 1])
+            CreateBatchNormalization([t, 1, 1, 1])
+            CreateBatchNormalization([1, 1, t, t])
+            CreateBatchNormalization([1, t, 1, t])
+            CreateBatchNormalization([t, 1, 1, t])
+            CreateBatchNormalization([1, t, t, 1])
+            CreateBatchNormalization([2, 1, t, 1])
+            CreateBatchNormalization([t, t, 1, 1])
+            CreateBatchNormalization([t, t, 1, 1])
+            CreateBatchNormalization([1, t, t, t])
+            CreateBatchNormalization([t, 1, t, t])
+            CreateBatchNormalization([t, t, 1, t])
+            CreateBatchNormalization([t, t, t, 1])
+            CreateBatchNormalization([t, t, t, t])
 
         # Big examples to trigger memory exhaustion problems.
-        CreateBatchNormalization([2,2,100,100])
+        CreateBatchNormalization([2, 2, 100, 100])
 
     if testSoftmax:
         # Softmax axis come in pairs.
@@ -1213,10 +1222,12 @@ def GenerateSimpleTest():
         # if testComplexity == 2 or testBig or False:
         #    CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, g, True)
 
+
 def MakeHashable(val):
-    if(type(val) == list):
+    if type(val) == list:
         val = tuple(MakeHashable(x) for x in val)
     return val
+
 
 def GenerateTest(outputPath):
     global testList
@@ -1225,7 +1236,7 @@ def GenerateTest(outputPath):
     GenerateSimpleTest()
 
     if False:
-        testToFocus = 1
+        testToFocus = 99
         testList = [testList[testToFocus]]
         print(testList[0])
 

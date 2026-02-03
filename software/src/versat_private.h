@@ -29,8 +29,8 @@ void Dimensions_PrependInPlace(
     Dimensions *dim, int value); // A bit slow, do not abuse if possible
 void Dimensions_AppendInPlace(Dimensions *dim, int value);
 
-Dimensions Dimensions_Cut_GetLeft(Dimensions dim,int amount);
-Dimensions Dimensions_Cut_GetRight(Dimensions dim,int amount);
+Dimensions Dimensions_Cut_GetLeft(Dimensions dim, int amount);
+Dimensions Dimensions_Cut_GetRight(Dimensions dim, int amount);
 
 int Dimensions_TotalSize(Dimensions dim);
 
@@ -54,7 +54,7 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
 // iterDims = 0 means no iteration.
 AddressGen StartAddressFromDims(Dimensions dims, int iterDims);
 
-int Address_GetDim(AddressGen *gen,int index);
+int Address_GetDim(AddressGen *gen, int index);
 void Address_Print(AddressGen *gen);
 int Address_GetValue(AddressGen *gen);
 bool Address_IsValid(AddressGen *gen);
@@ -274,8 +274,9 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
                       MatMulInfo *info);
 void *Software_Softmax(void *inputA, void *output, int index,
                        SoftmaxInfo *info);
-void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
-                       BatchNormalizationInfo *info);
+void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,
+                                  void *mean, void *var, void *output,
+                                  int index, BatchNormalizationInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
@@ -295,8 +296,9 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info);
 void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info);
-void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,void *mean,void *var, void *output, int index,
-                       BatchNormalizationInfo *info);
+void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
+                                void *mean, void *var, void *output, int index,
+                                BatchNormalizationInfo *info);
 
 // ======================================
 // Misc
@@ -382,6 +384,7 @@ typedef struct {
   int outputH;
 
   PaddingRegion padding;
+  bool entireWindowInsidePadding;
 } AdvancedWindow;
 
 WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW);

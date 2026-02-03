@@ -72,18 +72,18 @@ void Dimensions_AppendInPlace(Dimensions *dim, int value) {
   dim->size += 1;
 }
 
-Dimensions Dimensions_Cut_GetLeft(Dimensions dim,int amount){
+Dimensions Dimensions_Cut_GetLeft(Dimensions dim, int amount) {
   Dimensions res = {};
 
-  if(amount == 0){
+  if (amount == 0) {
     res.data[0] = 1;
     res.size = 1;
     return res;
   }
-  
-  int size = MIN(dim.size,amount);
-  
-  for(int i = 0; i < size; i++){
+
+  int size = MIN(dim.size, amount);
+
+  for (int i = 0; i < size; i++) {
     res.data[i] = dim.data[i];
   }
   res.size = size;
@@ -91,17 +91,17 @@ Dimensions Dimensions_Cut_GetLeft(Dimensions dim,int amount){
   return res;
 }
 
-Dimensions Dimensions_Cut_GetRight(Dimensions dim,int amount){
+Dimensions Dimensions_Cut_GetRight(Dimensions dim, int amount) {
   Dimensions res = {};
 
-  if(amount == dim.size){
+  if (amount == dim.size) {
     res.data[0] = 1;
     res.size = 1;
     return res;
   }
 
-  int size = MAX(dim.size - amount,0);
-  for(int i = 0; i < size; i++){
+  int size = MAX(dim.size - amount, 0);
+  for (int i = 0; i < size; i++) {
     res.data[i] = dim.data[amount + i];
   }
   res.size = size;
@@ -151,8 +151,8 @@ AddressGen StartAddressFromDims(Dimensions dims, int iterDims) {
   return gen;
 }
 
-int Address_GetDim(AddressGen *gen,int index){
-  Assert(index < gen->numberDims,"Index greater than dimensions of Address");
+int Address_GetDim(AddressGen *gen, int index) {
+  Assert(index < gen->numberDims, "Index greater than dimensions of Address");
   return gen->addressVars[index];
 }
 
@@ -865,6 +865,11 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
     int offset = (res.inputY + res.actualKernelH) - gen->info->inputImageH;
     res.actualKernelH -= offset;
     res.padding |= PaddingRegion_BOTTOM;
+  }
+
+  // In this case we are inside the entirity of the padding section, which means that we do not actually want to do anything. It should just be zero, right?
+  if(res.actualKernelH <= 0 || res.actualKernelW <= 0){
+    res.entireWindowInsidePadding = true;
   }
 
   return res;
