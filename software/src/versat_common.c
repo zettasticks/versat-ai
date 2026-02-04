@@ -9,23 +9,15 @@
 // Global stuff (versat side)
 
 uint64_t Versat_DefaultMeasureTime() { return 0; }
-int Versat_DefaultPrintFunction(const char *name, ...) { return 0; }
 void Versat_DefaultClearCache(void *ptr, size_t size) {}
 
 MeasureTimeFunction versat_time = Versat_DefaultMeasureTime;
-PrintFunction versat_printf = Versat_DefaultPrintFunction;
 ClearCache versat_clearCache = Versat_DefaultClearCache;
 
 MeasureTimeFunction
 Versat_SetTimeMeasurementFunction(MeasureTimeFunction func) {
   MeasureTimeFunction old = versat_time;
   versat_time = func;
-  return old;
-}
-
-PrintFunction Versat_SetPrintFunction(PrintFunction func) {
-  PrintFunction old = versat_printf;
-  versat_printf = func;
   return old;
 }
 
@@ -754,6 +746,16 @@ WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW) {
   res.info = info;
   res.iterateC = iterateC;
   res.isNCHW = isNCHW;
+  res.advanceC = 1;
+  return res;
+}
+
+WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,int cMaxAdvance){
+  WindowGen res = {};
+  res.info = info;
+  res.iterateC = iterateC;
+  res.isNCHW = isNCHW;
+  res.advanceC = cMaxAdvance;
   return res;
 }
 
@@ -819,7 +821,7 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
 
   // For now, just like the rest of the window, we only advance a single output
   // channel
-  res.outputSizeC = 1;
+  res.outputSizeC = gen->advanceC;
 
   // By default, input equals kernel size
   res.actualKernelW = gen->info->kernelW;

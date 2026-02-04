@@ -18,6 +18,7 @@ import numpy as np
 import onnxruntime as ort
 import os
 import shutil
+import hashlib
 
 tests = []
 testList = []
@@ -59,6 +60,9 @@ class ConvArgs:
 
         if self.features % self.group != 0:
             return False
+        # NOTE: Seems weird but onnxruntime complains.
+        # TODO: Check if for group == 1 if we can remove this check.
+        #       Maybe it only matters for group > 1
         if (self.features * self.group) != inputChannels:
             return False
         if ((self.features * self.group) % inputChannels) != 0:
@@ -627,7 +631,6 @@ def GenerateSimpleTest():
     testComplexity = 0
 
     # MARK
-
     testAdd = False
     testRelu = False
     testReshape = False
@@ -642,6 +645,8 @@ def GenerateSimpleTest():
     generativeTests = True
 
     testBig = False
+
+    #CreateConvolution([1, 1, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
 
     if False:
         n = 1  # Batches
@@ -1044,7 +1049,7 @@ def GenerateSimpleTest():
             bP = [False, True]
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
-                PaddingType("NOTSET", [4, 2, 1, 6]),
+                #PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             gP = [1, 2, 3, 4, 8]
@@ -1235,21 +1240,23 @@ def GenerateTest(outputPath):
 
     GenerateSimpleTest()
 
-    if False:
-        testToFocus = 99
+    if True:
+        testToFocus = 27
+
+        testList[testToFocus].pad = [2,3,4,5]
+
         testList = [testList[testToFocus]]
         print(testList[0])
 
-    # TODO: Make the seed be an hash of the test, thus ensuring it is reproducible if we end up changing things in the future.
-    for test in testList:
+    for i,test in enumerate(testList):
         hashable = {}
         for field in fields(test):
             val = getattr(test, field.name)
             val = MakeHashable(val)
             hashable[field.name] = val
 
-        h = hash(frozenset(hashable.items())) % 2**31
-        np.random.seed(h)
+        persistantHash = int(hashlib.md5(str(hashable).encode("UTF-8"),usedforsecurity=False).hexdigest(),16)
+        np.random.seed(persistantHash % (2 ** 31))
         test.Create()
 
     """

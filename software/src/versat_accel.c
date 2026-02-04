@@ -429,7 +429,7 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 }
 
 void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
-                                void *output, float *bias, ConvInfo *info,
+                                void *outAddr, float *bias, ConvInfo *info,
                                 int inputC, int outputC) {
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
@@ -445,31 +445,33 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
   int convChannelSize = inputImageC;
-  int kernelChannelSize = inputImageC;
   int group = info->group;
 
   int convStartC = 0; // We must always process the entire input channels.
-  int outputStartC = w.startC;
 
-  int featuresComputedPerRun = 1;
+  //int featuresComputedPerRun = w.outputSizeC;
 
-  Top_Conv_Features(inputX, w.inputX, w.inputY, w.actualKernelW,
-                    w.actualKernelH, inputImageW, inputImageC, convChannelSize,
-                    featuresComputedPerRun, convStartC);
+  Top_Conv_FeaturesWeightsOutputs(inputX, inputW, outAddr, 
+    w.actualKernelW,w.actualKernelH,convChannelSize,
 
-  Top_Conv_Weight2D(inputW, w.kernelStartW, w.kernelStartH, w.actualKernelW,
-                    w.actualKernelH, kernelW, kernelH, inputImageC,
-                    kernelChannelSize, featuresComputedPerRun, convStartC,
-                    outputStartC);
+    w.outputH, w.outputW,w.outputSizeC,
 
-  Top_Conv_Output(output, w.outputX, w.outputY, w.outputH, w.outputW, w.startC,
-                  outputC, featuresComputedPerRun, outputImageW, stride);
+    w.inputX, w.inputY,
+    w.kernelStartW, w.kernelStartH,
+    w.startC, w.outputX, 
+    w.outputY, 
+
+    inputImageW, inputImageC, 
+    convStartC, 
+    kernelW, kernelH,
+    
+    outputImageW, stride, outputC);
 
   if (bias == NULL) {
     static float bias = 0.0f;
     Top_Conv_Bias(&bias, 1, 1);
   } else {
-    Top_Conv_Bias(bias + outputStartC, featuresComputedPerRun, stride);
+    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride);
   }
 
   config->myAccum.strideMinusOne = stride - 1;
@@ -509,6 +511,16 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int outputSize = outputImageW * outputImageH * outputChannels;
   int group = info->group;
 
+  int kernelW = info->kernelDims[1];
+  int kernelH = info->kernelDims[0];
+
+  VersatVarSpec outputHSpec = {1,outputImageH,0};
+  VersatVarSpec outputWSpec = {1,outputImageW,1};
+  VersatVarSpec outputCSpec = {1,outputChannels,2};
+  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(kernelW,kernelH,inputChannels,&outputHSpec,&outputWSpec,&outputCSpec);
+
+  versat_printf("%d %d %d:%d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
+
   Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
   inputTensor.data = inputX;
 
@@ -516,9 +528,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     ArenaMark mark = MarkArena(arena);
 
     // TODO: This technically depends on batch because we have group related
-    // operations
-    //       that change these values. If we remove them we can then push this
-    //       outside the loop
+    // operations that change these values. 
+    // If we remove them we can then push this outside the loop
     ExtraInfo extra = CalculateExtraInfo_Conv(info);
     // ExtraInfo_Print(extra);
 
@@ -650,20 +661,22 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       Tensor_CheckCanary(tempGroupTensor);
     } else {
-
-      WindowGen genInst = StartWindowGen(&extra, true, false);
+      WindowGen genInst = StartAdvancedWindowGen(&extra, true, false, outputCSpec.value);
       WindowGen *gen = &genInst;
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
 
+        // TODO: Do not forget passing this logic to the groups != 1 above.
         if(w.entireWindowInsidePadding){
-          float bias = 0.0f;
-          if(biasView){
-            bias = biasView[w.outputC];
-          }
+          for(int outC = w.outputC; outC < w.outputC + w.outputSizeC; outC++){
+            float bias = 0.0f;
+            if(biasView){
+              bias = biasView[outC];
+            }
 
-          tempOutput[w.outputY * outputChannels * outputImageW + w.outputX * outputChannels + w.outputC] = bias;
+            tempOutput[w.outputY * outputChannels * outputImageW + w.outputX * outputChannels + outC] = bias;
+          }
         } else {
           ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
                                      info, info->inputDims[1],
@@ -899,8 +912,7 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
   VersatVarSpec sizeSpec;
   sizeSpec.min = 1;
   sizeSpec.max = size;
-  int bytesTransferPerRun =
-      Top_BatchNormalization_Simple_Size(index, &sizeSpec, 0, 0);
+  int bytesTransferPerRun = Top_BatchNormalization_Simple_Size(&sizeSpec);
 
   int transferSize = sizeSpec.value;
 

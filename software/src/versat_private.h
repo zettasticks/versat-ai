@@ -11,8 +11,8 @@
 // ======================================
 // Global stuff (versat side)
 
+extern VersatPrintf versat_printf;
 extern MeasureTimeFunction versat_time;
-extern PrintFunction versat_printf;
 extern ClearCache versat_clearCache;
 
 // ======================================
@@ -349,6 +349,9 @@ typedef struct {
   int currentOutputC;
   int currentOutputX;
   int currentOutputY;
+
+  int advanceC;
+
   bool iterateC;
   bool isNCHW; // Otherwise assume it is NHWC
 } WindowGen;
@@ -367,9 +370,11 @@ typedef struct {
   int outputY;
 
   int startC;
-  int inputSizeC; // This is mostly the same as inputImageC since Conv cannot
-                  // handle half sums. We must always process the entire input
-                  // channels, we cannot handle half sums.
+  // TODO: The comment below is technically true but we might want to represent inputSizeC because of groups.
+  //       We might be able to push the logic of conv groups  
+  // NOTE: Versat cannot handle processing less than full input channels per run. 
+  //       Otherwise we would need to store the "half sum" somewhere and 
+  //       add everything together at the end
 
   int outputC;
   int outputSizeC;
@@ -388,6 +393,8 @@ typedef struct {
 } AdvancedWindow;
 
 WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW);
+WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,int cMaxAdvance);
+
 AdvancedWindow WindowGen_Get(WindowGen *gen);
 void WindowGen_Advance(WindowGen *gen);
 bool WindowGen_Valid(WindowGen *gen);

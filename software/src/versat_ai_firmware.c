@@ -203,7 +203,6 @@ int main() {
   ConfigCreateVCD(false);
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
-  Versat_SetPrintFunction(printf);
   Versat_SetClearCache(silent_clear_cache_args);
 
   printf("Versat base: %x\n", VERSAT0_BASE);

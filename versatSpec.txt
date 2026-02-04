@@ -112,8 +112,8 @@ addressGen LinearStrided(size,stride){
 }
 
 module Top_Conv(){
-   using(Conv2D_NHWC) VRead features;
-   using(Weight2D) VRead weights;
+   using(Conv2D_NHWC) VRead #(.ADDR_W(18)) features;
+   using(Weight2D) VRead #(.ADDR_W(18)) weights;
    using(LinearStrided) VRead bias;
    F_Mul muller;
    F_Add addBias;
@@ -126,25 +126,35 @@ module Top_Conv(){
    {myAccum,bias} -> addBias:0..1;
    addBias -> output;
 ##
-   config Features(addr : Address,startX,startY,sizeW,sizeH,inputImageW,inputImageC,sizeC,featuresAmount,startC){
+   config FeaturesWeightsOutputs(inputX : Address,inputW : Address,outAddr : Address,
+      // Fixed and we just pass the worst case scenario value.
+      actualKernelW : Fixed,actualKernelH : Fixed,sizeC : Fixed,
+
+      outputH : Dyn,outputW : Dyn,featuresAmount : Dyn,
+
+      startX,startY,
+      kernelStartX,kernelStartY,
+      startD,outStartX,
+      outStartY,
+      inputImageW,inputImageC,
+      startC,
+      kernelW,kernelH,
+      outputWidth,stride,outputChannels){
+
       for d 0..featuresAmount {
          for c 0..sizeC {
-            for ky 0..sizeH {
-               for kx 0..sizeW { 
-                  features = addr[(startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + (c + startC)];
+            for ky 0..actualKernelH {
+               for kx 0..actualKernelW { 
+                  features = inputX[(startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + (c + startC)];
+                  weights = inputW[(d + startD) * inputImageC * kernelW * kernelH + (c + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
                }
             }
          }
       }
-   }
-
-   config Weight2D(addr : Address,startX,startY,sizeW,sizeH,kernelW,kernelH,inputChannels,sizeC,features,startC,startD){
-      for d 0..features {
-         for c 0..sizeC {
-            for y 0..sizeH {
-               for x 0..sizeW {
-                  weights = addr[(d + startD) * inputChannels * kernelW * kernelH + (c + startC) * kernelW * kernelH + (y + startY) * kernelW + (x + startX)];
-               }
+      for y 0..outputH {
+         for x 0..outputW {
+            for c 0..featuresAmount {
+              output = outAddr[((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + startD + c) / stride];
             }
          }
       }
@@ -156,15 +166,6 @@ module Top_Conv(){
       }
    }
 
-   config Output(addr : Address,startX,startY,height,width,startC,outputChannels,outputSize,outputWidth,stride){
-      for y 0..height {
-         for x 0..width {
-            for c 0..outputSize {
-              output = addr[((y + startY) * outputWidth * outputChannels + (x + startX) * outputChannels + startC + c) / stride];
-            }
-         }
-      }
-   }
 }
 
 module Top_MatMul(){
