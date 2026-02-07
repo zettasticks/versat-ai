@@ -19,6 +19,7 @@ import onnxruntime as ort
 import os
 import shutil
 import hashlib
+import random
 
 tests = []
 testList = []
@@ -69,7 +70,7 @@ class ConvArgs:
             return False
         return True
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         s = self
 
@@ -142,8 +143,6 @@ class ConvArgs:
         randomArray0 = np.random.randn(*shape).astype(np.float32)
         randomArray1 = np.random.randn(*kernelShape).astype(np.float32)
 
-        linear = False
-
         val = 1.0
         if linear:
             randomArray0 = np.zeros(shape).astype(np.float32)
@@ -179,7 +178,7 @@ class BinaryOpArgs:
     rightShape: list[int]
     forcedOutputShape: list[int]
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -221,7 +220,7 @@ class UnaryOpArgs:
     op: str
     shape: list[int]
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -263,7 +262,7 @@ class MaxPoolArgs:
     auto_pad: str = "NOTSET"
     pads: list[int] = None
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -315,7 +314,7 @@ class AveragePoolArgs:
     auto_pad: str = "NOTSET"
     pads: list[int] = None
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -366,7 +365,7 @@ class ReshapeArgs:
     shapeIn: list[int]
     shapeOut: list[int]
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -402,14 +401,17 @@ class ReshapeArgs:
 @dataclass
 class TransposeArgs:
     shapeIn: list[int]
-    shapeOut: list[int]
+    permutations: list[int]
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
         shapeIn = self.shapeIn
-        shapeOut = self.shapeOut
+        shapeOut = [0] * len(self.shapeIn)
+
+        for i,perm in enumerate(self.permutations):
+            shapeOut[i] = shapeIn[perm]
 
         test = Test()
 
@@ -425,7 +427,7 @@ class TransposeArgs:
             "Transpose",
             [GetInputTrueName(testIndex, 0)],
             [GetOutputTrueName(testIndex)],
-            perm=shapeOut,
+            perm=self.permutations,
         )
 
         randomArray = np.random.randn(*shapeIn).astype(np.float32)
@@ -439,7 +441,7 @@ class SoftmaxArgs:
     shape: list[int]
     axis: int
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -476,7 +478,7 @@ class BatchNormalizationArgs:
     epsilon: float
     momentum: float
 
-    def Create(self):
+    def Create(self,linear = False):
         global tests
         testIndex = len(tests)
 
@@ -630,23 +632,22 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
 def GenerateSimpleTest():
     testComplexity = 0
 
-    # MARK
-    testAdd = False
-    testRelu = False
-    testReshape = False
-    testSoftmax = False
-    testTranspose = False
-    testMaxPool = False
-    testAveragePool = False
-    testMatMul = False
+    # MARK1
+    testAdd                 = 1
+    testRelu                = 1
+    testReshape             = 1
+    testSoftmax             = 1
+    testTranspose           = 1
+    testMaxPool             = 1
+    testAveragePool         = 1
+    testMatMul              = 1
+    testConv                = 1
+    testBatchNormalization  = 1
 
-    testConv = True
-    testBatchNormalization = False
-    generativeTests = True
-
+    generativeTests = False
     testBig = False
 
-    #CreateConvolution([1, 1, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
+    #CreateConvolution([1, 2, 3, 3], 2, [3, 3], [5, 5], [1, 1], 1, True, "NOTSET", [1,2,3,4])
 
     if False:
         n = 1  # Batches
@@ -1240,10 +1241,18 @@ def GenerateTest(outputPath):
 
     GenerateSimpleTest()
 
-    if True:
-        testToFocus = 27
+    # MARK2
+    focusOnOneTest = False
 
-        testList[testToFocus].pad = [2,3,4,5]
+    # MARK3
+    #testList = testList[0:3]
+
+    # MARK4
+    if True:
+        random.shuffle(testList)
+
+    if focusOnOneTest:
+        testToFocus = 0
 
         testList = [testList[testToFocus]]
         print(testList[0])
@@ -1257,18 +1266,7 @@ def GenerateTest(outputPath):
 
         persistantHash = int(hashlib.md5(str(hashable).encode("UTF-8"),usedforsecurity=False).hexdigest(),16)
         np.random.seed(persistantHash % (2 ** 31))
-        test.Create()
-
-    """
-    for test in tests:
-        val = 1.0
-        sign = 1.0
-        for array in test.randomArrays:
-            for i, x in np.ndenumerate(array):
-                array[i] = val
-                val += 1.0 * sign
-                sign = -sign
-    """
+        test.Create(focusOnOneTest)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:

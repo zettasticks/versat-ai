@@ -449,8 +449,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int convStartC = 0; // We must always process the entire input channels.
 
-  //int featuresComputedPerRun = w.outputSizeC;
-
   Top_Conv_FeaturesWeightsOutputs(inputX, inputW, outAddr, 
     w.actualKernelW,w.actualKernelH,convChannelSize,
 
@@ -661,11 +659,29 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       Tensor_CheckCanary(tempGroupTensor);
     } else {
-      WindowGen genInst = StartAdvancedWindowGen(&extra, true, false, outputCSpec.value);
+      WindowGen genInst = StartAdvancedWindowGen(&extra, true, false, 1);
       WindowGen *gen = &genInst;
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
+
+#if 0
+        LEFT HERE - Currently when using a non 1 sizeC we get problems but only when the test is using
+                    a bunch of waky padding options. Something like [2,3,4,5] for padding is causing problems but only
+                    when sizeC != 1, otherwise it works. It is kinda weird but because it seems to be mostly based on the padding
+                    we might be able to craft a very small and simple example and trigger the bug with the weird padding 
+                    and should be easy to find the problem that way.
+
+                    The steps are basically: 
+
+                      Craft the simplest possible test to trigger the bug and fix it.
+                      Move the logic to the group != 1 above.
+                      Check if everything is working fine.
+                      Then we can potentially see if we can join the group != 1 and group == 1 logic into the same 
+                      logic flow, because it is becoming kinda of weird going on this way.
+                      Afterwards find a way of making the algorithm respond to the outputHSpec and outputWSpec values.
+                        Since it is all based on the advanced window stuff, we might be able to do it fairly quickly.
+#endif
 
         // TODO: Do not forget passing this logic to the groups != 1 above.
         if(w.entireWindowInsidePadding){
@@ -875,6 +891,7 @@ static float my_invsqrt(float number) {
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info) {
+  ResetAccelerator();
 
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
 
@@ -915,6 +932,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
   int bytesTransferPerRun = Top_BatchNormalization_Simple_Size(&sizeSpec);
 
   int transferSize = sizeSpec.value;
+
+  silent_clear_cache();
 
   while (Address_IsValid(addr)) {
     int c = Address_GetDim(addr, 1);

@@ -94,7 +94,7 @@ build_emul: fw_emul
 BOARD_GRAB_CMD ?=../scripts/board_client.py grab 3000
 
 test.log: build_emul
-	$(BOARD_GRAB_CMD) -s 'gdb --args ./fw_emul' -c '$(CONSOLE_CMD)'
+	$(BOARD_GRAB_CMD) -s './fw_emul' -c '$(CONSOLE_CMD)'
 
 run_emul: test.log
 	test "$$(cat test.log)" = "Test passed!"

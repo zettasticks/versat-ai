@@ -127,9 +127,7 @@ module Top_Conv(){
    addBias -> output;
 ##
    config FeaturesWeightsOutputs(inputX : Address,inputW : Address,outAddr : Address,
-      // Fixed and we just pass the worst case scenario value.
       actualKernelW : Fixed,actualKernelH : Fixed,sizeC : Fixed,
-
       outputH : Dyn,outputW : Dyn,featuresAmount : Dyn,
 
       startX,startY,

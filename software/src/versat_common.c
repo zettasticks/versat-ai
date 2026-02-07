@@ -508,7 +508,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
 
 #ifndef LOW_OUTPUT
   if (printOk && incorrectFound == 0) {
-    versat_printf("[%s] (Layer %d) - OK\n", info->typeName, index);
+    versat_printf("[%30s] (Layer %4d) - OK\n", info->typeName, index);
   }
 #endif
 }
