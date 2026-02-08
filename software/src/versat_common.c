@@ -750,7 +750,8 @@ WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW) {
   return res;
 }
 
-WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,int cMaxAdvance){
+WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,
+                                 int cMaxAdvance) {
   WindowGen res = {};
   res.info = info;
   res.iterateC = iterateC;
@@ -869,8 +870,9 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
     res.padding |= PaddingRegion_BOTTOM;
   }
 
-  // In this case we are inside the entirity of the padding section, which means that we do not actually want to do anything. It should just be zero, right?
-  if(res.actualKernelH <= 0 || res.actualKernelW <= 0){
+  // In this case we are inside the entirity of the padding section, which means
+  // that we do not actually want to do anything. It should just be zero, right?
+  if (res.actualKernelH <= 0 || res.actualKernelW <= 0) {
     res.entireWindowInsidePadding = true;
   }
 

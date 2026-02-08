@@ -370,10 +370,12 @@ typedef struct {
   int outputY;
 
   int startC;
-  // TODO: The comment below is technically true but we might want to represent inputSizeC because of groups.
-  //       We might be able to push the logic of conv groups  
-  // NOTE: Versat cannot handle processing less than full input channels per run. 
-  //       Otherwise we would need to store the "half sum" somewhere and 
+  // TODO: The comment below is technically true but we might want to represent
+  // inputSizeC because of groups.
+  //       We might be able to push the logic of conv groups
+  // NOTE: Versat cannot handle processing less than full input channels per
+  // run.
+  //       Otherwise we would need to store the "half sum" somewhere and
   //       add everything together at the end
 
   int outputC;
@@ -393,7 +395,8 @@ typedef struct {
 } AdvancedWindow;
 
 WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW);
-WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,int cMaxAdvance);
+WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,
+                                 int cMaxAdvance);
 
 AdvancedWindow WindowGen_Get(WindowGen *gen);
 void WindowGen_Advance(WindowGen *gen);

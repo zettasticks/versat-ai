@@ -23,7 +23,7 @@ MeasureTimeFunction Versat_SetTimeMeasurementFunction(MeasureTimeFunction func);
 typedef void (*ClearCache)(void *ptr, size_t size);
 ClearCache Versat_SetClearCache(ClearCache func);
 
-typedef int (*VersatPrintf)(const char* format,...);
+typedef int (*VersatPrintf)(const char *format, ...);
 
 // TODO: Still need to figure out how to make this work, we could just allocate
 // some output memory and store the array inside it.

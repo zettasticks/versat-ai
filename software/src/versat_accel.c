@@ -204,6 +204,8 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
     B = t;                                                                     \
   } while (0)
 
+#include <string.h>
+
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
   int64_t *l = info->firstInputDim;
@@ -221,7 +223,6 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
   }
 
   volatile Top_AddConfig *config = &accelConfig->Top_Add;
-
   ActivateMergedAccelerator(MergeType_Top_Add);
 
   float *viewA = (float *)inputA;
@@ -247,11 +248,10 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     for (int offset = 0; offset < lineLength; offset += maxLineSupported) {
       int trueLength = MIN(maxLineSupported, lineLength - offset);
 
-      Linear_VRead(&config->inputs_0, &viewA[indexA + offset], trueLength);
-      Broadcast1_VRead(&config->inputs_1,
-                       &viewB[indexB + (broadcastedB ? 0 : offset)], trueLength,
-                       GetSize(r, d, d - 1));
-      Linear_VWrite(&config->output, &out[indexO + offset], trueLength);
+      Top_Add_Linear(&viewA[indexA + offset], trueLength);
+      Top_Add_Broadcast(&viewB[indexB + (broadcastedB ? 0 : offset)],
+                        trueLength, GetSize(r, d, d - 1));
+      Top_Add_Output(&out[indexO + offset], trueLength);
 
       RunAccelerator(1);
     }
@@ -273,6 +273,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
 
 void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   volatile Top_ReluConfig *config = &accelConfig->Top_Relu;
+
   ActivateMergedAccelerator(MergeType_Top_Relu);
 
   int dims = info->dims;
@@ -288,8 +289,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   for (int i = 0; i < totalSize; i += maxAtATime) {
     int size = MIN(maxAtATime, totalSize - i);
 
-    Linear_VRead(&config->input, &inputView[i], size);
-    Linear_VWrite(&config->output, &outputView[i], size);
+    Top_Relu_Simple(&inputView[i], &outputView[i], size);
 
     RunAccelerator(1);
   }
@@ -325,11 +325,12 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
   int strideW = info->strideDims[1];
   int strideH = info->strideDims[0];
 
-  MaxPool2D_VRead(&config->features, input, w.inputX, w.inputY, cInStart,
-                  w.actualKernelW, w.actualKernelH, inputImageW, w.outputW,
-                  w.outputH, strideW, strideH);
-  Linear2_VWrite(&config->output, output, w.outputX, w.outputY, cOutStart,
-                 w.outputW, w.outputH, outputImageW, stride);
+  Top_Maxpool_Features(input, w.inputX, w.inputY, cInStart, w.actualKernelW,
+                       w.actualKernelH, inputImageW, w.outputW, w.outputH,
+                       strideW, strideH);
+
+  Top_Maxpool_Output(output, w.outputX, w.outputY, cOutStart, w.outputW,
+                     w.outputH, outputImageW, stride);
 
   config->accum.strideMinusOne = stride - 1;
   StartAccelerator();
@@ -387,11 +388,11 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
   int strideW = info->strideDims[1];
   int strideH = info->strideDims[0];
 
-  MaxPool2D_VRead(&config->features, input, w.inputX, w.inputY, cInStart,
-                  w.actualKernelW, w.actualKernelH, inputImageW, w.outputW,
-                  w.outputH, strideW, strideH);
-  Linear2_VWrite(&config->output, output, w.outputX, w.outputY, cOutStart,
-                 w.outputW, w.outputH, outputImageW, stride);
+  Top_AveragePool_Features(input, w.inputX, w.inputY, cInStart, w.actualKernelW,
+                           w.actualKernelH, inputImageW, w.outputW, w.outputH,
+                           strideW, strideH);
+  Top_AveragePool_Output(output, w.outputX, w.outputY, cOutStart, w.outputW,
+                         w.outputH, outputImageW, stride);
 
   config->averagePool_accum.strideMinusOne = stride - 1;
   config->invertedDivisor.constant = NoConvert(1.0f / (float)stride);
@@ -449,21 +450,18 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int convStartC = 0; // We must always process the entire input channels.
 
-  Top_Conv_FeaturesWeightsOutputs(inputX, inputW, outAddr, 
-    w.actualKernelW,w.actualKernelH,convChannelSize,
+  Top_Conv_FeaturesWeightsOutputs(
+      inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
+      convChannelSize,
 
-    w.outputH, w.outputW,w.outputSizeC,
+      w.outputH, w.outputW, w.outputSizeC,
 
-    w.inputX, w.inputY,
-    w.kernelStartW, w.kernelStartH,
-    w.startC, w.outputX, 
-    w.outputY, 
+      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, w.startC, w.outputX,
+      w.outputY,
 
-    inputImageW, inputImageC, 
-    convStartC, 
-    kernelW, kernelH,
-    
-    outputImageW, stride, outputC);
+      inputImageW, inputImageC, convStartC, kernelW, kernelH,
+
+      outputImageW, stride, outputC);
 
   if (bias == NULL) {
     static float bias = 0.0f;
@@ -512,12 +510,15 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int kernelW = info->kernelDims[1];
   int kernelH = info->kernelDims[0];
 
-  VersatVarSpec outputHSpec = {1,outputImageH,0};
-  VersatVarSpec outputWSpec = {1,outputImageW,1};
-  VersatVarSpec outputCSpec = {1,outputChannels,2};
-  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(kernelW,kernelH,inputChannels,&outputHSpec,&outputWSpec,&outputCSpec);
+  VersatVarSpec outputHSpec = {1, outputImageH, 0};
+  VersatVarSpec outputWSpec = {1, outputImageW, 1};
+  VersatVarSpec outputCSpec = {1, outputChannels, 2};
+  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
+      kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
+      &outputCSpec);
 
-  versat_printf("%d %d %d:%d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
+  // versat_printf("%d %d
+  // %d:%d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
 
   Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
   inputTensor.data = inputX;
@@ -526,7 +527,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     ArenaMark mark = MarkArena(arena);
 
     // TODO: This technically depends on batch because we have group related
-    // operations that change these values. 
+    // operations that change these values.
     // If we remove them we can then push this outside the loop
     ExtraInfo extra = CalculateExtraInfo_Conv(info);
     // ExtraInfo_Print(extra);
@@ -613,17 +614,18 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
           AdvancedWindow w = WindowGen_Get(gen);
 
-        if(w.entireWindowInsidePadding){
-          float bias = 0.0f;
-          if(trueBias){
-            bias = trueBias[w.outputC];
+          if (w.entireWindowInsidePadding) {
+            float bias = 0.0f;
+            if (trueBias) {
+              bias = trueBias[w.outputC];
+            }
+            tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
+                            w.outputX * extra.outputImageC + w.outputC] = bias;
+          } else {
+            ConvWithBias_ProcessWindow(
+                w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
+                tempGroupOutput, trueBias, info, s, o);
           }
-          tempGroupOutput[w.outputY * extra.outputImageC * outputImageW + w.outputX * extra.outputImageC + w.outputC] = bias;
-        } else {
-          ConvWithBias_ProcessWindow(
-              w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
-              tempGroupOutput, trueBias, info, s, o);
-          } 
         }
 
         // Flush the remaining data from the accelerator
@@ -684,14 +686,15 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 #endif
 
         // TODO: Do not forget passing this logic to the groups != 1 above.
-        if(w.entireWindowInsidePadding){
-          for(int outC = w.outputC; outC < w.outputC + w.outputSizeC; outC++){
+        if (w.entireWindowInsidePadding) {
+          for (int outC = w.outputC; outC < w.outputC + w.outputSizeC; outC++) {
             float bias = 0.0f;
-            if(biasView){
+            if (biasView) {
               bias = biasView[outC];
             }
 
-            tempOutput[w.outputY * outputChannels * outputImageW + w.outputX * outputChannels + outC] = bias;
+            tempOutput[w.outputY * outputChannels * outputImageW +
+                       w.outputX * outputChannels + outC] = bias;
           }
         } else {
           ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
@@ -842,9 +845,8 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 
         float *out = &viewOut[y * OW + x + valO];
 
-        Linear_VRead(&config->leftRow, lineAStart, AW);
-        Linear_VRead(&config->rightRow, lineBStart, BH);
-        LinearStrided_VWrite(&config->output, out, 1, AW);
+        Top_MatMul_Simple(lineAStart, lineBStart, AW);
+        Top_MatMul_Output(out, 1, AW);
 
         config->myAccum.strideMinusOne = AW - 1;
 
@@ -891,8 +893,6 @@ static float my_invsqrt(float number) {
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info) {
-  ResetAccelerator();
-
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
 
   float *x = (float *)inputX;

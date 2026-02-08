@@ -70,7 +70,7 @@ class ConvArgs:
             return False
         return True
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         s = self
 
@@ -178,7 +178,7 @@ class BinaryOpArgs:
     rightShape: list[int]
     forcedOutputShape: list[int]
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -220,7 +220,7 @@ class UnaryOpArgs:
     op: str
     shape: list[int]
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -262,7 +262,7 @@ class MaxPoolArgs:
     auto_pad: str = "NOTSET"
     pads: list[int] = None
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -314,7 +314,7 @@ class AveragePoolArgs:
     auto_pad: str = "NOTSET"
     pads: list[int] = None
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -365,7 +365,7 @@ class ReshapeArgs:
     shapeIn: list[int]
     shapeOut: list[int]
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -403,14 +403,14 @@ class TransposeArgs:
     shapeIn: list[int]
     permutations: list[int]
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
         shapeIn = self.shapeIn
         shapeOut = [0] * len(self.shapeIn)
 
-        for i,perm in enumerate(self.permutations):
+        for i, perm in enumerate(self.permutations):
             shapeOut[i] = shapeIn[perm]
 
         test = Test()
@@ -441,7 +441,7 @@ class SoftmaxArgs:
     shape: list[int]
     axis: int
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -478,7 +478,7 @@ class BatchNormalizationArgs:
     epsilon: float
     momentum: float
 
-    def Create(self,linear = False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -633,21 +633,19 @@ def GenerateSimpleTest():
     testComplexity = 0
 
     # MARK1
-    testAdd                 = 1
-    testRelu                = 1
-    testReshape             = 1
-    testSoftmax             = 1
-    testTranspose           = 1
-    testMaxPool             = 1
-    testAveragePool         = 1
-    testMatMul              = 1
-    testConv                = 1
-    testBatchNormalization  = 1
+    testAdd = 1
+    testRelu = 1
+    testReshape = 1
+    testSoftmax = 1
+    testTranspose = 1
+    testMaxPool = 1
+    testAveragePool = 1
+    testMatMul = 1
+    testConv = 1
+    testBatchNormalization = 1
 
     generativeTests = False
     testBig = False
-
-    #CreateConvolution([1, 2, 3, 3], 2, [3, 3], [5, 5], [1, 1], 1, True, "NOTSET", [1,2,3,4])
 
     if False:
         n = 1  # Batches
@@ -1050,7 +1048,7 @@ def GenerateSimpleTest():
             bP = [False, True]
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
-                #PaddingType("NOTSET", [4, 2, 1, 6]),
+                # PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             gP = [1, 2, 3, 4, 8]
@@ -1245,10 +1243,12 @@ def GenerateTest(outputPath):
     focusOnOneTest = False
 
     # MARK3
-    #testList = testList[0:3]
+    if 0:
+        # testList = testList[0:3]
+        testList = [testList[0], testList[2]]
 
     # MARK4
-    if True:
+    if 1:
         random.shuffle(testList)
 
     if focusOnOneTest:
@@ -1257,15 +1257,20 @@ def GenerateTest(outputPath):
         testList = [testList[testToFocus]]
         print(testList[0])
 
-    for i,test in enumerate(testList):
+    for i, test in enumerate(testList):
         hashable = {}
         for field in fields(test):
             val = getattr(test, field.name)
             val = MakeHashable(val)
             hashable[field.name] = val
 
-        persistantHash = int(hashlib.md5(str(hashable).encode("UTF-8"),usedforsecurity=False).hexdigest(),16)
-        np.random.seed(persistantHash % (2 ** 31))
+        persistantHash = int(
+            hashlib.md5(
+                str(hashable).encode("UTF-8"), usedforsecurity=False
+            ).hexdigest(),
+            16,
+        )
+        np.random.seed(persistantHash % (2**31))
         test.Create(focusOnOneTest)
 
     allInputNodesAndValuesInOrder = []
