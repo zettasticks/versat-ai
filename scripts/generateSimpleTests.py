@@ -633,16 +633,16 @@ def GenerateSimpleTest():
     testComplexity = 0
 
     # MARK1
-    testAdd = 1
-    testRelu = 1
-    testReshape = 1
-    testSoftmax = 1
-    testTranspose = 1
-    testMaxPool = 1
-    testAveragePool = 1
-    testMatMul = 1
+    testAdd = 0
+    testRelu = 0
+    testReshape = 0
+    testSoftmax = 0
+    testTranspose = 0
+    testMaxPool = 0
+    testAveragePool = 0
+    testMatMul = 0
     testConv = 1
-    testBatchNormalization = 1
+    testBatchNormalization = 0
 
     generativeTests = 1
     testBig = 0
@@ -987,8 +987,8 @@ def GenerateSimpleTest():
                 PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
+            #gP = [1, 2, 3, 4, 8]
             gP = [1, 2, 3, 4, 8]
-            # gP = [2]
 
             args = []
             for n in nP:

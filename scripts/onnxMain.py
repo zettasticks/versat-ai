@@ -168,11 +168,30 @@ def GenerateModelFromOnnxModel(onnxModel):
             inputNames.append(Port(value.name, shape))
     cModel.modelInputs = inputNames
 
+    # Check for operators not supported.
+    opsNotSupported = {}
+    for node in onnxModel.graph.node:
+        opType = node.op_type
+
+        if not opType in operatorNameToSpec:
+            opsNotSupported[opType] = 1
+
+    if(len(opsNotSupported)):
+        print("\n\n[ERROR]")
+        print("The following operators that are present in the graph")
+        print("are not currently implemented and therefore we cannot proceed:")
+
+        for item in opsNotSupported.keys():
+            print(f"    {item}")
+
+        print("\n")
+
+        sys.exit(0)
+
     # Extract all the data that we care about from the graph into a simpler struct for further processing.
     for node in onnxModel.graph.node:
         opType = node.op_type
 
-        # TODO: Need to properly handle the operator not being registered
         operatorSpec = operatorNameToSpec[opType]
         attributesSpec = operatorSpec.attributesDict
 

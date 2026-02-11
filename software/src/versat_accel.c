@@ -521,9 +521,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
       &outputCSpec);
 
-  // versat_printf("%d %d
-  // %d:%d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
-
   Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
   inputTensor.data = inputX;
 
@@ -583,157 +580,94 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     Tensor_CheckCanary(tempInputTensor);
 
     // Extract the channel
-    if (group != 1) {
-      extra.inputImageC /= group;
-      extra.outputImageC /= group;
+    Dimensions dims = CreateDimensions(info->inputDims, 4);
+    dims.data[1] /= group;
 
-      Dimensions dims = CreateDimensions(info->inputDims, 4);
-      dims.data[1] /= group;
+    int size = Dimensions_TotalSize(dims);
 
-      int size = Dimensions_TotalSize(dims);
+    Dimensions outDims = CreateDimensions(info->outputDims, 4);
+    outDims.data[1] /= group;
+    
+    int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2],
+                              outDims.data[3], outDims.data[1]};
+    Tensor tempGroupTensor = PushTensor(arena, NHWCOutDims, 4);
+    float *tempGroupOutput = tempGroupTensor.data;
 
-      Dimensions outDims = CreateDimensions(info->outputDims, 4);
-      outDims.data[1] /= group;
+    // TODO: Changing extra is kinda "problematic". We are doing a bunch of stuff that might not be needed anymore.
+    //       It might be possible to just push this logic to Versat and let it handle it.
+    extra.inputImageC /= group;
+    extra.outputImageC /= group;
 
-      int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2],
-                                outDims.data[3], outDims.data[1]};
-      Tensor tempGroupTensor = PushTensor(arena, NHWCOutDims, 4);
-      float *tempGroupOutput = tempGroupTensor.data;
+    int index = 0;
+    for (int g = 0; g < group; g++) {
+      int inputC = extra.inputImageC;
+      int outputC = extra.outputImageC;
 
-      int index = 0;
-      for (int g = 0; g < group; g++) {
-        int s = extra.inputImageC;
-        int o = extra.outputImageC;
-        Tensor extracted =
-            Tensor_ExtractView(tempInputTensor, 3, g * s, s, arena);
+      // We extract the input associated to the current group.
+      Tensor extracted =
+          Tensor_ExtractView(tempInputTensor, 3, g * inputC, inputC, arena);
 
-        WindowGen genInst = StartWindowGen(&extra, true, false);
-        WindowGen *gen = &genInst;
-
-        float *trueBias = biasView;
-        if (trueBias != NULL) {
-          trueBias += (g * extra.outputImageC);
-        }
-
-        for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
-          AdvancedWindow w = WindowGen_Get(gen);
-
-          if (w.entireWindowInsidePadding) {
-            float bias = 0.0f;
-            if (trueBias) {
-              bias = trueBias[w.outputC];
-            }
-            tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
-                            w.outputX * extra.outputImageC + w.outputC] = bias;
-          } else {
-            ConvWithBias_ProcessWindow(
-                w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
-                tempGroupOutput, trueBias, info, s, o);
-          }
-        }
-
-        // Flush the remaining data from the accelerator
-        // TODO: Not efficient but not worrying about it for now.
-        config->features.enabled = 0;
-        config->weights.enabled = 0;
-        config->output.enabled = 0;
-        config->bias.enabled = 0;
-        RunAccelerator(2);
-
-        silent_clear_cache();
-
-        // We obtain the result in NHWC format and we need to "concatenate" this
-        // with the output that we are building.
-        // The output is also in NHWC format.
-        // The problem is that the concatenation assumes that we are in NCHW
-        // format.
-
-        //
-        int transposeDims[] = {0, 3, 1, 2};
-        Tensor transposed =
-            Tensor_Transpose(tempGroupTensor, transposeDims, arena);
-
-        float *outputView = (float *)output;
-        outputView += batch * outputSize; // + g * (outputSize / group);
-        for (int i = 0; i < outputSize / group; i++) {
-          outputView[index++] = transposed.data[i];
-        }
-
-        Tensor_CheckCanary(extracted);
-        Tensor_CheckCanary(transposed);
-      }
-
-      Tensor_CheckCanary(tempGroupTensor);
-    } else {
-      WindowGen genInst =
-          StartAdvancedWindowGen(&extra, true, false, outputCSpec.value);
+      // We iterate over the "reduced" extra values.
+      WindowGen genInst = StartWindowGen(&extra, true, false);
       WindowGen *gen = &genInst;
+
+      // We extract the bias input.
+      float *trueBias = biasView;
+      if (trueBias != NULL) {
+        trueBias += (g * extra.outputImageC);
+      }
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
 
-#if 0
-        LEFT HERE - Currently when using a non 1 sizeC we get problems but only when the test is using
-                    a bunch of waky padding options. Something like [2,3,4,5] for padding is causing problems but only
-                    when sizeC != 1, otherwise it works. It is kinda weird but because it seems to be mostly based on the padding
-                    we might be able to craft a very small and simple example and trigger the bug with the weird padding 
-                    and should be easy to find the problem that way.
-
-                    The steps are basically: 
-
-                      Craft the simplest possible test to trigger the bug and fix it.
-                      Move the logic to the group != 1 above.
-                      Check if everything is working fine.
-                      Then we can potentially see if we can join the group != 1 and group == 1 logic into the same 
-                      logic flow, because it is becoming kinda of weird going on this way.
-                      Afterwards find a way of making the algorithm respond to the outputHSpec and outputWSpec values.
-                        Since it is all based on the advanced window stuff, we might be able to do it fairly quickly.
-#endif
-
-        // TODO: Do not forget passing this logic to the groups != 1 above.
         if (w.entireWindowInsidePadding) {
-          for (int outC = w.outputC; outC < w.outputC + w.outputSizeC; outC++) {
-            float bias = 0.0f;
-            if (biasView) {
-              bias = biasView[outC];
-            }
-
-            tempOutput[w.outputY * outputChannels * outputImageW +
-                       w.outputX * outputChannels + outC] = bias;
+          float bias = 0.0f;
+          if (trueBias) {
+            bias = trueBias[w.outputC];
           }
+          tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
+                          w.outputX * extra.outputImageC + w.outputC] = bias;
         } else {
-          ConvWithBias_ProcessWindow(w, tempInput, inputW, tempOutput, biasView,
-                                     info, info->inputDims[1],
-                                     info->outputDims[1]);
+          ConvWithBias_ProcessWindow(
+              w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
+              tempGroupOutput, trueBias, info, inputC, outputC);
         }
       }
 
       // Flush the remaining data from the accelerator
+      // TODO: Not efficient but not worrying about it for now.
       config->features.enabled = 0;
       config->weights.enabled = 0;
       config->output.enabled = 0;
       config->bias.enabled = 0;
       RunAccelerator(2);
 
-      float *outputView = (float *)output;
-      outputView += batch * outputSize;
-
       silent_clear_cache();
 
-      // Convert NHWC to NCHW
-      for (int c = 0; c < outputChannels; c++) {
-        for (int y = 0; y < outputImageH; y++) {
-          for (int x = 0; x < outputImageW; x++) {
-            int NCHW_Index =
-                c * (outputImageH * outputImageW) + y * outputImageW + x;
-            int NHWC_Index =
-                y * (outputImageW * outputChannels) + x * outputChannels + c;
+      // We obtain the result in NHWC format and we need to "concatenate" this
+      // with the output that we are building.
+      // The output is also in NHWC format.
+      // The problem is that the concatenation assumes that we are in NCHW
+      // format.
 
-            outputView[NCHW_Index] = tempOutput[NHWC_Index];
-          }
-        }
+      // We then concatenate everything into one place.
+      // And make use of the fact that in NCHW we can just "append".
+      // So it is easier to transpose the small output patch than it is to 
+      int transposeDims[] = {0, 3, 1, 2};
+      Tensor transposed =
+          Tensor_Transpose(tempGroupTensor, transposeDims, arena);
+
+      float *outputView = (float *)output;
+      outputView += batch * outputSize; // + g * (outputSize / group);
+      for (int i = 0; i < outputSize / group; i++) {
+        outputView[index++] = transposed.data[i];
       }
+
+      Tensor_CheckCanary(extracted);
+      Tensor_CheckCanary(transposed);
     }
+
+    Tensor_CheckCanary(tempGroupTensor);
 
     Tensor_CheckCanary(tempInputTensor);
     Tensor_CheckCanary(tempOutputTensor);
