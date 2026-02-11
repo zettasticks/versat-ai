@@ -450,6 +450,10 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int convStartC = 0; // We must always process the entire input channels.
 
+  static unsigned int delayBuffer[] = {0x0, 0x0, 0x10, 0x0, 0x0, 0x6};
+  ;
+  VersatLoadDelay(delayBuffer);
+
   Top_Conv_FeaturesWeightsOutputs(
       inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
       convChannelSize,
@@ -661,7 +665,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       Tensor_CheckCanary(tempGroupTensor);
     } else {
-      WindowGen genInst = StartAdvancedWindowGen(&extra, true, false, 1);
+      WindowGen genInst =
+          StartAdvancedWindowGen(&extra, true, false, outputCSpec.value);
       WindowGen *gen = &genInst;
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {

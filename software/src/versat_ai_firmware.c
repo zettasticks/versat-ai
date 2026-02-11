@@ -200,7 +200,7 @@ int main() {
   PrintU64InHex(1ull << 63);
 #endif
 
-  ConfigCreateVCD(true);
+  ConfigCreateVCD(false);
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);

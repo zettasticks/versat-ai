@@ -824,6 +824,14 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
   // channel
   res.outputSizeC = gen->advanceC;
 
+  if (res.outputSizeC + res.outputC >= gen->info->outputImageC) {
+    res.outputSizeC = gen->info->outputImageC - res.outputC;
+    if (res.outputSizeC <= 0) {
+      versat_printf("ERROR, CANNOT HAVE OUTPUT SIZE LOWER OR EQUAL TO 0: %d",
+                    res.outputSizeC);
+    }
+  }
+
   // By default, input equals kernel size
   res.actualKernelW = gen->info->kernelW;
   res.actualKernelH = gen->info->kernelH;

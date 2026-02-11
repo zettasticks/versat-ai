@@ -644,72 +644,8 @@ def GenerateSimpleTest():
     testConv = 1
     testBatchNormalization = 1
 
-    generativeTests = False
-    testBig = False
-
-    if False:
-        n = 1  # Batches
-        c = 1  # Input channels
-        f = 1  # Output channels
-        hw = [4, 4]  # Image height and width
-        k = [2, 2]  # 2D Kernel
-        s = [2, 2]  # 2D Stride
-        d = [1, 1]  # 2D Dilations
-        g = 1  # Groups
-        b = False  # Use bias
-        p = "NOTSET"  # Padding Kind
-        pd = [0, 0, 0, 0]  # Actual padding used when NOTSET
-
-        # 0
-        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-
-    if False:
-        n = 1  # Batches
-        c = 1  # Input channels
-        f = 1  # Output channels
-        hw = [4, 4]  # Image height and width
-        k = [2, 2]  # 2D Kernel
-        s = [2, 2]  # 2D Stride
-        d = [1, 1]  # 2D Dilations
-        g = 1  # Groups
-        b = False  # Use bias
-        p = "NOTSET"  # Padding Kind
-        pd = [0, 0, 0, 0]  # Actual padding used when NOTSET
-
-        # 0
-        CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-        # 1
-        CreateConvolution([2, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-        # 2
-        CreateConvolution([n, 2, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-        # 3
-        CreateConvolution([n, c, hw[0], hw[1]], 2, k, s, d, g, b, p, pd)
-        # 4
-        # CreateConvolution([n, c, hw[0], hw[1]], f, [4, 4], s, d, g, b, p, pd)
-        # 5
-        # CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-        # 6
-        # CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, b, p, pd)
-        # 7
-        # CreateConvolution([n, 2, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
-        # 8
-        # CreateConvolution([n, c, hw[0], hw[1]], f, k, s, d, g, True, p, pd)
-        # 9
-        # CreateConvolution([n, 2, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
-        # 10
-        # CreateConvolution([n, 4, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
-        # CreateConvolution([n, 8, hw[0], hw[1]], 2, k, s, d, 2, b, p, pd)
-        # CreateConvolution([n, 8, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
-        # CreateConvolution([n, 16, hw[0], hw[1]], 4, k, s, d, 2, b, p, pd)
-        # CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 2, b, p, pd)
-        # CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
-        # CreateConvolution([n, 16, hw[0], hw[1]], 8, k, s, d, 8, b, p, pd)
-        # CreateConvolution([n, 8, hw[0], hw[1]], 16, k, s, d, 8, b, p, pd)
-        # CreateConvolution([n, 4, hw[0], hw[1]], 16, k, s, d, 4, b, p, pd)
-        # CreateConvolution([n, 4, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
-        # CreateConvolution([n, 4, hw[0], hw[1]], 12, k, s, d, 4, b, p, pd)
-        # CreateConvolution([n, 12, hw[0], hw[1]], 12, k, s, d, 4, b, p, pd)
-        # CreateConvolution([n, 12, hw[0], hw[1]], 8, k, s, d, 4, b, p, pd)
+    generativeTests = 1
+    testBig = 0
 
     if testBatchNormalization:
         for t in [2, 10]:
@@ -1048,7 +984,7 @@ def GenerateSimpleTest():
             bP = [False, True]
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
-                # PaddingType("NOTSET", [4, 2, 1, 6]),
+                PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             gP = [1, 2, 3, 4, 8]
@@ -1240,19 +1176,14 @@ def GenerateTest(outputPath):
     GenerateSimpleTest()
 
     # MARK2
-    focusOnOneTest = False
+    focusOnOneTest = 0
 
     # MARK3
     if 0:
-        # testList = testList[0:3]
-        testList = [testList[0], testList[2]]
-
-    # MARK4
-    if 1:
         random.shuffle(testList)
 
     if focusOnOneTest:
-        testToFocus = 0
+        testToFocus = 1131
 
         testList = [testList[testToFocus]]
         print(testList[0])

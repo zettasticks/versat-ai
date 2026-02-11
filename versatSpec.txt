@@ -23,7 +23,7 @@ module Top_Add(){
       for x 0..size {
          output = addr[x];
       }
-   }   
+   }
 }
 
 module Top_Relu(){
@@ -155,7 +155,6 @@ module Top_Conv(){
          bias = addr[x / stride];
       }
    }
-
 }
 
 module Top_MatMul(){
