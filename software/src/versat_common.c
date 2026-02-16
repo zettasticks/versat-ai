@@ -311,10 +311,11 @@ KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
   return gen;
 }
 
-KernelGen StartKernel_IterateOneDimOnly(AddressGen *address,int dimToIterate,int start,int end){
-  int dims[] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+KernelGen StartKernel_IterateOneDimOnly(AddressGen *address, int dimToIterate,
+                                        int start, int end) {
+  int dims[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  KernelGen gen = StartKernel(address,dims,address->numberDims);
+  KernelGen gen = StartKernel(address, dims, address->numberDims);
 
   gen.addressGenVars[dimToIterate] = 0;
   gen.kernelDims[dimToIterate] = end;

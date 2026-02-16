@@ -730,6 +730,89 @@ def CreateDropout(shape, ratio):
     testList.append(DropoutArgs(shape, ratio))
 
 
+@dataclass
+class GemmArgs:
+    aShape: list[int]
+    bShape: list[int]
+    cShape: list[int]
+    alpha: float
+    beta: float
+    transA: int
+    transB: int
+
+    def IsValid(self):
+        aShape = self.aShape
+        if(self.transA):
+            aShape = [aShape[1],aShape[0]]
+        bShape = self.bShape
+        if(self.transB):
+            bShape = [bShape[1],bShape[0]]
+        cShape = self.cShape
+        if not self.cShape:
+            cShape = [1, 1]
+
+        outShape = [aShape[0],bShape[1]]
+
+        if(aShape[1] != bShape[0]):
+            return False
+        if(cShape[0] != 1 and cShape[0] != outShape[0]):
+            return False
+        if(cShape[1] != 1 and cShape[1] != outShape[1]):
+            return False
+        return True
+
+    def Create(self, linear=False):
+        global tests
+        testIndex = len(tests)
+
+        assert self.IsValid()
+
+        test = Test()
+
+        maxDims = max(len(self.aShape), len(self.bShape))
+
+        # Let onnx infer shape specifics
+        outputShape = [None] * maxDims
+
+        cShape = self.cShape
+        if not self.cShape:
+            cShape = [1, 1]
+
+        numberInputs = 3
+        shapes = [self.aShape, self.bShape, cShape]
+
+        inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
+
+        test.outputTensor = make_tensor_value_info(
+            GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+        )
+        test.node = make_node(
+            "Gemm",
+            inputs,
+            [GetOutputTrueName(testIndex)],
+            alpha=self.alpha,
+            beta=self.beta,
+            transA=self.transA,
+            transB=self.transB,
+        )
+
+        test.randomArrays = [np.random.randn(*x).astype(np.float32) for x in shapes]
+
+        if not self.cShape:
+            test.randomArrays[2] = np.zeros(cShape).astype(np.float32)
+
+        tests.append(test)
+
+
+def CreateGemm(aShape, bShape, cShape=None, alpha=1.0, beta=1.0, transA=0, transB=0):
+    global testList
+    testList.append(GemmArgs(aShape, bShape, cShape, alpha, beta, transA, transB))
+
+
 def GenerateSimpleTest():
     testComplexity = 0
 
@@ -744,14 +827,45 @@ def GenerateSimpleTest():
     testMatMul = 0
     testConv = 0
     testBatchNormalization = 0
-    testLRN = 1
+    testLRN = 0
     testDropout = 0
+    testGemm = 1
 
     generativeTests = 1
     testBig = 0
 
+    if testGemm:
+        CreateGemm([4,1],[1,4],[1,4],2.0,2.0,1,0)
+        
+        if False:
+            CreateGemm([1,2],[2,3],[1,1],2.0,2.0)
+            CreateGemm([1,4],[4,1],[1,1],2.0,2.0)
+            CreateGemm([4,1],[1,4],[1,1],2.0,2.0)
+            CreateGemm([4,1],[1,4],[4,1],2.0,2.0)
+            CreateGemm([4,1],[1,4],[1,4],2.0,2.0)
+            CreateGemm([4,1],[1,4],[4,4],2.0,2.0)
+
+        if generativeTests:
+            aShapes = [[4,1],[4,2],[4,4],[2,4],[1,4]]
+            bShapes = [[1,4],[2,4],[4,4],[4,2],[4,1]]
+            cShapes = [None,[1,1],[2,1],[1,2],[4,1],[1,4]]
+            alphas = [1.0,2.0]
+            betas = [1.0,2.0]
+            transA = [0,1]
+            transB = [0,1]
+
+            for a in aShapes:
+                for b in bShapes:
+                    for c in cShapes:
+                        for alpha in alphas:
+                            for beta in betas:
+                                for tA in transA:
+                                    for tB in transB:
+                                        CreateGemm(a,b,c,alpha,beta,tA,tB)
+
     if testLRN:
         CreateLRN([1, 4, 4, 4], int(3), 0.0001, 0.75, 1.0)
+
         CreateLRN([1, 11, 6, 6], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 8, 8], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 10, 10], int(5), 0.0001, 0.75, 1.0)
@@ -843,25 +957,24 @@ def GenerateSimpleTest():
         CreateSoftmax([w, z, y, x], 3)  # D
 
     if testAdd:
-        if True:
-            CreateBinaryOpTest("Add", [1], [1])
-            CreateBinaryOpTest("Add", [2], [2])
-            CreateBinaryOpTest("Add", [3, 2], [3, 2])
-            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+        CreateBinaryOpTest("Add", [1], [1])
+        CreateBinaryOpTest("Add", [2], [2])
+        CreateBinaryOpTest("Add", [3, 2], [3, 2])
+        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
 
-            # Simplest tests, no broadcast or abusing dimensions
-            CreateBinaryOpTest("Add", [1], [1])
-            CreateBinaryOpTest("Add", [4], [4])
-            CreateBinaryOpTest("Add", [2, 4], [2, 4])
-            CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-            CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+        # Simplest tests, no broadcast or abusing dimensions
+        CreateBinaryOpTest("Add", [1], [1])
+        CreateBinaryOpTest("Add", [4], [4])
+        CreateBinaryOpTest("Add", [2, 4], [2, 4])
+        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-            # Broadcasting
-            CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-            CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-            CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-            CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+        # Broadcasting
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
         if testBig:
             CreateBinaryOpTest("Add", [10240], [10240])
@@ -1299,6 +1412,8 @@ def GenerateTest(outputPath):
 
     GenerateSimpleTest()
 
+    testList = [x for x in testList if not hasattr(x,"IsValid") or x.IsValid()]
+
     # MARK2
     focusOnOneTest = 0
 
@@ -1307,7 +1422,7 @@ def GenerateTest(outputPath):
         random.shuffle(testList)
 
     if focusOnOneTest:
-        testToFocus = 1131
+        testToFocus = 48
 
         testList = [testList[testToFocus]]
         print(testList[0])

@@ -207,4 +207,48 @@ module Top_BatchNormalization(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization;
+module Top_Gemm(){
+   VRead #(.ADDR_W(14)) gemmLeftRow;
+   VRead #(.ADDR_W(14)) gemmRightRow;
+   F_Mul mat_muller;
+   MyFloatAccum myAccum;
+   VWrite output;
+
+   Const alpha;
+   F_Mul alphaMul;
+
+   Const cValue;
+   F_Add adder;
+#
+   {gemmLeftRow,gemmRightRow} -> mat_muller:0..1;
+   mat_muller -> myAccum;
+
+   {myAccum,alpha} -> alphaMul:0..1;
+
+   {alphaMul,cValue} -> adder:0..1;
+
+   adder -> output;
+##
+   config Alpha(val){
+      alpha.constant = val;
+   }
+
+   config CValue(val){
+      cValue.constant = val;
+   }
+
+   config Simple(leftAddr: Address,rightAddr: Address,size: Dyn){
+      for x 0..size {
+         gemmLeftRow = leftAddr[x];
+         gemmRightRow = rightAddr[x];
+      }
+   }
+
+   config Output(addr: Address,size,stride){
+      for x 0..size {
+         output = addr[x / stride];
+      }
+   }
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm;

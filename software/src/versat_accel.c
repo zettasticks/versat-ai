@@ -690,6 +690,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   float *viewB = (float *)inputB;
   float *viewOut = (float *)output;
 
+  // TODO: The names are kinda wrong. AH and AW are "technically" swapped in name only.
   int AS = info->numberInputADims;
   int AH;
   int AW;
@@ -913,20 +914,160 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 }
 
 void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
-  Tensor asTensor = CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);  
+  Tensor asTensor =
+      CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
   int size = Tensor_Size(asTensor);
 
-  float* asFloatIn = (float*) input;
-  float* asFloatOut = (float*) out;
+  float *asFloatIn = (float *)input;
+  float *asFloatOut = (float *)out;
 
-  for(int i = 0; i < size; i++){
+  for (int i = 0; i < size; i++) {
     asFloatOut[i] = asFloatIn[i];
   }
 
   return input;
 }
 
-
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
-  //return input;
+  return Software_LRN(input, out, index, info);
+}
+
+void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
+                  GemmInfo *info) {
+  ActivateMergedAccelerator(MergeType_Top_Gemm);
+  volatile Top_GemmConfig *config = &accelConfig->Top_Gemm;
+
+  float *viewA = (float *)inA;
+  float *viewB = (float *)inB;
+  float *viewC = (float *)inC;
+  float *viewOut = (float *)out;
+
+  int AH = info->aDims[0]; // 1
+  int AW = info->aDims[1]; // 4
+
+  int totalASize = AH * AW;
+  float *tempA = (float *)malloc(sizeof(float) * totalASize);
+
+  int BH = info->bDims[0];
+  int BW = info->bDims[1];
+
+  int totalBSize = BH * BW;
+  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
+
+  int CH = info->cDims[0];
+  int CW = info->cDims[1];
+
+  int trueAW = AW;
+  int trueAH = AH;
+  if(info->transA){
+    trueAW = AH;
+    trueAH = AW;
+  }
+
+  int trueBW = BW;
+  int trueBH = BH;
+  if(info->transB){
+    trueBW = BH;
+    trueBH = BW;
+  }
+
+  int OH = trueAH;
+  int OW = trueBW;
+
+  int broadCastH = (OH == CH && OH != 1) ? 1 : 0;
+  int broadCastW = (OW == CW && OW != 1) ? 1 : 0;
+
+  int64_t dimsOut[2] = {OH, OW};
+
+  Dimensions dimA = CreateDimensions(info->aDims, info->numberDims);
+  Dimensions dimB = CreateDimensions(info->bDims, info->numberDims);
+  Dimensions dimC = CreateDimensions(info->cDims, info->numberDims);
+
+  Dimensions dimO = CreateDimensions(dimsOut, info->numberDims);
+
+  AddressGen addrA = StartAddressFromDims(dimA, 0);
+  AddressGen addrB = StartAddressFromDims(dimB, 0);
+  AddressGen addrO = StartAddressFromDims(dimO, 0);
+
+#if 0
+  while (Address_IsValid(&addrA) || Address_IsValid(&addrB) ||
+         Address_IsValid(&addrO)) {
+    int valA = Address_GetValue(&addrA);
+    int valB = Address_GetValue(&addrB);
+    int valO = Address_GetValue(&addrO);
+
+    EndAccelerator();
+#endif
+  int valA = 0;
+  int valB = 0;
+  int valO = 0;
+
+  // By default we transpose B in order to implement the multiplication phase directly.
+  // Which means that we do the opposite when we want to "transpose" B.
+  float* properBInput = viewB;
+  if(!info->transB){
+    for (int y = 0; y < BH; y++) {
+      for (int x = 0; x < BW; x++) {
+        // Transposing B
+        tempB[x * BH + y] = viewB[y * BW + x + valB];
+      }
+    }
+
+    properBInput = tempB;
+  }
+
+  //versat_printf("AW: %d,AH: %d,BW: %d,BH: %d,OW: %d,OH: %d\n",AW,AH,BW,BH,OW,OH);
+
+  Top_Gemm_Alpha(NoConvert(info->alpha));
+
+  for (int y = 0; y < OH; y++) {
+
+    float* properAInput = &viewA[y * AW];
+    if(info->transA){
+      for (int x = 0; x < AH; x++) {
+        // Transposing A
+        tempA[x] = viewA[x * AW + y];
+      }
+      properAInput = tempA;
+    } 
+
+    silent_clear_cache();
+
+    for (int x = 0; x < OW; x++) {
+      float *lineAStart = properAInput;
+      float *lineBStart = &properBInput[x * trueAW];
+
+      float *out = &viewOut[y * OW + x + valO];
+
+      int cIndex = y * (broadCastH ? CW : 0) + x * (broadCastW ? 1 : 0);
+
+      float cVal = viewC[cIndex];
+
+      Top_Gemm_CValue(NoConvert(cVal * info->beta));
+
+      Top_Gemm_Simple(lineAStart, lineBStart, trueAW);
+      Top_Gemm_Output(out, 1, trueAW);
+
+      config->myAccum.strideMinusOne = trueAW - 1;
+
+      StartAccelerator();
+    }
+  }
+
+#if 0
+    Address_Advance(&addrA);
+    Address_Advance(&addrB);
+    Address_Advance(&addrO);
+  }
+#endif
+
+  config->gemmLeftRow.enabled = 0;
+  config->gemmRightRow.enabled = 0;
+  config->output.enabled = 0;
+  RunAccelerator(2);
+
+  free(tempA);
+  free(tempB);
+
+  return viewOut;
 }

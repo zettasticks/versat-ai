@@ -273,10 +273,7 @@ def EmitGemm(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     in0Shape = emitter.EmitArray("int64_t", op.inputDimensions[0])
     in1Shape = emitter.EmitArray("int64_t", op.inputDimensions[1])
-
-    in2Shape = None
-    if len(op.inputDimensions) > 2:
-        in2Shape = emitter.EmitArray("int64_t", op.inputDimensions[2])
+    in2Shape = emitter.EmitArray("int64_t", op.inputDimensions[2])
 
     attr = GetAttributesForOperator(op)
 
@@ -394,9 +391,6 @@ def OperationToFunctionName(op: Operation, useVersat: bool):
     if op.opName == "Conv":
         if len(op.inputs) == 3:
             name = "ConvWithBias"
-    if op.opName == "Gemm":
-        if len(op.inputs) == 3:
-            name = "GemmWithC"
 
     return f"{decider}_{name}"
 

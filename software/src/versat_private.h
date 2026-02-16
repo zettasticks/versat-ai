@@ -106,9 +106,9 @@ typedef struct {
   int numberDims;
 } KernelGen;
 
-
 KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize);
-KernelGen StartKernel_IterateOneDimOnly(AddressGen *address,int dimToIterate,int start,int end);
+KernelGen StartKernel_IterateOneDimOnly(AddressGen *address, int dimToIterate,
+                                        int start, int end);
 
 void Kernel_PrintShort(KernelGen *gen);
 void Kernel_Print(KernelGen *gen);
@@ -267,8 +267,19 @@ typedef struct {
   float alpha;
   float beta;
   float bias;
-  int size;  
+  int size;
 } LRNInfo;
+
+typedef struct {
+  int64_t *aDims;
+  int64_t *bDims;
+  int64_t *cDims;
+  int numberDims;
+  float alpha;
+  float beta;
+  int transA;
+  int transB;
+} GemmInfo;
 
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
@@ -295,6 +306,8 @@ void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,
                                   int index, BatchNormalizationInfo *info);
 void *Software_Dropout(void *input, void *out, int index, DropoutInfo *info);
 void *Software_LRN(void *input, void *out, int index, LRNInfo *info);
+void *Software_Gemm(void *inA, void *inB, void *inC, void *out, int index,
+                    GemmInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
@@ -319,6 +332,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 BatchNormalizationInfo *info);
 void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info);
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info);
+void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
+                  GemmInfo *info);
 
 // ======================================
 // Misc
