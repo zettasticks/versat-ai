@@ -587,14 +587,16 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
     Dimensions outDims = CreateDimensions(info->outputDims, 4);
     outDims.data[1] /= group;
-    
-    int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2],
-                              outDims.data[3], outDims.data[1]};
+
+    int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2], outDims.data[3],
+                              outDims.data[1]};
     Tensor tempGroupTensor = PushTensor(arena, NHWCOutDims, 4);
     float *tempGroupOutput = tempGroupTensor.data;
 
-    // TODO: Changing extra is kinda "problematic". We are doing a bunch of stuff that might not be needed anymore.
-    //       It might be possible to just push this logic to Versat and let it handle it.
+    // TODO: Changing extra is kinda "problematic". We are doing a bunch of
+    // stuff that might not be needed anymore.
+    //       It might be possible to just push this logic to Versat and let it
+    //       handle it.
     extra.inputImageC /= group;
     extra.outputImageC /= group;
 
@@ -652,7 +654,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       // We then concatenate everything into one place.
       // And make use of the fact that in NCHW we can just "append".
-      // So it is easier to transpose the small output patch than it is to 
+      // So it is easier to transpose the small output patch than it is to
       int transposeDims[] = {0, 3, 1, 2};
       Tensor transposed =
           Tensor_Transpose(tempGroupTensor, transposeDims, arena);
@@ -908,4 +910,23 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
   free(B);
 
   return o;
+}
+
+void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
+  Tensor asTensor = CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);  
+  int size = Tensor_Size(asTensor);
+
+  float* asFloatIn = (float*) input;
+  float* asFloatOut = (float*) out;
+
+  for(int i = 0; i < size; i++){
+    asFloatOut[i] = asFloatIn[i];
+  }
+
+  return input;
+}
+
+
+void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
+  //return input;
 }

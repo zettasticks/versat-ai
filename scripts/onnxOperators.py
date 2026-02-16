@@ -13,7 +13,7 @@ from versatDefs import (
 from enum import Enum, auto
 
 # TODO: I eventually want to start generating the C structs from the emitters defined here. Really cumbersome to have to match
-#      the emitter code with the C code, any change requires to carefully interact with
+#      the emitter code with the C code,.
 
 # TODO: Because Onnx supports variable sized tensors, we might want to start moving the tensors shape calculations to runtime.
 #      For now this is fine because most models do not have dynamic tensor shapes, but eventually need to do this.
@@ -250,6 +250,51 @@ def EmitBatchNormalization(emitter, op: Operation):
     return [inputShape, dims, epsilon, momentum]
 
 
+def EmitLRN(emitter, op: Operation):
+    dims = len(op.inputDimensions[0])
+    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
+
+    attr = GetAttributesForOperator(op)
+
+    alpha = attr["alpha"].value
+    beta = attr["beta"].value
+    bias = attr["bias"].value
+    size = attr["size"].value
+
+    return [inputShape, dims, alpha, beta, bias, size]
+
+
+class ConType(Enum):
+    NORMAL = auto()
+    OPTIONAL = auto()
+
+
+def EmitGemm(emitter, op: Operation):
+    dims = len(op.inputDimensions[0])
+    in0Shape = emitter.EmitArray("int64_t", op.inputDimensions[0])
+    in1Shape = emitter.EmitArray("int64_t", op.inputDimensions[1])
+
+    in2Shape = None
+    if len(op.inputDimensions) > 2:
+        in2Shape = emitter.EmitArray("int64_t", op.inputDimensions[2])
+
+    attr = GetAttributesForOperator(op)
+
+    alpha = attr["alpha"].value
+    beta = attr["beta"].value
+    transA = attr["transA"].value
+    transB = attr["transB"].value
+
+    return [in0Shape, in1Shape, in2Shape, dims, alpha, beta, transA, transB]
+
+
+def EmitDropout(emitter, op: Operation):
+    dims = len(op.inputDimensions[0])
+    shape = emitter.EmitArray("int64_t", op.inputDimensions[0])
+
+    return [shape, dims]
+
+
 def IsOperatorRegistered(opName: str):
     return opName in operatorNameToSpec
 
@@ -318,6 +363,22 @@ batchNormalizationAttributes = {
     "training_mode": MakeAttrInteger(0),
 }
 
+lrnAttributes = {
+    "alpha": MakeAttrFloat("0.0001"),
+    "beta": MakeAttrFloat("0.75"),
+    "bias": MakeAttrFloat("1.0"),
+    "size": MakeAttrInteger(None),
+}
+
+gemmAttributes = {
+    "alpha": MakeAttrFloat("1.0"),
+    "beta": MakeAttrFloat("1.0"),
+    "transA": MakeAttrInteger(0),
+    "transB": MakeAttrInteger(0),
+}
+
+dropoutAttributes = {"ratio": MakeAttrFloat(0.5)}
+
 
 def GetOperatorSpec(opName):
     global operatorNameToSpec
@@ -333,6 +394,9 @@ def OperationToFunctionName(op: Operation, useVersat: bool):
     if op.opName == "Conv":
         if len(op.inputs) == 3:
             name = "ConvWithBias"
+    if op.opName == "Gemm":
+        if len(op.inputs) == 3:
+            name = "GemmWithC"
 
     return f"{decider}_{name}"
 
@@ -372,4 +436,9 @@ operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
 )
 operatorNameToSpec["BatchNormalization"] = OnnxOperatorSpec(
     "BatchNormalization", EmitBatchNormalization, batchNormalizationAttributes, True
+)
+operatorNameToSpec["LRN"] = OnnxOperatorSpec("LRN", EmitLRN, lrnAttributes, False)
+operatorNameToSpec["Gemm"] = OnnxOperatorSpec("Gemm", EmitGemm, gemmAttributes, True)
+operatorNameToSpec["Dropout"] = OnnxOperatorSpec(
+    "Dropout", EmitDropout, dropoutAttributes, True
 )

@@ -125,6 +125,8 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
 
 void *Software_Reshape(void *data, void *shape, void *output, int index,
                        ReshapeInfo *info) {
+  // TODO: Need to copy the input, cannot assume that memory will remain valid.
+  // NOTE: If we want to avoid the copy need to put logic on onnx script that removes the operator call.
   return data;
 }
 
@@ -376,9 +378,9 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
   return output;
 }
 
-float ABS(float x) { return x < 0 ? -x : x; }
+double ABS(double x) { return x < 0 ? -x : x; }
 
-float my_exp(float x) {
+double my_exp(double x) {
   double result = 1.0;
   double term = 1.0;
   double div = 1.0;
@@ -399,11 +401,30 @@ float my_exp(float x) {
     lastResult = result;
   }
 
-  return (float)result;
+  return result;
 }
 
+double my_log(double x){
+  double start = 0.0;
+
+  for(int i = 0; i < 1000; i++){
+    double last = start;
+    start = start + 2.0 * ((x - my_exp(start)) / (x + my_exp(start)));
+    if(last == start){
+      break;
+    }
+  }
+
+  return start;
+}
+
+double my_pow(double b, double e){
+  double result = my_exp(e * my_log(b));
+  return result;
+} 
+
 // Based on quake fast inverse square root function.
-static float my_invsqrt(float number) {
+double my_invsqrt(double number) {
   long i;
   float x2, y;
   const float threehalfs = 1.5F;
@@ -529,4 +550,55 @@ void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,
   }
 
   return o;
+}
+
+void *Software_Dropout(void *input, void *out, int index, DropoutInfo *info) {
+  // TODO: Need to copy the input, cannot assume that memory will remain valid.
+  // NOTE: If we want to avoid the copy need to put logic on onnx script that removes the operator call.
+  return input;
+}
+
+void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
+  int N = info->inputDims[0];
+  int C = info->inputDims[1];
+  int Y = info->inputDims[2];
+  int X = info->inputDims[3];
+
+  int n = info->size;
+  double k = (double) info->bias;
+  double a = (double) info->alpha;
+  double b = (double) info->beta;
+
+  float* in = (float*) input;
+  float* output = (float*) out;
+
+  #define CEIL_DIV(A,B) ((A + B - 1) / B)
+
+  AddressGen addrInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+  AddressGen* addr = &addrInst;
+  for (; Address_IsValid(addr); Address_Advance(addr)) {
+      int c = Address_GetDim(addr, 1);
+
+      int lowerBound = MAX(0,c - n / 2);
+      int upperBound = MIN(C-1,c + CEIL_DIV(n,2));
+
+      KernelGen genInst = StartKernel_IterateOneDimOnly(addr,1,lowerBound,upperBound);
+      KernelGen* gen = &genInst;
+
+      double sum = 0.0f;
+      for(; Kernel_IsValid(gen); Kernel_Advance(gen)){
+        int index = Kernel_GetValue(gen);
+
+        double val = (double) in[index];
+
+        sum += (val * val);
+      }
+
+      int index = Address_GetValue(addr);
+
+      double div = my_pow(k + (a / n) * sum,b);
+      output[index] = (((double) in[index]) / div);
+  }
+
+  return output;
 }

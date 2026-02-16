@@ -92,8 +92,6 @@ AddressGen Address_Map2(AddressGen *in, int64_t *biggerDim, int *stride,
 typedef struct {
   int kernelVars[MAX_DIMS]; // Current state
 
-  // Kernel Info
-  // AddressGen *address;
   int addressGenVars[MAX_DIMS]; // The value of the address vars at the start of
                                 // the kernel iteration.
   int addressIterDims[MAX_DIMS];   // The original iteration dimensions. Kernel
@@ -108,7 +106,10 @@ typedef struct {
   int numberDims;
 } KernelGen;
 
+
 KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize);
+KernelGen StartKernel_IterateOneDimOnly(AddressGen *address,int dimToIterate,int start,int end);
+
 void Kernel_PrintShort(KernelGen *gen);
 void Kernel_Print(KernelGen *gen);
 int Kernel_GetValue(KernelGen *gen);
@@ -254,6 +255,21 @@ typedef struct {
   float momentum;
 } BatchNormalizationInfo;
 
+typedef struct {
+  int64_t *inputDims;
+  int numberInputDims;
+  float ratio;
+} DropoutInfo;
+
+typedef struct {
+  int64_t *inputDims;
+  int numberInputDims;
+  float alpha;
+  float beta;
+  float bias;
+  int size;  
+} LRNInfo;
+
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
                     ConvInfo *info);
@@ -277,6 +293,8 @@ void *Software_Softmax(void *inputA, void *output, int index,
 void *Software_BatchNormalization(void *inputX, void *scale, void *inputB,
                                   void *mean, void *var, void *output,
                                   int index, BatchNormalizationInfo *info);
+void *Software_Dropout(void *input, void *out, int index, DropoutInfo *info);
+void *Software_LRN(void *input, void *out, int index, LRNInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
@@ -299,6 +317,8 @@ void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info);
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info);
+void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info);
+void *Versat_LRN(void *input, void *out, int index, LRNInfo *info);
 
 // ======================================
 // Misc

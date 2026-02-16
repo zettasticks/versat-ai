@@ -311,6 +311,18 @@ KernelGen StartKernel(AddressGen *address, int *kernelDims, int kernelSize) {
   return gen;
 }
 
+KernelGen StartKernel_IterateOneDimOnly(AddressGen *address,int dimToIterate,int start,int end){
+  int dims[] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
+  KernelGen gen = StartKernel(address,dims,address->numberDims);
+
+  gen.addressGenVars[dimToIterate] = 0;
+  gen.kernelDims[dimToIterate] = end;
+  gen.kernelVars[dimToIterate] = start;
+
+  return gen;
+}
+
 void Kernel_PrintShort(KernelGen *gen) {
   versat_printf(
       "Kernel is gonna iterate the base tensor in the following coordinates:");
@@ -342,15 +354,6 @@ void Kernel_Print(KernelGen *gen) {
     versat_printf("%ld", gen->kernelDims[i]);
   }
   versat_printf("]");
-
-  versat_printf(" [");
-  for (int i = 0; i < gen->numberDims; i++) {
-    if (i != 0) {
-      versat_printf(" x ");
-    }
-    versat_printf("%ld", gen->kernelDims[i]);
-  }
-  versat_printf("]\n");
 
   versat_printf(" [");
   for (int i = 0; i < gen->numberDims; i++) {

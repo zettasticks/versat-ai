@@ -629,6 +629,107 @@ def CreateBinaryOpDynamicTest(leftShape, rightShape, actualLeft, actualRight):
     tests.append(test)
 
 
+@dataclass(frozen=True)
+class LRNArgs:
+    shape: list[int]
+    size: int
+    alpha: float
+    beta: float
+    bias: float
+
+    def Create(self, linear=False):
+        global tests
+        testIndex = len(tests)
+
+        maxDims = len(self.shape)
+
+        # Let onnx infer shape specifics
+        outputShape = [None] * maxDims
+
+        test = Test()
+
+        numberInputs = 1
+        shapes = [self.shape]
+
+        inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
+
+        test.outputTensor = make_tensor_value_info(
+            GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+        )
+        test.node = make_node(
+            "LRN",
+            inputs,
+            [GetOutputTrueName(testIndex)],
+            alpha=self.alpha,
+            beta=self.beta,
+            bias=self.bias,
+            size=self.size,
+        )
+
+        test.randomArrays = [np.random.randn(*x).astype(np.float32) for x in shapes]
+
+        tests.append(test)
+
+
+def CreateLRN(shape, size, alpha, beta, bias):
+    global testList
+    testList.append(LRNArgs(shape, size, alpha, beta, bias))
+
+
+@dataclass(frozen=True)
+class DropoutArgs:
+    shape: list[int]
+    ratio: float
+
+    def Create(self, linear=False):
+        global tests
+        testIndex = len(tests)
+
+        maxDims = len(self.shape)
+
+        # Let onnx infer shape specifics
+        outputShape = [None] * maxDims
+
+        test = Test()
+
+        numberInputs = 1
+        shapes = [self.shape]
+
+        inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
+        test.tensors = [
+            make_tensor_value_info(x, TensorProto.FLOAT, shapes[i])
+            for i, x in enumerate(inputs)
+        ]
+
+        test.outputTensor = make_tensor_value_info(
+            GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+        )
+        test.node = make_node(
+            "Dropout",
+            inputs,
+            [GetOutputTrueName(testIndex)],
+            ratio=self.ratio,
+        )
+
+        test.randomArrays = [np.random.randn(*x).astype(np.float32) for x in shapes]
+
+        tests.append(test)
+
+
+def CreateLRN(shape, size, alpha, beta, bias):
+    global testList
+    testList.append(LRNArgs(shape, size, alpha, beta, bias))
+
+
+def CreateDropout(shape, ratio):
+    global testList
+    testList.append(DropoutArgs(shape, ratio))
+
+
 def GenerateSimpleTest():
     testComplexity = 0
 
@@ -641,11 +742,34 @@ def GenerateSimpleTest():
     testMaxPool = 0
     testAveragePool = 0
     testMatMul = 0
-    testConv = 1
+    testConv = 0
     testBatchNormalization = 0
+    testLRN = 1
+    testDropout = 0
 
     generativeTests = 1
     testBig = 0
+
+    if testLRN:
+        CreateLRN([1, 4, 4, 4], int(3), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 11, 6, 6], int(5), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 11, 8, 8], int(5), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 11, 10, 10], int(5), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 6, 3, 3], int(5), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 6, 5, 5], int(5), 0.0001, 0.75, 1.0)
+        CreateLRN([1, 7, 1, 1], int(3), 0.0001, 0.65, 1.5)
+        CreateLRN([1, 7, 3, 3], int(3), 0.0001, 0.65, 1.5)
+        CreateLRN([1, 7, 5, 5], int(3), 0.0001, 0.65, 1.5)
+        CreateLRN([1, 11, 1, 1], int(5), 0.0002, 0.85, 2.0)
+        CreateLRN([1, 11, 3, 3], int(5), 0.0002, 0.85, 2.0)
+        CreateLRN([1, 11, 5, 5], int(5), 0.0002, 0.85, 2.0)
+
+    if testDropout:
+        # No point in complex tests, dropout in inference is just a copy from input to output.
+        CreateDropout([1, 1, 1, 1], 0.5)
+        CreateDropout([1, 1, 2, 2], 0.5)
+        CreateDropout([1, 2, 2, 2], 0.5)
+        CreateDropout([4, 4, 4, 4], 1.0)
 
     if testBatchNormalization:
         for t in [2, 10]:
@@ -987,7 +1111,7 @@ def GenerateSimpleTest():
                 PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
-            #gP = [1, 2, 3, 4, 8]
+            # gP = [1, 2, 3, 4, 8]
             gP = [1, 2, 3, 4, 8]
 
             args = []
