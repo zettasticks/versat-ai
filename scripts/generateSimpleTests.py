@@ -742,22 +742,22 @@ class GemmArgs:
 
     def IsValid(self):
         aShape = self.aShape
-        if(self.transA):
-            aShape = [aShape[1],aShape[0]]
+        if self.transA:
+            aShape = [aShape[1], aShape[0]]
         bShape = self.bShape
-        if(self.transB):
-            bShape = [bShape[1],bShape[0]]
+        if self.transB:
+            bShape = [bShape[1], bShape[0]]
         cShape = self.cShape
         if not self.cShape:
             cShape = [1, 1]
 
-        outShape = [aShape[0],bShape[1]]
+        outShape = [aShape[0], bShape[1]]
 
-        if(aShape[1] != bShape[0]):
+        if aShape[1] != bShape[0]:
             return False
-        if(cShape[0] != 1 and cShape[0] != outShape[0]):
+        if cShape[0] != 1 and cShape[0] != outShape[0]:
             return False
-        if(cShape[1] != 1 and cShape[1] != outShape[1]):
+        if cShape[1] != 1 and cShape[1] != outShape[1]:
             return False
         return True
 
@@ -835,24 +835,24 @@ def GenerateSimpleTest():
     testBig = 0
 
     if testGemm:
-        CreateGemm([4,1],[1,4],[1,4],2.0,2.0,1,0)
-        
+        CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0, 1, 0)
+
         if False:
-            CreateGemm([1,2],[2,3],[1,1],2.0,2.0)
-            CreateGemm([1,4],[4,1],[1,1],2.0,2.0)
-            CreateGemm([4,1],[1,4],[1,1],2.0,2.0)
-            CreateGemm([4,1],[1,4],[4,1],2.0,2.0)
-            CreateGemm([4,1],[1,4],[1,4],2.0,2.0)
-            CreateGemm([4,1],[1,4],[4,4],2.0,2.0)
+            CreateGemm([1, 2], [2, 3], [1, 1], 2.0, 2.0)
+            CreateGemm([1, 4], [4, 1], [1, 1], 2.0, 2.0)
+            CreateGemm([4, 1], [1, 4], [1, 1], 2.0, 2.0)
+            CreateGemm([4, 1], [1, 4], [4, 1], 2.0, 2.0)
+            CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0)
+            CreateGemm([4, 1], [1, 4], [4, 4], 2.0, 2.0)
 
         if generativeTests:
-            aShapes = [[4,1],[4,2],[4,4],[2,4],[1,4]]
-            bShapes = [[1,4],[2,4],[4,4],[4,2],[4,1]]
-            cShapes = [None,[1,1],[2,1],[1,2],[4,1],[1,4]]
-            alphas = [1.0,2.0]
-            betas = [1.0,2.0]
-            transA = [0,1]
-            transB = [0,1]
+            aShapes = [[4, 1], [4, 2], [4, 4], [2, 4], [1, 4]]
+            bShapes = [[1, 4], [2, 4], [4, 4], [4, 2], [4, 1]]
+            cShapes = [None, [1, 1], [2, 1], [1, 2], [4, 1], [1, 4]]
+            alphas = [1.0, 2.0]
+            betas = [1.0, 2.0]
+            transA = [0, 1]
+            transB = [0, 1]
 
             for a in aShapes:
                 for b in bShapes:
@@ -861,7 +861,7 @@ def GenerateSimpleTest():
                             for beta in betas:
                                 for tA in transA:
                                     for tB in transB:
-                                        CreateGemm(a,b,c,alpha,beta,tA,tB)
+                                        CreateGemm(a, b, c, alpha, beta, tA, tB)
 
     if testLRN:
         CreateLRN([1, 4, 4, 4], int(3), 0.0001, 0.75, 1.0)
@@ -1412,7 +1412,7 @@ def GenerateTest(outputPath):
 
     GenerateSimpleTest()
 
-    testList = [x for x in testList if not hasattr(x,"IsValid") or x.IsValid()]
+    testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
 
     # MARK2
     focusOnOneTest = 0

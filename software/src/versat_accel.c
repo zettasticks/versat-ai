@@ -690,7 +690,8 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   float *viewB = (float *)inputB;
   float *viewOut = (float *)output;
 
-  // TODO: The names are kinda wrong. AH and AW are "technically" swapped in name only.
+  // TODO: The names are kinda wrong. AH and AW are "technically" swapped in
+  // name only.
   int AS = info->numberInputADims;
   int AH;
   int AW;
@@ -959,14 +960,14 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
 
   int trueAW = AW;
   int trueAH = AH;
-  if(info->transA){
+  if (info->transA) {
     trueAW = AH;
     trueAH = AW;
   }
 
   int trueBW = BW;
   int trueBH = BH;
-  if(info->transB){
+  if (info->transB) {
     trueBW = BH;
     trueBH = BW;
   }
@@ -1002,10 +1003,11 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   int valB = 0;
   int valO = 0;
 
-  // By default we transpose B in order to implement the multiplication phase directly.
-  // Which means that we do the opposite when we want to "transpose" B.
-  float* properBInput = viewB;
-  if(!info->transB){
+  // By default we transpose B in order to implement the multiplication phase
+  // directly. Which means that we do the opposite when we want to "transpose"
+  // B.
+  float *properBInput = viewB;
+  if (!info->transB) {
     for (int y = 0; y < BH; y++) {
       for (int x = 0; x < BW; x++) {
         // Transposing B
@@ -1016,20 +1018,21 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
     properBInput = tempB;
   }
 
-  //versat_printf("AW: %d,AH: %d,BW: %d,BH: %d,OW: %d,OH: %d\n",AW,AH,BW,BH,OW,OH);
+  // versat_printf("AW: %d,AH: %d,BW: %d,BH: %d,OW: %d,OH:
+  // %d\n",AW,AH,BW,BH,OW,OH);
 
   Top_Gemm_Alpha(NoConvert(info->alpha));
 
   for (int y = 0; y < OH; y++) {
 
-    float* properAInput = &viewA[y * AW];
-    if(info->transA){
+    float *properAInput = &viewA[y * AW];
+    if (info->transA) {
       for (int x = 0; x < AH; x++) {
         // Transposing A
         tempA[x] = viewA[x * AW + y];
       }
       properAInput = tempA;
-    } 
+    }
 
     silent_clear_cache();
 
