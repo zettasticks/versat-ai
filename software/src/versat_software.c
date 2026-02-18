@@ -551,23 +551,6 @@ double Cordic_pow(double b, double e) {
 #define SOFT_EXP(X) my_exp(X)
 #endif
 
-// Based on quake fast inverse square root function.
-double my_invsqrt(double number) {
-  long i;
-  float x2, y;
-  const float threehalfs = 1.5F;
-
-  x2 = number * 0.5F;
-  y = number;
-  i = *(long *)&y;
-  i = 0x5f3759df - (i >> 1);
-  y = *(float *)&i;
-  y = y * (threehalfs - (x2 * y * y));
-  y = y * (threehalfs - (x2 * y * y));
-
-  return y;
-}
-
 void *Software_Softmax(void *input, void *output, int index,
                        SoftmaxInfo *info) {
   float sum = 0.0f;
