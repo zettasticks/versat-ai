@@ -28,13 +28,17 @@ iptr NoConvert(float f) {
 
 unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
 
+#define ALIGN(IN,ALIGNMENT) (((IN) + ((ALIGNMENT) - 1)) & ~((ALIGNMENT) - 1))
+
 typedef struct Arena_t {
   void *mem;
   int used;
   int allocated;
 } Arena;
 
-void *PushBytes(Arena *arena, int size) {
+void *PushBytes(Arena *arena, int size, int alignment) {
+  arena->used = ALIGN(arena->used,alignment);
+
   int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
                                 // worry about alignment further
 
@@ -50,39 +54,47 @@ void *PushBytes(Arena *arena, int size) {
   return res;
 }
 
-#define PushType(ARENA, TYPE) (TYPE *)PushBytes(ARENA, sizeof(TYPE))
-#define PushArray(ARENA, COUNT, TYPE)                                          \
-  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE))
+#define PushType(ARENA, TYPE) (TYPE *) PushBytes(ARENA, sizeof(TYPE),__alignof__(TYPE))
+#define PushArray(ARENA, COUNT, TYPE) \
+  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE),__alignof__(TYPE))
 
 typedef struct {
   unsigned int firstMarker;
   unsigned int *secondMarkerPtr;
 } CanaryHeader;
 
-void CheckCanary(void *memory) {
-  CanaryHeader *asHeader = (CanaryHeader *)memory;
-  asHeader -= 1;
+bool CheckCanary(void *memory,int line) {
+  CanaryHeader *asHeader = ((CanaryHeader *)memory) - 1;
 
   if (asHeader->firstMarker != 0x12345678) {
-    versat_printf("Canary check failed before allocation\n");
+    versat_printf("Canary check failed before at line: %d value: %08x \n",line,asHeader->firstMarker);
+    versat_printf("HeaderPtr: %p FirstMarkerPtr: %p\n",asHeader,&asHeader->firstMarker);
+    return false;
   }
 
   if (*asHeader->secondMarkerPtr != 0x87654321) {
-    versat_printf("Canary check failed after allocation\n");
+    versat_printf("Canary check failed after at line: %d value: %08x\n",line,*asHeader->secondMarkerPtr);
+    versat_printf("SecondMarkerPtr: %p\n",asHeader->secondMarkerPtr);
+    return false;
   }
+
+  return true;
 }
 
 void *PushBytesWithCanary(Arena *arena, int size) {
   CanaryHeader *header = PushType(arena, CanaryHeader);
-  void *memory = PushBytes(arena, size);
+  void *memory = PushBytes(arena, size, 1);
   unsigned int *last = PushType(arena, unsigned int);
 
   header->firstMarker = 0x12345678;
   header->secondMarkerPtr = last;
 
   *last = 0x87654321;
-
-  CheckCanary(memory);
+  
+  // This should never fail, right?
+  if(!CheckCanary(memory,-1)){
+    versat_printf("%p %p %p\n",header,memory,last);
+  }
 
   return memory;
 }
@@ -121,7 +133,8 @@ Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
   return tensor;
 }
 
-static void Tensor_CheckCanary(Tensor in) { CheckCanary(in.data); }
+static void Tensor_CheckCanary_(Tensor in,int line) { CheckCanary(in.data,line); }
+#define Tensor_CheckCanary(IN) Tensor_CheckCanary_(IN,__LINE__) 
 
 Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
   int size = input.dims.size;
@@ -450,9 +463,11 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   int convStartC = 0; // We must always process the entire input channels.
 
+#if 0
   static unsigned int delayBuffer[] = {0x0, 0x0, 0x10, 0x0, 0x0, 0x6};
   ;
   VersatLoadDelay(delayBuffer);
+#endif
 
   Top_Conv_FeaturesWeightsOutputs(
       inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
@@ -490,11 +505,15 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
-  Arena arenaInst = {};
-  Arena *arena = &arenaInst;
+  static Arena arenaInst = {};
+  static Arena *arena = &arenaInst;
 
-  arena->allocated = 1024 * 1024 * 16;
-  arena->mem = malloc(arena->allocated); // 16 Megabytes
+  if(!arena->mem){
+    arena->allocated = 1024 * 1024 * 16;
+    arena->mem = malloc(arena->allocated); // 16 Megabytes
+  }
+
+  ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
 
@@ -676,6 +695,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
     MarkPop(mark);
   }
+
+  MarkPop(outerMark);
 
   return output;
 }

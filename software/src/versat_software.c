@@ -405,6 +405,116 @@ double my_exp(double x) {
   return result;
 }
 
+#define MAX_ITERS 20
+double thetah_table[MAX_ITERS] = {
+    0.549306, 0.255413, 0.125657, 0.062582, 0.031260, 0.015626, 0.007813,
+    0.003906, 0.001953, 0.000977, 0.000488, 0.000244, 0.000122, 0.000061,
+    0.000031, 0.000015, 0.000008, 0.000004, 0.000002, 0.000001};
+
+double Cordic_arctanh(double y, double x) {
+  double angle = 0.0;
+  double P2i = 0.5;
+  int k = 4;
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (y < 0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  return angle;
+}
+
+#define MATH_E 2.71828182846
+#define MATH_PI 3.14159265359
+
+double Cordic_log(double in) {
+  double val = in;
+
+  double extra = 0;
+  while (val > MATH_E) {
+    val /= MATH_E;
+    extra += 1;
+  }
+
+  double res = (2.0 * Cordic_arctanh(val - 1, val + 1)) + extra;
+  return res;
+}
+
+double Cordic_exp(double exponent) {
+  int k = 4;
+  double angle = exponent;
+  double y = 1.207497067763;
+  double x = 1.207497067763;
+  double P2i = 0.5;
+
+  int extra = 0;
+  while (angle > 1.0) {
+    angle -= 1.0;
+    extra += 1;
+  }
+
+  while (angle < 0) {
+    angle += 1.0;
+    extra -= 1;
+  }
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (angle > 0.0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  for (int i = 0; i < extra; i++) {
+    x *= MATH_E;
+  }
+  for (int i = 0; i > extra; i--) {
+    x /= MATH_E;
+  }
+
+  return x;
+}
+
 double my_log(double x) {
   double start = 0.0;
 
@@ -423,6 +533,23 @@ double my_pow(double b, double e) {
   double result = my_exp(e * my_log(b));
   return result;
 }
+
+double Cordic_pow(double b, double e) {
+  double result = Cordic_exp(e * Cordic_log(b));
+  return result;
+}
+
+#define USE_CORDIC
+
+#ifdef USE_CORDIC
+#define SOFT_POW(B, E) Cordic_pow(B, E)
+#define SOFT_LOG(X) Cordic_log(X)
+#define SOFT_EXP(X) Cordic_exp(X)
+#else
+#define SOFT_POW(B, E) my_pow(B, E)
+#define SOFT_LOG(X) my_log(X)
+#define SOFT_EXP(X) my_exp(X)
+#endif
 
 // Based on quake fast inverse square root function.
 double my_invsqrt(double number) {
@@ -487,14 +614,14 @@ void *Software_Softmax(void *input, void *output, int index,
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
 
-      sum += my_exp(view[index]);
+      sum += SOFT_EXP(view[index]);
     }
 
     genInst = StartKernel(test, kernelDims, kernelSize);
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
 
-      out[index] = my_exp(view[index]) / sum;
+      out[index] = SOFT_EXP(view[index]) / sum;
     }
   }
 
@@ -579,6 +706,7 @@ void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
   AddressGen addrInst =
       StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
   AddressGen *addr = &addrInst;
+  int loopCount = 0;
   for (; Address_IsValid(addr); Address_Advance(addr)) {
     int c = Address_GetDim(addr, 1);
 
@@ -600,9 +728,11 @@ void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
 
     int index = Address_GetValue(addr);
 
-    double div = my_pow(k + (a / n) * sum, b);
+    double div = SOFT_POW(k + (a / n) * sum, b);
     output[index] = (((double)in[index]) / div);
   }
+
+#undef CEIL_DIV
 
   return output;
 }

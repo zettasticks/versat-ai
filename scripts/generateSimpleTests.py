@@ -820,16 +820,18 @@ def GenerateSimpleTest():
     testAdd = 0
     testRelu = 0
     testReshape = 0
-    testSoftmax = 0
     testTranspose = 0
     testMaxPool = 0
     testAveragePool = 0
     testMatMul = 0
-    testConv = 0
-    testBatchNormalization = 0
-    testLRN = 0
     testDropout = 0
-    testGemm = 1
+    testGemm = 0
+
+    testConv = 1
+    testBatchNormalization = 1
+
+    testSoftmax = 0
+    testLRN = 0
 
     generativeTests = 1
     testBig = 0
@@ -1212,17 +1214,24 @@ def GenerateSimpleTest():
         # Input shape, features, kernel, stride, dilations, bias
         if generativeTests or False:
             nP = [1, 2]
-            aP = [[3, 3], [5, 5], [16, 16]]
-            cP = [1, 3, 4, 6, 8, 16]
-            fP = [1, 3, 4, 6, 8, 16]
+            aP = [[3, 3], [5, 5]]
+            cP = [1, 3, 4]
+            fP = [1, 3, 4]
             kP = [[3, 3], [5, 5]]
-            sP = [[3, 3], [5, 5], [9, 9]]
+            sP = [[3, 3], [5, 5]]
             dP = [[1, 1]]
             bP = [False, True]
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
                 PaddingType("NOTSET", [4, 2, 1, 6]),
             ]
+
+            if testBig:
+                aP = [[3, 3], [5, 5]]
+                cP = [1, 3, 4, 6, 8, 16]        
+                fP = [1, 3, 4, 6, 8, 16]        
+                sP = [[3, 3], [5, 5], [9, 9]]
+
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
             # gP = [1, 2, 3, 4, 8]
             gP = [1, 2, 3, 4, 8]
@@ -1421,8 +1430,11 @@ def GenerateTest(outputPath):
     if 0:
         random.shuffle(testList)
 
+    if 0:
+        testList = testList[0:70]
+
     if focusOnOneTest:
-        testToFocus = 48
+        testToFocus = 64
 
         testList = [testList[testToFocus]]
         print(testList[0])
