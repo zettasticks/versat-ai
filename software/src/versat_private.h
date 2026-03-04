@@ -448,4 +448,10 @@ Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims);
 int Tensor_Size(Tensor tensor);
 void Tensor_Print(Tensor tensor);
 
+// ======================================
+// Math
+
+double Cordic_log(double in);
+double Cordic_exp(double exponent);
+
 #endif // VERSAT_PRIVATE_INCLUDED

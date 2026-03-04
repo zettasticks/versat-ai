@@ -827,10 +827,10 @@ def GenerateSimpleTest():
     testDropout = 0
     testGemm = 0
 
-    testConv = 1
-    testBatchNormalization = 1
+    testConv = 0
+    testBatchNormalization = 0
 
-    testSoftmax = 0
+    testSoftmax = 1
     testLRN = 0
 
     generativeTests = 1
@@ -1228,8 +1228,8 @@ def GenerateSimpleTest():
 
             if testBig:
                 aP = [[3, 3], [5, 5]]
-                cP = [1, 3, 4, 6, 8, 16]        
-                fP = [1, 3, 4, 6, 8, 16]        
+                cP = [1, 3, 4, 6, 8, 16]
+                fP = [1, 3, 4, 6, 8, 16]
                 sP = [[3, 3], [5, 5], [9, 9]]
 
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
@@ -1424,7 +1424,7 @@ def GenerateTest(outputPath):
     testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
 
     # MARK2
-    focusOnOneTest = 0
+    focusOnOneTest = 1
 
     # MARK3
     if 0:
@@ -1434,7 +1434,7 @@ def GenerateTest(outputPath):
         testList = testList[0:70]
 
     if focusOnOneTest:
-        testToFocus = 64
+        testToFocus = 1
 
         testList = [testList[testToFocus]]
         print(testList[0])

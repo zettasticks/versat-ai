@@ -14,9 +14,9 @@
 #include <string.h>
 
 // ETHERNET enabled for now to test Alexnet
-//#define USE_ETHERNET
+// #define USE_ETHERNET
 
-//#define DEBUG
+#define DEBUG
 
 #ifdef PC
 #undef USE_ETHERNET
@@ -207,7 +207,7 @@ int main() {
   PrintU64InHex(1ull << 63);
 #endif
 
-  ConfigCreateVCD(false);
+  ConfigCreateVCD(true);
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);

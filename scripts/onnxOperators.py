@@ -423,7 +423,7 @@ operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
     "AveragePool", EmitMaxPool, averagePoolAttributes, True
 )
 operatorNameToSpec["Softmax"] = OnnxOperatorSpec(
-    "Softmax", EmitSoftmax, softmaxAttributes, False
+    "Softmax", EmitSoftmax, softmaxAttributes, True
 )
 operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
     "Transpose", EmitTranspose, transposeAttributes, False
