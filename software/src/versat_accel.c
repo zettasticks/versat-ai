@@ -845,14 +845,13 @@ extern uint32_t logMantissaTable[1 << 12];
 
 #define ARRAY_SIZE(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
-void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
+void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
+#if 0
+  int32_t log2Val = 0x3f317218;
   float *toTest = (float *)malloc(sizeof(float) * 256);
   float *toTest2 = (float *)malloc(sizeof(float) * 256);
   float *result = (float *)malloc(sizeof(float) * 256);
 
-  int32_t log2Val = 0x3f317218;
-
-#if 0
   // LOG Stuff
   ActivateMergedAccelerator(MergeType_Test_Log);
 
@@ -988,6 +987,7 @@ void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
   versat_printf("Software\n");
 #endif
 
+#if 0
   // Test pow
 #if 1
   ActivateMergedAccelerator(MergeType_Test_Pow);
@@ -1023,8 +1023,73 @@ void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
   free(result);
 
   return output;
+#endif
 
-  return Software_Softmax(inputA, output, index, info);
+  float *view = (float *)input;
+  float *out = (float *)output;
+
+  ActivateMergedAccelerator(MergeType_Top_Exp);
+
+  Top_Exp_LoadExp(expTable, ARRAY_SIZE(expTable));
+  Top_Exp_LoadFrac(expMantissaTable, ARRAY_SIZE(expMantissaTable));
+
+  int size = CalculateSizeOfDim(info->inputDims,info->numberInputDims);
+
+  VersatVarSpec width = {};
+  width.min = 1;
+  width.max = size;
+  width.order = 0;
+  Top_Exp_Simple_Size(&width);
+  int increment = width.value;
+
+  int axis = info->axis;
+  if (axis < 0) {
+    axis += info->numberInputDims;
+  }
+
+  AddressGen testInst = StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
+  AddressGen *test = &testInst;
+
+  int kernelSize = info->numberInputDims - axis;
+
+  for(int i = 0; i < size; i += increment){
+    int transferSize = MIN(size - i,increment);
+
+    Top_Exp_Simple(&view[i],&out[i],transferSize);
+    StartAccelerator();
+  }
+
+  RunAccelerator(2);
+
+  silent_clear_cache();
+
+  for (; Address_IsValid(test); Address_AdvanceAxis(test, axis - 1)) {
+    int kernelDims[MAX_DIMS] = {};
+    for (int i = 0; i < kernelSize; i++) {
+      kernelDims[i] = info->inputDims[i + axis];
+    }
+
+    float sum = 0.0f;
+
+    KernelGen genInst = StartKernel(test, kernelDims, kernelSize);
+    KernelGen *gen = &genInst;
+    for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
+      int index = Kernel_GetValue(gen);
+
+      sum += out[index];
+    }
+
+    float invSum = 1.0 / sum;
+
+    genInst = StartKernel(test, kernelDims, kernelSize);
+    for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
+      int index = Kernel_GetValue(gen);
+
+      out[index] = out[index] * invSum;
+    }
+  }
+
+  return output;
 }
 
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,

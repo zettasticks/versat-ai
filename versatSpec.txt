@@ -309,7 +309,7 @@ module Exp(in){
    }
 }
 
-module Test_Exp(){
+module Top_Exp(){
    VRead #(.ADDR_W(14)) test;
   
    Exp exp;
@@ -320,7 +320,7 @@ module Test_Exp(){
 
    exp -> output;
 ##
-   config Simple(addr: Address,addr2: Address, width){
+   config Simple(addr: Address,addr2: Address, width: Dyn){
       for x 0..width {
          test = addr[x];
          output = addr2[x];
@@ -420,4 +420,4 @@ module Top_Gemm(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Test_Exp | Test_Log | Test_Pow;
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Test_Log | Test_Pow;

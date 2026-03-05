@@ -453,5 +453,23 @@ void Tensor_Print(Tensor tensor);
 
 double Cordic_log(double in);
 double Cordic_exp(double exponent);
+double Cordic_pow(double base,double power);
+
+#define USE_CORDIC
+//#define USE_TABLE
+
+#if defined(USE_TABLE)
+#define SOFT_POW(B, E) Cordic_pow(B, E)
+#define SOFT_LOG(X) Cordic_log(X)
+#define SOFT_EXP(X) newExp(X)
+#elif defined(USE_CORDIC)
+#define SOFT_POW(B, E) Cordic_pow(B, E)
+#define SOFT_LOG(X) Cordic_log(X)
+#define SOFT_EXP(X) Cordic_exp(X)
+#else
+#define SOFT_POW(B, E) my_pow(B, E)
+#define SOFT_LOG(X) my_log(X)
+#define SOFT_EXP(X) my_exp(X)
+#endif
 
 #endif // VERSAT_PRIVATE_INCLUDED

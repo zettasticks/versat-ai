@@ -935,10 +935,11 @@ void testLog(float in) {
 
 void *Software_Softmax(void *input, void *output, int index,
                        SoftmaxInfo *info) {
-  float sum = 0.0f;
-
   float *view = (float *)input;
   float *out = (float *)output;
+
+#if 0
+  float sum = 0.0f;
 
   {
     u32 increment = 0x00000800; // For a fractionalPrecision of 12
@@ -1113,6 +1114,7 @@ void *Software_Softmax(void *input, void *output, int index,
 #if 0
   InitializeExpTable();
 #endif
+#endif
 
   // Axis are normalized here, no need to handle negative axis after this point
   int axis = info->axis;
@@ -1153,14 +1155,15 @@ void *Software_Softmax(void *input, void *output, int index,
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
 
-      sum += SOFT_EXP(view[index]);
+      out[index] = SOFT_EXP(view[index]);
+      sum += out[index];
     }
 
     genInst = StartKernel(test, kernelDims, kernelSize);
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
 
-      out[index] = SOFT_EXP(view[index]) / sum;
+      out[index] = out[index] / sum;
     }
   }
 
