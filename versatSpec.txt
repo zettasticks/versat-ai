@@ -336,33 +336,21 @@ module Top_Exp(){
    }
 }
 
-module Test_Pow(){
-   VRead #(.ADDR_W(10)) base;
-   VRead #(.ADDR_W(10)) power;
-
+module Pow(base,power){
+   // base ^ power  = exp(power * ln(base))
    Exp exp;
    Log log;
-
    F_Mul mul;
-
-   VWrite output;
-
-   // base ^ power  = exp(power * ln(base))
 #
    base -> log;
    {log,power} -> mul:0..1;
 
    mul -> exp;
 
-   exp -> output;
+   exp -> out;
 ##
-   config Simple(baseAddr: Address,powerAddr : Address,outAddr: Address,width,log2Val){
+   config Init(log2Val){
       log.LoadLog2(log2Val);
-      for x 0..width{
-         base = baseAddr[x];
-         power = powerAddr[x];
-         output = outAddr[x];
-      }
    }
 
    mem LoadMantissa(addr: Address, width){
@@ -373,6 +361,37 @@ module Test_Pow(){
    }
    mem LoadFrac(addr: Address,width){
       exp.LoadFrac(addr,width);
+   }
+}
+
+module Test_Pow(){
+   VRead #(.ADDR_W(10)) base;
+   VRead #(.ADDR_W(10)) power;
+
+   Pow pow;
+
+   VWrite output;
+#
+   {base,power} -> pow:0..1;
+   pow -> output;
+##
+   config Simple(baseAddr: Address,powerAddr : Address,outAddr: Address,width,log2Val){
+      pow.Init(log2Val);
+      for x 0..width{
+         base = baseAddr[x];
+         power = powerAddr[x];
+         output = outAddr[x];
+      }
+   }
+
+   mem LoadMantissa(addr: Address, width){
+      pow.LoadMantissa(addr,width);
+   }
+   mem LoadExp(addr: Address,width){
+      pow.LoadExp(addr,width);
+   }
+   mem LoadFrac(addr: Address,width){
+      pow.LoadFrac(addr,width);
    }
 }
 
@@ -420,4 +439,63 @@ module Top_Gemm(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Test_Log | Test_Pow;
+module Top_LRN(){
+   Const constK;
+   Const constA;
+   Const constB;
+
+   MyFloatAccum accum;
+   F_Mul pow2;
+   F_Mul alphaMul;
+
+   F_Add adder;
+
+   Pow pow;
+
+   VRead in;
+   VWrite output;
+#
+   {in,in} -> pow2:0..1;
+   pow2 -> accum;
+
+   {accum,constA}    -> alphaMul:0..1;
+   {alphaMul,constK} -> adder:0..1;
+
+   {adder,constB} -> pow:0..1;
+
+   pow -> output;
+##
+   config InitConsts(valA,valB,valK,log2Val){
+      constA.constant = valA;
+      constB.constant = valB;
+      constK.constant = valK;
+      pow.Init(log2Val);
+   }
+
+   config SetConstA(val){
+      constA.constant = val;
+   }
+
+   config Simple(inAddr: Address,outAddr: Address,lowerBound,width){
+      accum.strideMinusOne = width - 1;
+      for x 0..width{
+         in = inAddr[lowerBound + x];
+      }
+      for x 0..1 {
+         output = outAddr[x];
+      }
+      output.extra_delay = width - 1;
+   }
+
+   mem LoadMantissa(addr: Address, width){
+      pow.LoadMantissa(addr,width);
+   }
+   mem LoadExp(addr: Address,width){
+      pow.LoadExp(addr,width);
+   }
+   mem LoadFrac(addr: Address,width){
+      pow.LoadFrac(addr,width);
+   }
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Test_Log | Test_Pow | Top_LRN;

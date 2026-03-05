@@ -830,8 +830,8 @@ def GenerateSimpleTest():
     testConv = 0
     testBatchNormalization = 0
 
-    testSoftmax = 1
-    testLRN = 0
+    testSoftmax = 0
+    testLRN = 1
 
     generativeTests = 1
     testBig = 0
@@ -866,8 +866,8 @@ def GenerateSimpleTest():
                                         CreateGemm(a, b, c, alpha, beta, tA, tB)
 
     if testLRN:
+        CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
         CreateLRN([1, 4, 4, 4], int(3), 0.0001, 0.75, 1.0)
-
         CreateLRN([1, 11, 6, 6], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 8, 8], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 10, 10], int(5), 0.0001, 0.75, 1.0)

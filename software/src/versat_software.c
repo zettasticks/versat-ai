@@ -1243,8 +1243,6 @@ void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
   float *in = (float *)input;
   float *output = (float *)out;
 
-#define CEIL_DIV(A, B) ((A + B - 1) / B)
-
   AddressGen addrInst =
       StartAddress(info->inputDims, info->inputDims, info->numberInputDims);
   AddressGen *addr = &addrInst;
@@ -1253,10 +1251,10 @@ void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
     int c = Address_GetDim(addr, 1);
 
     int lowerBound = MAX(0, c - n / 2);
-    int upperBound = MIN(C - 1, c + CEIL_DIV(n, 2));
+    int upperBound = MIN(C - 1, c + n / 2);
 
     KernelGen genInst =
-        StartKernel_IterateOneDimOnly(addr, 1, lowerBound, upperBound);
+        StartKernel_IterateOneDimOnly(addr, 1, lowerBound, upperBound + 1);
     KernelGen *gen = &genInst;
 
     double sum = 0.0f;
@@ -1273,8 +1271,6 @@ void *Software_LRN(void *input, void *out, int index, LRNInfo *info) {
     double div = SOFT_POW(k + (a / n) * sum, b);
     output[index] = (((double)in[index]) / div);
   }
-
-#undef CEIL_DIV
 
   return output;
 }

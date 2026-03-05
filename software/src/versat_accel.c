@@ -1189,7 +1189,111 @@ void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
 }
 
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
-  return Software_LRN(input, out, index, info);
+  // VERSAT IMPLEMENTATION
+  static Arena arenaInst = {};
+  static Arena *arena = &arenaInst;
+
+  if (!arena->mem) {
+    arena->allocated = 1024 * 1024 * 16;
+    arena->mem = malloc(arena->allocated); // 16 Megabytes
+  }
+
+  ArenaMark outerMark = MarkArena(arena);
+
+  int N = info->inputDims[0];
+  int C = info->inputDims[1];
+  int H = info->inputDims[2];
+  int W = info->inputDims[3];
+
+  int n = info->size;
+  float k = info->bias;
+  float a = info->alpha;
+  float b = info->beta;
+
+  float *in = (float *)input;
+  float *output = (float *)out;
+
+  int64_t NHWCDims[] = {info->inputDims[0], info->inputDims[2],
+                        info->inputDims[3], info->inputDims[1]};
+
+  Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
+  float *tempInput = tempInputTensor.data;
+
+  Tensor tempOutputTensor = PushTensor(arena, NHWCDims, 4);
+  float *tempOutput = tempOutputTensor.data;
+
+  // Convert NCHW to NHWC
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      for (int c = 0; c < C; c++) {
+        int NCHW_Index =
+            c * (H * W) + y * W + x;
+        int NHWC_Index =
+            y * (W * C) + x * C + c;
+
+        tempInput[NHWC_Index] = in[NCHW_Index];
+      }
+    }
+  }
+
+  ActivateMergedAccelerator(MergeType_Top_LRN);
+
+  int32_t log2Val = 0x3f317218;
+
+  Top_LRN_LoadMantissa(logMantissaTable, ARRAY_SIZE(logMantissaTable));
+  Top_LRN_LoadExp(expTable, ARRAY_SIZE(expTable));
+  Top_LRN_LoadFrac(expMantissaTable, ARRAY_SIZE(expMantissaTable));  
+  Top_LRN_InitConsts(*((uint32_t*) &a),*((uint32_t*) &b),*((uint32_t*) &k),log2Val);
+
+  int size = CalculateSizeOfDim(info->inputDims,4);
+  float* buffer = (float*) malloc(sizeof(float) * size);
+
+  AddressGen addrInst =
+      StartAddress(NHWCDims, NHWCDims, info->numberInputDims);
+  AddressGen *addr = &addrInst;
+  int loopCount = 0;
+  for (; Address_IsValid(addr); Address_Advance(addr)) {
+    int c = Address_GetDim(addr, 3);
+
+    int y = Address_GetDim(addr, 1);
+    int x = Address_GetDim(addr, 2);
+
+    int lowerBound = MAX(0, c - n / 2);
+    int upperBound = MIN(C - 1, c + n / 2);
+
+    int index = Address_GetValue(addr);
+
+    int yx = y * W * C + x * C;
+
+    float aDivSize = a / n;
+    Top_LRN_SetConstA(*((uint32_t*) &aDivSize));
+    Top_LRN_Simple(&tempInput[yx],&buffer[index],lowerBound,upperBound + 1 - lowerBound);
+    StartAccelerator();
+  }
+
+  RunAccelerator(3);
+
+  for(int i = 0; i < size; i++){
+    tempOutput[i] = tempInput[i] / buffer[i];
+  }
+
+  // Convert NHWC to NCHW
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      for (int c = 0; c < C; c++) {
+        int NCHW_Index =
+            c * (H * W) + y * W + x;
+        int NHWC_Index =
+            y * (W * C) + x * C + c;
+
+        output[NCHW_Index] = tempOutput[NHWC_Index];
+      }
+    }
+  }
+
+  MarkPop(outerMark);
+
+  return output;
 }
 
 void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,

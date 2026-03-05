@@ -431,7 +431,7 @@ operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
 operatorNameToSpec["BatchNormalization"] = OnnxOperatorSpec(
     "BatchNormalization", EmitBatchNormalization, batchNormalizationAttributes, True
 )
-operatorNameToSpec["LRN"] = OnnxOperatorSpec("LRN", EmitLRN, lrnAttributes, False)
+operatorNameToSpec["LRN"] = OnnxOperatorSpec("LRN", EmitLRN, lrnAttributes, True)
 operatorNameToSpec["Gemm"] = OnnxOperatorSpec("Gemm", EmitGemm, gemmAttributes, True)
 operatorNameToSpec["Dropout"] = OnnxOperatorSpec(
     "Dropout", EmitDropout, dropoutAttributes, True
