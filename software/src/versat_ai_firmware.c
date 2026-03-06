@@ -13,16 +13,7 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
-// ETHERNET enabled for now to test Alexnet
-// #define USE_ETHERNET
-
-#define DEBUG
-
-#ifdef PC
-#undef USE_ETHERNET
-#endif
-
-#ifdef USE_ETHERNET
+#if USE_ETHERNET
 #include "iob_eth.h"
 #endif
 
@@ -31,15 +22,7 @@
 // Contains info for each test.
 #include "testInfo.h"
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
-#endif
-
-#ifndef OFFSET_PTR
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-#endif
-
-#ifdef PC
+#if PC
 #include <stdio.h>
 #include <unistd.h> // for sleep()
 long int GetFileSize(FILE *file) {
@@ -54,7 +37,7 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#ifdef USE_ETHERNET
+#if USE_ETHERNET
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
   uart_puts(UART_PROGNAME);
   uart_puts(": requesting to receive file by ethernet\n");
@@ -83,11 +66,6 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
     return;
   }
   uint32_t size = uart_request_ethernet_recvfile(path);
-#if 0
-  printf(
-      "Gonna call eth to receive file of size: %u and expected size of: %u\n",
-      size, expectedSize);
-#endif
   eth_rcv_file(buffer, size);
 }
 #endif
@@ -97,7 +75,7 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   char fullPath[128];
   snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
 
-#ifdef PC
+#if PC
   FILE *f = fopen(fullPath, "r");
   if (!f) {
     printf("Problem opening file for reading: %s\n", fullPath);
@@ -110,7 +88,7 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   return;
 #endif
 
-#ifdef USE_ETHERNET
+#if USE_ETHERNET
   ethernet_receive_file(fullPath, buffer, expectedSize);
 #endif
 }
@@ -185,7 +163,7 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#ifdef USE_ETHERNET
+#if USE_ETHERNET
   uart_puts("\nGonna init ethernet\n");
   eth_init(ETH0_BASE, &silent_clear_cache);
   eth_wait_phy_rst();
@@ -195,7 +173,7 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   PrintU64InHex(1ull << 0);
   PrintU64InHex(1ull << 8);
   PrintU64InHex(1ull << 16);
@@ -211,19 +189,25 @@ int main() {
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   int stackVar;
   printf("Stack  : %p\n", &stackVar);
+#endif
+
+#if EMPTY_TABLES
+  printf("\n\n[WARNING] Running without computing or embedding tables. Any "
+         "operator that uses any transcendental functions should fail.\n\n");
 #endif
 
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
   int extra = 16;
 
-  for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
+  for (int i = 0; i < VERSAT_ARRAY_SIZE(testModels); i++) {
     TestModelInfo info = *testModels[i];
 
     printf("\n==============================\n");
@@ -238,17 +222,17 @@ int main() {
 
     void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
     for (int i = 0; i < info.inputCount; i++) {
-      inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
+      inputs[i] = VERSAT_OFFSET_PTR(inputMemory, info.inputOffsets[i]);
     }
 
     void *total;
     if (info.inputCount == 0) {
-      total = OFFSET_PTR(correct, info.correctSize);
+      total = VERSAT_OFFSET_PTR(correct, info.correctSize);
     } else {
       total = inputs[info.inputCount - 1];
     }
 
-#ifdef DEBUG
+#if DEBUG
     printf("Output : %p\n", output);
     printf("Temp   : %p\n", temp);
     printf("Model  : %p\n", model);
@@ -284,7 +268,7 @@ int main() {
     free(inputMemory);
   }
 
-#ifdef PC
+#if PC
   sleep(1);
 #endif
 

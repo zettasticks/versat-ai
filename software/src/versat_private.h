@@ -6,14 +6,25 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-
 // ======================================
 // Global stuff (versat side)
 
 extern VersatPrintf versat_printf;
 extern MeasureTimeFunction versat_time;
 extern ClearCache versat_clearCache;
+
+#define EXP_MANTISSA_PRECISION 12
+#define LOG_MANTISSA_PRECISION 12
+
+#define EXP_MANTISSA_TABLE_SIZE (1 << (EXP_MANTISSA_PRECISION + 1))
+#define EXP_TABLE_SIZE (256)
+#define LOG_MANTISSA_TABLE_SIZE (1 << LOG_MANTISSA_PRECISION)
+
+extern uint32_t *expMantissaTable;
+extern uint32_t *expTable;
+extern uint32_t *logMantissaTable;
+
+static int32_t log2Val = 0x3f317218;
 
 // ======================================
 // Dimensions
@@ -345,6 +356,8 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
 
 float my_invsqrt(float number);
 
+void silent_clear_cache();
+
 // ======================================
 // Extra Info
 
@@ -453,23 +466,32 @@ void Tensor_Print(Tensor tensor);
 
 double Cordic_log(double in);
 double Cordic_exp(double exponent);
-double Cordic_pow(double base,double power);
+double Cordic_pow(double base, double power);
 
-#define USE_CORDIC
-//#define USE_TABLE
+double Table_log(double in);
+double Table_exp(double exponent);
+double Table_pow(double base, double power);
 
-#if defined(USE_TABLE)
-#define SOFT_POW(B, E) Cordic_pow(B, E)
-#define SOFT_LOG(X) Cordic_log(X)
-#define SOFT_EXP(X) newExp(X)
-#elif defined(USE_CORDIC)
-#define SOFT_POW(B, E) Cordic_pow(B, E)
+double Taylor_log(double in);
+double Taylor_exp(double exponent);
+double Taylor_pow(double base, double power);
+
+#if USE_CORDIC
 #define SOFT_LOG(X) Cordic_log(X)
 #define SOFT_EXP(X) Cordic_exp(X)
-#else
-#define SOFT_POW(B, E) my_pow(B, E)
-#define SOFT_LOG(X) my_log(X)
-#define SOFT_EXP(X) my_exp(X)
+#define SOFT_POW(B, E) Cordic_pow(B, E)
+#endif
+
+#if USE_TABLE
+#define SOFT_LOG(X) Table_log(X)
+#define SOFT_EXP(X) Table_exp(X)
+#define SOFT_POW(B, E) Table_pow(B, E)
+#endif
+
+#if USE_TAYLOR
+#define SOFT_LOG(X) Taylor_log(X)
+#define SOFT_EXP(X) Taylor_exp(X)
+#define SOFT_POW(B, E) Taylor_pow(B, E)
 #endif
 
 #endif // VERSAT_PRIVATE_INCLUDED

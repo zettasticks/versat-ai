@@ -4,12 +4,77 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// ===============================
+//  Global configurations
+//
+
+#define EMBED_TABLES 1
+#define COMPUTE_TABLES 0
+
+#define USE_ETHERNET 0
+#define DEBUG 1
+
+#define USE_CORDIC 1
+#define USE_TABLE 0
+#define USE_TAYLOR 0
+
+#define VERSAT_OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
+#define VERSAT_CONVERT(IN, TYPE) (*((TYPE *)&IN))
+#define VERSAT_ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
+
+// ==================
+// Derived configs
+//
+
+#if !EMBED_TABLES && !COMPUTE_TABLES
+#define EMPTY_TABLES 1
+#else
+#define EMPTY_TABLES 0
+#endif
+
+#if PC
+#undef USE_ETHERNET
+#endif
+
+// ==================
+// Config checking
+//
+
+#ifndef PC
+#define PC 0
+#endif
+
+#if EMBED_TABLES && COMPUTE_TABLES
+#error Cannot have embed tables and compute tables at the same time
+#endif
+
+#if USE_TABLE && !(EMBED_TABLES || COMPUTE_TABLES)
+#error USE_TABLE defined but no table is being computed
+#endif
+
+#if USE_CORDIC && (USE_TABLE || USE_TAYLOR)
+#error Multiple implementations being defined for math operations
+#endif
+#if USE_TABLE && (USE_CORDIC || USE_TAYLOR)
+#error Multiple implementations being defined for math operations
+#endif
+#if USE_TAYLOR && (USE_CORDIC || USE_TABLE)
+#error Multiple implementations being defined for math operations
+#endif
+#if !USE_TAYLOR && !USE_CORDIC && !USE_TABLE
+#error No implementation selected for math operations
+#endif
+
 // NOTE: All these functions are used to set Versat specific functions that are
 // defined by the firmware
 //       All of them return the previously set function and by default they are
 //       initialized with dummy functions that do not perform any action
 
 // TODO: Maybe change the name since they are not actually used by Versat.
+
+// Mandatory. The fuctions below are technically optional but this one must be
+// called before any Inference function
+void Versat_Init();
 
 // Call this function with a valid function that is fast and returns some form
 // of time measurement (application specific, Versat does not care about this

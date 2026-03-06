@@ -697,27 +697,23 @@ def GenerateDebug(
                 for inp in c.inputs:
                     if inp.sourceType == DataSourceType.INITIALIZER:
                         content.append(
-                            f"OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})"
+                            f"VERSAT_OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})"
                         )
                     elif inp.sourceType == DataSourceType.MODEL_INPUT:
                         content.append(f"inputs[{inp.index}]")
                     else:
                         if debugging:
                             content.append(
-                                f"OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})"
+                                f"VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})"
                             )
                         else:
                             content.append(f"res_{inp.index}")
 
                 outputStr = ""
                 if c.outputMemoryAddress.memType == MemoryType.TEMP:
-                    outputStr = (
-                        f"OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
-                    )
+                    outputStr = f"VERSAT_OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
                 else:
-                    outputStr = (
-                        f"OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
-                    )
+                    outputStr = f"VERSAT_OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
 
                 functionName = OperationToFunctionName(c, useVersat)
 
@@ -738,7 +734,7 @@ def GenerateDebug(
                 )
                 if debugging and (IsOperatorRegistered(c.opName)):
                     f.write(
-                        f"  AssertAlmostEqual(res_{index},OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
+                        f"  AssertAlmostEqual(res_{index},VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
                     )
 
             if measureTime:

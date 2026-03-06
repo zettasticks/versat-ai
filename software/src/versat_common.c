@@ -1006,3 +1006,442 @@ void Tensor_Print(Tensor tensor) {
     versat_printf("%f\n", tensor.data[i]);
   }
 }
+
+// ===============
+//  Math utils
+
+#define MATH_E 2.71828182846
+#define MATH_PI 3.14159265359
+
+double ABS(double x) { return x < 0 ? -x : x; }
+
+typedef uint32_t u32;
+typedef int32_t i32;
+
+typedef uint8_t u8;
+
+typedef struct {
+  u32 mantissa : 23;
+  u32 exponent : 8;
+  u32 sign : 1;
+} PackedFP;
+
+typedef struct {
+  u32 mantissa;
+  i32 exponent;
+  u8 sign;
+} UnpackedFP;
+
+UnpackedFP Unpack(float f, bool addImplicitBit) {
+  PackedFP fp = *((PackedFP *)&f);
+
+  UnpackedFP res = {};
+  res.mantissa = fp.mantissa;
+
+  if (addImplicitBit) {
+    res.mantissa |= (1 << 23);
+  }
+
+  res.exponent = -127 + fp.exponent;
+  res.sign = fp.sign;
+
+  return res;
+}
+
+float Pack(UnpackedFP fp) {
+  PackedFP res = {};
+  res.sign = fp.sign;
+  res.exponent = fp.exponent + 127;
+  res.mantissa = fp.mantissa & ((1 << 24) - 1);
+
+  return *((float *)&res);
+}
+
+static inline int Clamp(int min, int val, int max) {
+  if (val < min) {
+    return min;
+  }
+  if (val > max) {
+    return max;
+  }
+  return val;
+}
+
+u32 Downsize(float f, int totalSize, int exponentAmount) {
+  UnpackedFP unpacked = Unpack(f, false);
+
+  int mantissaAmount = totalSize - 1 - exponentAmount;
+  int signPos = totalSize - 1;
+
+  u32 sign = (unpacked.sign) ? 1 : 0;
+
+  int bias = (((1 << exponentAmount) / 2) - 1);
+
+  u32 trueMantissa = Clamp(0, unpacked.mantissa >> (23 - mantissaAmount),
+                           (1 << mantissaAmount) - 1);
+  u32 trueExponent = Clamp(0, unpacked.exponent + (bias - 1), 31) &
+                     ((1 << exponentAmount) - 1);
+
+  u32 res =
+      (trueMantissa | (trueExponent << mantissaAmount) | (sign << signPos));
+
+  if (res >= (1 << totalSize)) {
+    versat_printf("ERROR\n");
+  }
+
+  return res;
+}
+
+float Upsize(u32 in, int totalSize, int exponentAmount) {
+  int mantissaAmount = totalSize - 1 - exponentAmount;
+
+  u32 mantissaMask = ((1 << mantissaAmount) - 1);
+  u32 exponentMask = ((1 << exponentAmount) - 1);
+
+  u32 exponent = ((in >> mantissaAmount) & exponentMask);
+  u32 mantissa = (in & mantissaMask) << (23 - mantissaAmount);
+  int sign = ((in) >> (totalSize - 1)) & 1;
+
+  bool subnormal = (exponent == 0);
+
+  int bias = (((1 << exponentAmount) / 2) - 1);
+
+  UnpackedFP unpacked = {};
+  unpacked.sign = sign;
+  unpacked.exponent = exponent - (bias - 1);
+  unpacked.mantissa = mantissa;
+
+  return Pack(unpacked);
+}
+
+void PrintBinary(u32 val) {
+  for (int i = 31; i >= 0; i--) {
+    u32 v = (val) & (1 << i);
+    if (v) {
+      versat_printf("1");
+    } else {
+      versat_printf("0");
+    }
+  }
+
+  versat_printf("\n");
+}
+
+#define MAX_ITERS 20
+double thetah_table[MAX_ITERS] = {
+    0.549306, 0.255413, 0.125657, 0.062582, 0.031260, 0.015626, 0.007813,
+    0.003906, 0.001953, 0.000977, 0.000488, 0.000244, 0.000122, 0.000061,
+    0.000031, 0.000015, 0.000008, 0.000004, 0.000002, 0.000001};
+
+double Cordic_arctanh(double y, double x) {
+  double angle = 0.0;
+  double P2i = 0.5;
+  int k = 4;
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (y < 0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  return angle;
+}
+
+double Cordic_log(double in) {
+  double val = in;
+
+  if (in < 0.0f) {
+    u32 minusInf = 0x7fffffff;
+    return (double)VERSAT_CONVERT(minusInf, float);
+  }
+
+  double extra = 0;
+  while (val > MATH_E) {
+    val /= MATH_E;
+    extra += 1;
+  }
+
+  while (val < 1.0f) {
+    val *= MATH_E;
+    extra -= 1;
+  }
+
+  double res = (2.0 * Cordic_arctanh(val - 1, val + 1)) + extra;
+  return res;
+}
+
+double Cordic_exp(double exponent) {
+  int k = 4;
+  double angle = exponent;
+  double y = 1.207497067763;
+  double x = 1.207497067763;
+  double P2i = 0.5;
+
+  int extra = 0;
+  while (angle > 1.0) {
+    angle -= 1.0;
+    extra += 1;
+  }
+
+  while (angle < 0) {
+    angle += 1.0;
+    extra -= 1;
+  }
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (angle > 0.0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  for (int i = 0; i < extra; i++) {
+    x *= MATH_E;
+  }
+  for (int i = 0; i > extra; i--) {
+    x /= MATH_E;
+  }
+
+  return x;
+}
+
+double Cordic_pow(double b, double e) {
+  double result = Cordic_exp(e * Cordic_log(b));
+  return result;
+}
+
+u32 LogCalculateIndex(UnpackedFP unpacked) {
+  // Hardcoded for a fractional precision of 12
+  u32 fracIndex = (unpacked.mantissa >> 11);
+
+  return fracIndex;
+}
+
+double Table_log(double in) {
+  UnpackedFP unpacked = Unpack(in, false);
+
+  float exp = (float)unpacked.exponent;
+  u32 fracIndex = LogCalculateIndex(unpacked);
+
+  float logMantissa = logMantissaTable[fracIndex];
+  float result = exp * VERSAT_CONVERT(log2Val, float) + logMantissa;
+
+  return result;
+}
+
+double Table_exp(double exponent) {
+  float data = exponent;
+
+  int expPrecision = 8;
+  int halfExpPrecision = expPrecision - 1;
+  int expMax = (1 << halfExpPrecision) - 1;
+
+  // Hardware unit that calculates real part and also returns a floating point
+  // "view" of the real part.
+  int asInteger = (int)data;
+  int realPart = asInteger;
+  if (realPart >= expMax) {
+    realPart = expMax;
+  }
+  if (realPart <= -expMax) {
+    realPart = -expMax;
+  }
+
+  bool isNegative = false;
+  if (data < 0.0) {
+    realPart = -realPart;
+    isNegative = true;
+    data = -data;
+  }
+
+  // NOTE: If the realPart goes is outside the [-127,127] range, then
+  //       we do not actually care about the fractional part since we are in the
+  //       range of infinity anyway.
+
+  // Should be between 0 and 1
+  float asFraction = data - (float)realPart;
+  u32 mantissaPartU32 = *((u32 *)&asFraction);
+
+  UnpackedFP unpacked = Unpack(asFraction, true);
+
+  // Hardware unit that performs this calculation and outputs the fracIndex.
+  u32 fracIndex = (unpacked.mantissa >>
+                   (8 + (16 - EXP_MANTISSA_PRECISION) - unpacked.exponent)) &
+                  ((1 << EXP_MANTISSA_PRECISION) - 1);
+  u32 expIndex = realPart + (isNegative ? 128 : 0);
+
+  if (isNegative) {
+    fracIndex += (1 << EXP_MANTISSA_PRECISION);
+  }
+
+  float exp = expTable[expIndex];
+  float frac = expMantissaTable[fracIndex];
+
+  float res = exp * frac;
+
+  return res;
+}
+
+double Table_pow(double base, double power) {
+  double result = Table_exp(power * Table_log(base));
+  return result;
+}
+
+double Taylor_log(double in) {
+  double start = 0.0;
+
+  for (int i = 0; i < 1000; i++) {
+    double last = start;
+    start = start + 2.0 * ((in - Taylor_exp(start)) / (in + Taylor_exp(start)));
+    if (last == start) {
+      break;
+    }
+  }
+
+  return start;
+}
+
+double Taylor_exp(double exponent) {
+  double result = 1.0;
+  double term = 1.0;
+  double div = 1.0;
+  int maxTerms = 100000; // Failsafe
+
+  double lastResult = result;
+  for (int n = 1; n < maxTerms; n++) {
+    term *= exponent / div;
+    div += 1.0;
+    result += term;
+
+    // As term gets smaller eventually we will reach a point where addition does
+    // not change anything
+    if (lastResult == result) {
+      break;
+    }
+    lastResult = result;
+  }
+
+  return result;
+}
+
+double Taylor_pow(double base, double power) {
+  double result = Taylor_exp(power * Taylor_log(base));
+  return result;
+}
+
+#if !EMBED_TABLES
+uint32_t *expMantissaTable;
+uint32_t *expTable;
+uint32_t *logMantissaTable;
+#endif
+
+#include <stdlib.h>
+
+void Versat_Init() {
+#if !EMBED_TABLES
+  {
+    logMantissaTable =
+        (uint32_t *)malloc(sizeof(uint32_t) * LOG_MANTISSA_TABLE_SIZE);
+
+    u32 increment =
+        0x00000800; // TODO: Hardcoded for a fractionalPrecision of 12
+    float f = 1.0f;
+    for (int i = 0; i < LOG_MANTISSA_TABLE_SIZE; i++) {
+      float val = Cordic_log(f);
+      logMantissaTable[i] = VERSAT_CONVERT(val, u32);
+
+      u32 asU32 = VERSAT_CONVERT(f, u32);
+      asU32 += increment;
+      f = VERSAT_CONVERT(asU32, float);
+    }
+  }
+
+  {
+    expTable = (uint32_t *)malloc(sizeof(uint32_t) * EXP_TABLE_SIZE);
+
+    int halfSize = EXP_TABLE_SIZE / 2;
+
+    float f = 0.0f;
+    for (int i = 0; i < halfSize; i++) {
+      float posExp = Cordic_exp(f);
+      float negExp = Cordic_exp(-f);
+
+      expTable[i] = VERSAT_CONVERT(posExp, u32);
+      expTable[i + halfSize] = VERSAT_CONVERT(negExp, u32);
+      f += 1.0f;
+    }
+  }
+
+  {
+    expMantissaTable =
+        (uint32_t *)malloc(sizeof(uint32_t) * EXP_MANTISSA_TABLE_SIZE);
+
+    float incr = 1.0 / (float)(1 << EXP_MANTISSA_PRECISION);
+    float p = incr;
+
+    float oneVal = 1.0f;
+
+    expMantissaTable[0] = VERSAT_CONVERT(oneVal, u32);
+    expMantissaTable[(1 << EXP_MANTISSA_PRECISION)] =
+        VERSAT_CONVERT(oneVal, u32);
+
+    for (int i = 1; i < (1 << EXP_MANTISSA_PRECISION); i++) {
+      float posExp = Cordic_exp(p);
+      float negExp = Cordic_exp(p);
+
+      expMantissaTable[i] = VERSAT_CONVERT(posExp, u32);
+      expMantissaTable[i + (1 << EXP_MANTISSA_PRECISION)] =
+          VERSAT_CONVERT(negExp, u32);
+      p += incr;
+    }
+  }
+#endif
+}
+
+#if EMBED_TABLES
+#define VERSAT_DO_EMBED_TABLES
+#include "versat_embed_tables.h"
+
+uint32_t *expMantissaTable = expMantissaTableArray;
+uint32_t *expTable = expTableArray;
+uint32_t *logMantissaTable = logMantissaTableArray;
+#endif
