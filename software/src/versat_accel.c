@@ -846,6 +846,8 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
   Top_Exp_LoadExp(expTable, EXP_TABLE_SIZE);
   Top_Exp_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
 
+  // versat_printf("%x %x\n",expTable[0],expMantissaTable[0]);
+
   int size = CalculateSizeOfDim(info->inputDims, info->numberInputDims);
 
   VersatVarSpec width = {};
@@ -873,10 +875,15 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
     StartAccelerator();
   }
 
+  // TODO: We can go further and replace this with a VERSAT_Flush that does the
+  // disable and RunAccelerator(2) at the same time.
   VERSAT_DisableReadsAndWrites();
   RunAccelerator(3);
 
   silent_clear_cache();
+
+  // versat_printf("%e %e\n", view[0], view[1]);
+  // versat_printf("%e %e\n", out[0], out[1]);
 
   for (; Address_IsValid(test); Address_AdvanceAxis(test, axis - 1)) {
     int kernelDims[MAX_DIMS] = {};

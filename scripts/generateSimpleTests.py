@@ -831,7 +831,7 @@ def GenerateSimpleTest():
     testBatchNormalization = 0
 
     testSoftmax = 1
-    testLRN = 0
+    testLRN = 1
 
     generativeTests = 1
     testBig = 0

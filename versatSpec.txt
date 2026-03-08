@@ -104,8 +104,8 @@ module Top_AveragePool(){
 }
 
 module Top_Conv(){
-   VRead #(.ADDR_W(18)) features;
-   VRead #(.ADDR_W(18)) weights;
+   VRead #(.ADDR_W(12)) features;
+   VRead #(.ADDR_W(12)) weights;
    VRead bias;
    F_Mul muller;
    F_Add addBias;
@@ -211,7 +211,7 @@ module Log(in){
    ExtractExpAsFloat expAsFloat;
    ExtractMantissa   mantissaIndex;
 
-   LookupTable #(.ADDR_W(16)) mantissaLookup;
+   LookupTable #(.ADDR_W(14)) mantissaLookup;
 
    Const log2Value;
 
@@ -247,10 +247,11 @@ module Exp(in){
 
    FracIndex frac;
 
+   // Index bit is the precision.
    AddSignToIndex #(.INDEX_BIT(12)) fracIndex;
 
-   LookupTable #(.ADDR_W(16)) expLookup;
-   LookupTable #(.ADDR_W(16)) fracLookup;
+   LookupTable #(.ADDR_W(10)) expLookup;
+   LookupTable #(.ADDR_W(15)) fracLookup;
 
    F_Mul mul;
 #
@@ -286,19 +287,19 @@ module Exp(in){
 }
 
 module Top_Exp(){
-   VRead #(.ADDR_W(14)) test;
+   VRead #(.ADDR_W(12)) in;
   
    Exp exp;
 
    VWrite output;
 #
-   test -> exp;
+   in -> exp;
 
    exp -> output;
 ##
    config Simple(addr: Address,addr2: Address, width: Dyn){
       for x 0..width {
-         test = addr[x];
+         in = addr[x];
          output = addr2[x];
       }
    }

@@ -65,7 +65,11 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
   if (expectedSize == 0) {
     return;
   }
+  //printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
+
+  //printf("Gonna send uart request\n");
   uint32_t size = uart_request_ethernet_recvfile(path);
+  printf("Sent uart request\n");
   eth_rcv_file(buffer, size);
 }
 #endif
@@ -90,6 +94,9 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
 
 #if USE_ETHERNET
   ethernet_receive_file(fullPath, buffer, expectedSize);
+#else
+  uart_recvfile(fullPath, buffer);
+  printf("Received file by uart\n");
 #endif
 }
 
@@ -185,7 +192,7 @@ int main() {
   PrintU64InHex(1ull << 63);
 #endif
 
-  ConfigCreateVCD(true);
+  ConfigCreateVCD(false);
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);

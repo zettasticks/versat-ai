@@ -5,7 +5,7 @@
 
 def setup(py_params: dict):
     # Py2hwsw dictionary describing current core
-    mem_addr_w = 26
+    mem_addr_w = 29
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32
@@ -18,7 +18,7 @@ def setup(py_params: dict):
     iob_system_default_overrides = {
         "use_intmem": False,
         "use_extmem": True,
-        "use_ethernet": False,  # ETHERNET: Changed from true to false
+        "use_ethernet": True,  # ETHERNET: Changed from true to false
         "mem_addr_w": mem_addr_w,
         "include_tester": False,
         "cpu": "iob_vexriscv",
@@ -43,13 +43,13 @@ def setup(py_params: dict):
             "s0_axi_s": "cpu_ibus",
             "s1_axi_s": "cpu_dbus",
             "s2_axi_s": "versat_axi",
-            # "s3_axi_s": "eth_axi",  # ETHERNET: Commented this line
+            "s3_axi_s": "eth_axi",  # ETHERNET: Commented this line
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
         "data_w": data_w,
         "lock_w": 1,
-        "num_subordinates": 3,  # ETHERNET: CHANGED FROM 4 to 3
+        "num_subordinates": 4,  # ETHERNET: CHANGED FROM 4 to 3
     }
     xbar_manager_interfaces = {
         "use_extmem": (

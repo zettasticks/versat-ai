@@ -7,6 +7,7 @@
 import os
 import sys
 import threading
+import queue
 
 if __name__ == "__main__":
     # Save argv and override it with new values because ethBase requires them
@@ -72,8 +73,49 @@ def cnsl_sendfile_ethernet_work(name):
     socket.close()
 
 
+SEND = 0
+RECV = 1
+
+
+def ThreadMain(workQueue):
+    while True:
+        com, name, file_size = workQueue.get()
+
+        print(f"Got work request: {com},{name},{file_size}")
+
+        socket = CreateSocket()
+
+        print("Created socket")
+        if com == SEND:
+            SyncAckFirst(socket)
+            SendFile(socket, name)
+
+            print(PROGNAME, end="")
+            print(": file sent")
+        else:
+            # Receive Data File
+            SyncAckLast(socket)
+            RcvFile(socket, name, file_size)
+
+            print(PROGNAME, end="")
+            print(": file received")
+
+        # Close Socket
+        socket.close()
+
+        workQueue.task_done()
+
+
+# MARK
+workQueue = queue.Queue()
+ethernetThread = threading.Thread(target=ThreadMain, args=[workQueue], daemon=True)
+ethernetThread.start()
+
+
 # Send file to target by ethernet
 def cnsl_sendfile_ethernet():
+    global workQueue
+
     file_size = 0
     name = b""
 
@@ -93,23 +135,14 @@ def cnsl_sendfile_ethernet():
         while tb_read.read(1) != ACK:
             pass
 
-    # thread = Thread(target=cnsl_sendfile_ethernet_work, args=(name,), daemon=True)
-    socket = CreateSocket()
-    # Send Data File
-    SyncAckFirst(socket)
-    SendFile(socket, name)
+    workQueue.put([SEND, name, 0])
 
-    print(PROGNAME, end="")
-    print(": file sent")
-
-    # Close Socket
-    socket.close()
-
+    print("Added send command and going to exit")
 
 def cnsl_recvfile_ethernet():
     file_size = 0
     name = ""
-    socket = CreateSocket()
+    # socket = CreateSocket()
 
     # receive file name
     name = cnsl_recvstr()
@@ -123,16 +156,9 @@ def cnsl_recvfile_ethernet():
         print(PROGNAME, end=" ")
         print(": file size: {0} bytes".format(file_size))
 
-    # Receive Data File
-    SyncAckLast(socket)
-    RcvFile(socket, name, file_size)
+    workQueue.put([RECV, name, file_size])
 
-    print(PROGNAME, end="")
-    print(": file received")
-
-    # Close Socket
-    socket.close()
-
+    print("Added recv command and going to exit")
 
 def usage(message):
     print(

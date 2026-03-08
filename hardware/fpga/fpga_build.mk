@@ -7,7 +7,7 @@ include auto_fpga_build.mk
 # Add iob-system software as a build dependency
 RUN_DEPS+=versat_ai_bootrom.hex
 # Don't add firmware to BUILD_DEPS if we are not initializing memory since we don't want to rebuild the bitstream when we modify it.
-BUILD_DEPS+=versat_ai_bootrom.hex 
+BUILD_DEPS+=versat_ai_bootrom.hex versat_ai_firmware.bin
 
 # Throw error if user attempts to initialize external memory in FPGA
 ifeq ($(INIT_MEM), 1)
