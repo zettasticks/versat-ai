@@ -139,6 +139,7 @@ def cnsl_sendfile_ethernet():
 
     print("Added send command and going to exit")
 
+
 def cnsl_recvfile_ethernet():
     file_size = 0
     name = ""
@@ -159,6 +160,7 @@ def cnsl_recvfile_ethernet():
     workQueue.put([RECV, name, file_size])
 
     print("Added recv command and going to exit")
+
 
 def usage(message):
     print(

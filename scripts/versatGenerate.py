@@ -139,7 +139,7 @@ if __name__ == "__main__":
                             "mode": "R",
                             "n_bits": 32,
                             "rst_val": 0,
-                            "log2n_items": 20,
+                            "log2n_items": 10,
                             "descr": "Versat interface",
                         }
                     ],

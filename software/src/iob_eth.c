@@ -13,6 +13,10 @@
 
 #include "iob_printf.h"
 
+#define ETH_DEBUG_PRINT
+#undef ETH_RMAC_ADDR
+#define ETH_RMAC_ADDR 0x989096c0632c
+
 // Frame template (includes every field of the frame before the payload)
 static char TEMPLATE[TEMPLATE_LEN];
 
@@ -66,9 +70,6 @@ static void print_buffer(char *buffer, int size) {
   printf("\n\n");
   return;
 }
-
-#undef ETH_RMAC_ADDR
-#define ETH_RMAC_ADDR 0x989096c0632c
 
 /*******************************************/
 /*********** ETHERNET DRIVERS **************/
@@ -424,14 +425,11 @@ static void SyncAckFirst() {
 static void SyncAckLast() {
   // Wait to receive frame
   while (1) {
-    printf("Gonna call eth_rcv_frame\n");
     // Wait to receive ack
     if (eth_rcv_frame(buffer, ETH_MINIMUM_NBYTES, rcv_timeout) == ETH_DATA_RCV)
       break;
-    printf("Timeout\n");
   }
 
-  printf("Gonna call eth_send_frame\n");
   eth_send_frame(
       buffer,
       ETH_MINIMUM_NBYTES); // Do not care what we send, any frame is the ack
@@ -452,19 +450,13 @@ static unsigned int eth_rcv_file_impl(char *data, int size) {
     else
       bytes_to_receive = ETH_NBYTES;
 
-    //printf("\nHERE: C\n");
-
     // wait to receive frame
     while (eth_rcv_frame(&data[count_bytes], bytes_to_receive, rcv_timeout))
       ;
 
-    //printf("\nHERE: D\n");
-
     // send data back as ack
     eth_send_frame(&data[count_bytes],
                    MAX(bytes_to_receive, ETH_MINIMUM_NBYTES));
-
-    //printf("\nHERE: E\n");
 
     // update byte counter
     count_bytes += bytes_to_receive;
@@ -514,10 +506,8 @@ static unsigned int eth_send_file_impl(char *data, int size) {
 }
 
 unsigned int eth_rcv_file(char *data, int size) {
-  //printf("\nHERE: A\n");
-  SyncAckLast();
 
-  //printf("\nHERE: B\n");
+  SyncAckLast();
 
   return eth_rcv_file_impl(data, size);
 }

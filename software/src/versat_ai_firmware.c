@@ -13,11 +13,11 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
+#include "versat_ai.h"
+
 #if USE_ETHERNET
 #include "iob_eth.h"
 #endif
-
-#include "versat_ai.h"
 
 // Contains info for each test.
 #include "testInfo.h"
@@ -65,9 +65,9 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
   if (expectedSize == 0) {
     return;
   }
-  //printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
+  // printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
 
-  //printf("Gonna send uart request\n");
+  // printf("Gonna send uart request\n");
   uint32_t size = uart_request_ethernet_recvfile(path);
   printf("Sent uart request\n");
   eth_rcv_file(buffer, size);
@@ -152,6 +152,8 @@ void PrintU64InHex(uint64_t n) {
   printf("%08x%08x\n", conv.u32[1], conv.u32[0]);
 }
 
+volatile char *global_eth_frame_ptr;
+
 int main() {
   char pass_string[] = "Test passed!";
   char fail_string[] = "Test failed!";
@@ -176,6 +178,7 @@ int main() {
   eth_wait_phy_rst();
 #endif
 
+#if 1
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
@@ -193,10 +196,7 @@ int main() {
 #endif
 
   ConfigCreateVCD(false);
-
-  Versat_SetTimeMeasurementFunction(timer_get_count);
-  Versat_SetClearCache(silent_clear_cache_args);
-  Versat_Init();
+#endif
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
@@ -209,6 +209,31 @@ int main() {
   printf("\n\n[WARNING] Running without computing or embedding tables. Any "
          "operator that uses any transcendental functions should fail.\n\n");
 #endif
+
+  // TestModelInfo info = *testModels[0];
+  // void *correct = Align4(malloc(info.correctSize));
+  // FastReceiveFile("Generated", "correctOutputs.bin", correct,
+  // info.correctSize);
+
+#if 0
+  void* d = malloc(1024 * 16);
+
+  void* mem = malloc(4);
+
+  void *correct = Align4(malloc(64));
+
+  printf("%p %p %p %x\n",d,correct,mem, ((int *)correct)[0]);
+
+  printf("Gonna fast recv\n");
+  FastReceiveFile("Generated", "correctOutputs.bin", correct, 48);
+  printf("Did recv\n");
+#endif
+
+#if 1
+
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
 
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
@@ -286,6 +311,8 @@ int main() {
   unsigned int elapsedu = elapsed / (IOB_BSP_FREQ / 1000000);
 
   PrintTimeElapsed("\nTotal time elasped", 0, elapsed);
+
+#endif
 
   uart_finish();
 

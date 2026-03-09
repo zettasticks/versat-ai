@@ -8,7 +8,7 @@
 //  Global configurations
 //
 
-#define EMBED_TABLES 1
+#define EMBED_TABLES 0
 #define COMPUTE_TABLES 0
 
 #define USE_ETHERNET 1

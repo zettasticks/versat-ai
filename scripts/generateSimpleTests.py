@@ -1424,7 +1424,7 @@ def GenerateTest(outputPath):
     testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
 
     # MARK2
-    focusOnOneTest = 0
+    focusOnOneTest = 1
 
     # MARK3
     if 0:
@@ -1434,7 +1434,7 @@ def GenerateTest(outputPath):
         testList = testList[0:70]
 
     if focusOnOneTest:
-        testToFocus = 4
+        testToFocus = 0
 
         testList = [testList[testToFocus]]
         print(testList[0])

@@ -189,3 +189,5 @@ if __name__ == "__main__":
                 subTest.config.focusLayer,
                 subTest.config.mode == TestMode.SOFTWARE,
             )
+    else:
+        assert False
