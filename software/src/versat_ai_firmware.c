@@ -65,9 +65,9 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
   if (expectedSize == 0) {
     return;
   }
-  //printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
+  // printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
 
-  //printf("Gonna send uart request\n");
+  // printf("Gonna send uart request\n");
   uint32_t size = uart_request_ethernet_recvfile(path);
   printf("Sent uart request\n");
   eth_rcv_file(buffer, size);
@@ -101,7 +101,7 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
 }
 
 void silent_clear_cache() {
-#ifndef PC
+#if !PC
   for (unsigned int i = 0; i < 10; i++)
     asm volatile("nop");
   // Flush VexRiscv CPU internal cache
@@ -112,7 +112,7 @@ void silent_clear_cache() {
 void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
 
 void clear_cache() {
-#ifndef PC
+#if !PC
   // Delay to ensure all data is written to memory
   printf("Gonna clear the cache\n");
   for (unsigned int i = 0; i < 10; i++)
