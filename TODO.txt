@@ -1,2 +1,4 @@
-We added the 'entireWindowInsidePadding' field to the AdvancedWindow struct but still need to add the logic to
+[0] We added the 'entireWindowInsidePadding' field to the AdvancedWindow struct but still need to add the logic to
 every place that needs it. We can also try to figure out if we can find a simpler way of doing this but I doubt it.
+
+[1] We fixed a bug on the output memory calculation but created a new one where we ran out of memory because the Dropout correct data started using more memory. We end up "removing" these operators from consideration but this only works in debug. A full inference function requires all the operators since we do not have access to correct inputs.

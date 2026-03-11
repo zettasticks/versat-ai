@@ -117,6 +117,7 @@ class OnnxOperatorSpec:
     attributesDict: dict[str, OnnxAttribute] = field(default_factory=dict)
     supportedByVersat: bool = False
     broadcastType: BroadcastType = BroadcastType.NO_BROADCAST
+    floatPrecision: float = 0.001
 
 
 @dataclass

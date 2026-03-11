@@ -830,11 +830,75 @@ def GenerateSimpleTest():
     testConv = 0
     testBatchNormalization = 0
 
-    testSoftmax = 1
+    testSoftmax = 0
     testLRN = 1
 
-    generativeTests = 1
+    generativeTests = 0
     testBig = 0
+
+    if False:
+        p = PaddingType("NOTSET", [2, 2, 2, 2])
+        p2 = PaddingType("NOTSET", [0, 0, 0, 0])
+
+        CreateConvolution(
+            [1, 96, 26, 26], 48, [5, 5], [1, 1], [1, 1], 2, True, p.kind, p.padding
+        )
+
+        # Does not work
+        CreateConvolution(
+            [1, 96 // 2, 7, 7],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p.kind,
+            p.padding,
+        )
+
+        CreateConvolution(
+            [1, 96 // 2, 7, 7],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p2.kind,
+            p2.padding,
+        )
+        CreateConvolution(
+            [1, 96 // 2, 5, 5],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p.kind,
+            p.padding,
+        )
+        CreateConvolution(
+            [1, 96 // 2, 5, 5],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p2.kind,
+            p2.padding,
+        )
+
+        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
+        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
+        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
+
+        # Works
+        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
+
+        # CreateGemm([1, 9216], [4096, 9216], [1, 4096], 1.0, 1.0, 0, 1)
 
     if testGemm:
         CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0, 1, 0)
@@ -1224,6 +1288,8 @@ def GenerateSimpleTest():
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
                 PaddingType("NOTSET", [4, 2, 1, 6]),
+                PaddingType("SAME_LOWER"),
+                PaddingType("SAME_UPPER"),
             ]
 
             if testBig:
@@ -1233,7 +1299,6 @@ def GenerateSimpleTest():
                 sP = [[3, 3], [5, 5], [9, 9]]
 
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
-            # gP = [1, 2, 3, 4, 8]
             gP = [1, 2, 3, 4, 8]
 
             args = []
@@ -1423,15 +1488,15 @@ def GenerateTest(outputPath):
 
     testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
 
-    # MARK2
-    focusOnOneTest = 0
-
     # MARK3
     if 0:
         random.shuffle(testList)
 
-    if 0:
-        testList = testList[0:70]
+    # NOTE: Use the setupTest way of selecting test ranges instead if possible.
+    # MARK2
+    focusOnOneTest = 0
+    if 1:
+        testList = testList[0:10]
 
     if focusOnOneTest:
         testToFocus = 4

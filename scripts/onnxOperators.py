@@ -95,7 +95,7 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
                 attrType.attrType == OnnxAttributeType.AXIS_LIST
                 or attrType.attrType == OnnxAttributeType.AXIS_PAIR_LIST
             ):
-                spatialAxes = 2 * (len(op.outputDimensions) - 2)
+                spatialAxes = 2 * (len(op.outputDimensions[0]) - 2)
                 trueDefaultValue = [attrType.defaultValue] * spatialAxes
 
                 res[name] = InstantiatedAttribute(attrType, trueDefaultValue)
@@ -129,7 +129,7 @@ def EmitRelu(emitter, op: Operation):
 def EmitMaxPool(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    outputShape = emitter.EmitArray("int64_t", op.outputDimensions)
+    outputShape = emitter.EmitArray("int64_t", op.outputDimensions[0])
 
     attr = GetAttributesForOperator(op)
 
@@ -159,7 +159,7 @@ def EmitMaxPool(emitter, op: Operation):
 def EmitConv(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    outShape = emitter.EmitArray("int64_t", op.outputDimensions)
+    outShape = emitter.EmitArray("int64_t", op.outputDimensions[0])
 
     attr = GetAttributesForOperator(op)
 
@@ -210,7 +210,7 @@ def EmitReshape(emitter, op: Operation):
 def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
-    res = op.outputDimensions
+    res = op.outputDimensions[0]
 
     aux_0 = emitter.EmitArray("int64_t", op0)
     aux_1 = emitter.EmitArray("int64_t", op1)
@@ -431,7 +431,13 @@ operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
 operatorNameToSpec["BatchNormalization"] = OnnxOperatorSpec(
     "BatchNormalization", EmitBatchNormalization, batchNormalizationAttributes, True
 )
-operatorNameToSpec["LRN"] = OnnxOperatorSpec("LRN", EmitLRN, lrnAttributes, True)
+
+# NOTE: We could improve LRN precision by using more internal memory but we are kinda
+#       trying to keep memory usage low (while making sure that everything works fine)
+#       and later on we can handle the tradeoff between performance vs memory vs precision.
+operatorNameToSpec["LRN"] = OnnxOperatorSpec(
+    "LRN", EmitLRN, lrnAttributes, True, BroadcastType.NO_BROADCAST, 0.1
+)
 operatorNameToSpec["Gemm"] = OnnxOperatorSpec("Gemm", EmitGemm, gemmAttributes, True)
 operatorNameToSpec["Dropout"] = OnnxOperatorSpec(
     "Dropout", EmitDropout, dropoutAttributes, True

@@ -5,13 +5,13 @@ import glob
 # Missing split_complex_to_pairs
 
 from versatDefs import *
+from versatCommons import *
 from memoryAllocator import CalculateMemoryAllocations
 from onnxAddOutputsToIntermediate import AddOutputsToEachNode
 from onnxOperators import *
 from copy import copy
 
 from onnx import shape_inference
-from functools import reduce
 from pprint import pprint
 
 import struct
@@ -34,18 +34,11 @@ def GetTensor(model, tensorName):
         if tensor.name == tensorName:
             return tensor
 
-
-# TODO: Need to properly handle different types and stuff like that. We might even need to handle padding
-def TensorSize(tensor: list[int]):
-    return reduce(lambda x, y: x * y, tensor) * 4  # 4 because size of float
-
-
 def GetValueForDim(dim):
     if dim.WhichOneof("value") == "dim_value":
         return dim.dim_value
     else:
         return dim.dim_param
-
 
 def GetShape(model, name):
     assert name  # Make sure that we got a name, onnx models contain a lot of members that contain optional names, which might work for some models and not others. Care
@@ -131,10 +124,40 @@ def PackMultipleArrays(arrayList, endianess: Endianess = Endianess.NATIVE):
     return PackedArrays(data, offsets)
 
 
-def RemoveContentExcept(packed: PackedArrays, indexesToPreserve: list[int]):
+def RemoveContentExcept(packed: PackedArrays, indexesToPreserveInOrder: list[int]):
     content = bytearray()
 
     newOffsets = []
+    for index in indexesToPreserveInOrder:
+        offset = packed.offsets[index]
+
+        nextOffset = 0
+        if index + 1 < len(packed.offsets):
+            nextOffset = packed.offsets[index + 1]
+        else:
+            nextOffset = len(packed.data)
+
+        newOff = len(content)
+        content = content + packed.data[offset:nextOffset]
+        newOffsets.append(newOff)
+
+    if len(newOffsets):
+        return PackedArrays(content, newOffsets)
+    else:
+        return PackedArrays(bytearray(), [])
+
+
+def RemoveContent(packed: PackedArrays, indexMap: dict[int, int]):
+    content = bytearray()
+
+    newOffsets = [0]
+    finalIndexToPackIndex = {}
+
+    for packIndex, finalIndex in indexMap:
+        finalIndexToPackIndex[finalIndex] = packIndex
+
+    """
+
     for index in indexesToPreserve:
         offset = packed.offsets[index]
 
@@ -152,6 +175,8 @@ def RemoveContentExcept(packed: PackedArrays, indexesToPreserve: list[int]):
         return PackedArrays(content, newOffsets)
     else:
         return PackedArrays(bytearray(), [])
+
+    """
 
 
 def IndexOfNodeThatProducesOutput(cModel, outputName):
@@ -246,10 +271,10 @@ def GenerateModelFromOnnxModel(onnxModel):
                 asNpArray = onnx.numpy_helper.to_array(tensor)
                 cModel.initializers.append(asNpArray)
 
-        outputDimensions = None
+        outputDimensions = []
         for output in node.output:
             shape = GetShape(shaped, output)
-            outputDimensions = shape
+            outputDimensions.append(shape)
 
         dataSources = []
         for name in node.input:
@@ -467,7 +492,7 @@ def GenerateDebug(
     binOutputLocation: str,
     sourceOutputLocation: str,
     namespace: str,
-    focusLayer: int = None,
+    focusLayerRange: [int, int] = None,
     debugSoftware: bool = False,
 ):
     # TODO: It would be better if we could check all the inputs for correctness.
@@ -573,35 +598,85 @@ def GenerateDebug(
     packedCorrectData = PackMultipleArrays(correctData)
     packedInitializers = PackMultipleArrays(cModel.initializers)
 
-    if focusLayer != None and focusLayer >= 0:
-        op = cModel.operations[focusLayer]
-        cModel.operations = [op]
+    layersToRemove = []
+    # HACK: See [1]
+    for index,c in enumerate(cModel.operations):
+        if(c.opName == "Dropout" or c.opName == "Reshape"):
+            layersToRemove.append(index)
 
-        op.outputMemoryAddress = MemoryLocation(0, MemoryType.OUTPUT)
+    layersToKeep = []
+
+    if len(layersToRemove):
+        size = len(cModel.operations)
+        layersToKeep = list(set(range(size)) - set(layersToRemove))
+
+    print(f"To keep:{layersToKeep}")
+
+    if focusLayerRange != None:
+        focusStart = focusLayerRange[0]
+        focusEnd = focusLayerRange[1]
+
+        layersToKeep = list(range(focusStart,focusEnd + 1))
+
+    if len(layersToKeep):
+        operations = []
+        for layer in layersToKeep:
+            operations.append(cModel.operations[layer])
+
+        #operations = cModel.operations[focusStart : focusEnd + 1]
+        cModel.operations = operations
 
         inputIndexes = []
-        nodeInputIndexes = []
         initializersIndexes = []
 
         newInputIndex = 0
         newNodeInputIndex = 0
         newInitializerIndex = 0
-        for inp in op.inputs:
-            if inp.sourceType == DataSourceType.MODEL_INPUT:
-                inputIndexes.append(inp.index)
-                inp.index = newInputIndex
-                newInputIndex += 1
-            if inp.sourceType == DataSourceType.NODE_INPUT:
-                nodeInputIndexes.append(inp.index)
-                inp.index = newNodeInputIndex
-                newNodeInputIndex += 1
-            if inp.sourceType == DataSourceType.INITIALIZER:
-                initializersIndexes.append(inp.index)
-                inp.index = newInitializerIndex
-                newInitializerIndex += 1
 
-        op.outputIndex = newNodeInputIndex
-        nodeInputIndexes.append(focusLayer)
+        nodeInputToIndexMap = {}
+
+        for index, op in enumerate(operations):
+            #print(op.outputIndex)
+            for inp in op.inputs:
+                if inp.sourceType == DataSourceType.MODEL_INPUT:
+                    inputIndexes.append(inp.index)
+                    inp.index = newInputIndex
+                    newInputIndex += 1
+                if inp.sourceType == DataSourceType.NODE_INPUT:
+                    if not inp.index in nodeInputToIndexMap:
+                        nodeInputToIndexMap[inp.index] = newNodeInputIndex
+                        newNodeInputIndex += 1
+
+                    inp.index = nodeInputToIndexMap[inp.index]
+
+                if inp.sourceType == DataSourceType.INITIALIZER:
+                    initializersIndexes.append(inp.index)
+                    inp.index = newInitializerIndex
+                    newInitializerIndex += 1
+
+            if not op.outputIndex in nodeInputToIndexMap:
+                nodeInputToIndexMap[op.outputIndex] = newNodeInputIndex
+                newNodeInputIndex += 1
+
+            op.outputIndex = nodeInputToIndexMap[op.outputIndex]
+
+        nodeInputIndexes = [0] * len(nodeInputToIndexMap)
+        for x, k in nodeInputToIndexMap.items():
+            nodeInputIndexes[k] = x
+
+        print(inputIndexes)
+        print(nodeInputIndexes)
+        print(initializersIndexes)
+
+        # for layer in range(focusStart,focusEnd + 1):
+        #    nodeInputIndexes.append(layer)
+
+        newModelInputs = []
+        for index in inputIndexes:
+            newModelInputs.append(cModel.modelInputs[index])
+        cModel.modelInputs = newModelInputs
+
+        # cModel.modelInputs = RemoveButPreserve(cModel.modelInputs, inputIndexes)
 
         packedInputs = RemoveContentExcept(packedInputs, inputIndexes)
         packedCorrectData = RemoveContentExcept(packedCorrectData, nodeInputIndexes)
@@ -627,7 +702,10 @@ def GenerateDebug(
         layerInfo = []
 
         for index, c in enumerate(cModel.operations):
-            outputSize = TensorSize(c.outputDimensions)
+            outputSize = 0
+            for x in c.outputDimensions:
+                outputSize += TensorSize(x)
+
             layerInfo.append(
                 "{"
                 + f'"{OperationToLayerName(c,not debugSoftware)}",{outputSize}'
@@ -679,7 +757,7 @@ def GenerateDebug(
 
         f.write(f"uint64_t {namespace}_time[{len(cModel.operations) + 1}];\n")
 
-        def OutputFunction(debugging, fuctionName, useVersat, measureTime):
+        def OutputFunctionStart(debugging, fuctionName):
             if debugging:
                 f.write(
                     f"\nInferenceOutput {fuctionName}(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput)"
@@ -691,8 +769,13 @@ def GenerateDebug(
                     + "{\n"
                 )
 
+        def OutputFunction(debugging, fuctionName, useVersat, measureTime):
+            OutputFunctionStart(debugging, fuctionName)
             opSeen = {}
             for index, c in enumerate(cModel.operations):
+                opName = c.opName
+                opSpec = operatorNameToSpec[opName]
+
                 content = []
                 for inp in c.inputs:
                     if inp.sourceType == DataSourceType.INITIALIZER:
@@ -733,8 +816,10 @@ def GenerateDebug(
                     + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"
                 )
                 if debugging and (IsOperatorRegistered(c.opName)):
+                    precision = opSpec.floatPrecision
+                    # print(c.outputIndex,packedCorrectData.offsets)
                     f.write(
-                        f"  AssertAlmostEqual(res_{index},VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},&layers[{index}]);\n"
+                        f"  AssertAlmostEqual(res_{index},VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},{precision},&layers[{index}]);\n"
                     )
 
             if measureTime:
@@ -745,10 +830,20 @@ def GenerateDebug(
             f.write("  return (InferenceOutput){};\n")
             f.write("}\n")
 
+        outputAll = False
         #              debugging, fuctionName, useVersat, measureTime
-        OutputFunction(False, f"{namespace}_SoftwareRunInference", False, True)
-        OutputFunction(False, f"{namespace}_VersatRunInference", True, True)
-        OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
+        if outputAll:
+            OutputFunction(False, f"{namespace}_SoftwareRunInference", False, True)
+            OutputFunction(False, f"{namespace}_VersatRunInference", True, True)
+            OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
+        else:
+            OutputFunctionStart(False,f"{namespace}_SoftwareRunInference")
+            f.write("  (InferenceOutput){};\n")
+            f.write("}\n")
+            OutputFunctionStart(False,f"{namespace}_VersatRunInference")
+            f.write("  (InferenceOutput){};\n")
+            f.write("}\n")
+            OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
 
     correctDataSize = 0
     inputSize = 0
@@ -839,10 +934,3 @@ if __name__ == "__main__":
 # TODO: Need to take care with alignment issues. Embedded usually cannot handle misaligned data.
 
 # TODO: Need to start giving NAMESPACE names to C stuff, this code is supposed to be easy to integrate anywhere.
-
-# TODO: Need to also output the input file so we can start testing things and implementing the operators in C code.
-#       Need to output parameters. Do not know the approach that we should take here.
-#         Should we generate optimized functions for a given set of parameters?
-#         Or should we just embed the data in source code and let runtime deal with it?
-#         Or should we just pack it into a file and load at runtime? (Should only be a few kbs).
-#       Even if we embed the data, I think it would be helpful to make a Conv2D especial function.

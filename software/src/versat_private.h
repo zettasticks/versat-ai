@@ -26,6 +26,14 @@ extern uint32_t *logMantissaTable;
 
 static int32_t log2Val = 0x3f317218;
 
+typedef struct Arena_t {
+  void *mem;
+  int used;
+  int allocated;
+} Arena;
+
+extern Arena *arena;
+
 // ======================================
 // Dimensions
 #define MAX_DIMS 6
@@ -352,7 +360,7 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
 int64_t CalculateSizeOfDim(int64_t *dim, int dims);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index,
-                       LayerInfo *info);
+                       float precision, LayerInfo *info);
 
 float my_invsqrt(float number);
 

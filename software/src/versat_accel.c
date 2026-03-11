@@ -28,12 +28,6 @@ unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
 
 #define ALIGN(IN, ALIGNMENT) (((IN) + ((ALIGNMENT)-1)) & ~((ALIGNMENT)-1))
 
-typedef struct Arena_t {
-  void *mem;
-  int used;
-  int allocated;
-} Arena;
-
 void *PushBytes(Arena *arena, int size, int alignment) {
   arena->used = ALIGN(arena->used, alignment);
 
@@ -280,9 +274,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     }
   }
 
-  config->inputs_0.enabled = 0;
-  config->inputs_1.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -311,8 +303,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
     RunAccelerator(1);
   }
 
-  config->input.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -378,9 +369,7 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
     }
   }
 
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -438,9 +427,7 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
     }
   }
 
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -466,12 +453,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int group = info->group;
 
   int convStartC = 0; // We must always process the entire input channels.
-
-#if 0
-  static unsigned int delayBuffer[] = {0x0, 0x0, 0x10, 0x0, 0x0, 0x6};
-  ;
-  VersatLoadDelay(delayBuffer);
-#endif
 
   Top_Conv_FeaturesWeightsOutputs(
       inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
@@ -508,14 +489,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   forceDoubleLoop = true;
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  static Arena arenaInst = {};
-  static Arena *arena = &arenaInst;
-
-  if (!arena->mem) {
-    arena->allocated = 1024 * 1024 * 16;
-    arena->mem = malloc(arena->allocated); // 16 Megabytes
-  }
 
   ArenaMark outerMark = MarkArena(arena);
 
@@ -661,10 +634,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       // Flush the remaining data from the accelerator
       // TODO: Not efficient but not worrying about it for now.
-      config->features.enabled = 0;
-      config->weights.enabled = 0;
-      config->output.enabled = 0;
-      config->bias.enabled = 0;
+      VERSAT_DisableReadsAndWrites();
       RunAccelerator(2);
 
       silent_clear_cache();
@@ -707,6 +677,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_MatMul);
   volatile Top_MatMulConfig *config = &accelConfig->Top_MatMul;
@@ -740,7 +711,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   }
 
   int totalBSize = BH * BW;
-  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
+  float *tempB = PushArray(arena,totalBSize,float);
 
   int OS = info->numberOutputDims;
   int OH;
@@ -827,12 +798,10 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
     Address_Advance(&addrO);
   }
 
-  config->leftRow.enabled = 0;
-  config->rightRow.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(tempB);
+  MarkPop(outerMark);
 
   return output;
 }
@@ -875,10 +844,8 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
     StartAccelerator();
   }
 
-  // TODO: We can go further and replace this with a VERSAT_Flush that does the
-  // disable and RunAccelerator(2) at the same time.
   VERSAT_DisableReadsAndWrites();
-  RunAccelerator(3);
+  RunAccelerator(2);
 
   silent_clear_cache();
 
@@ -917,6 +884,8 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
+
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
 
   float *x = (float *)inputX;
@@ -934,8 +903,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 
   int totalC = dim.data[1];
 
-  float *A = (float *)malloc(sizeof(float) * totalC);
-  float *B = (float *)malloc(sizeof(float) * totalC);
+  float *A = PushArray(arena,totalC,float);
+  float *B = PushArray(arena,totalC,float);
   for (int c = 0; c < totalC; c++) {
     float inv = my_invsqrt(v[c] + info->epsilon);
     A[c] = s[c] * inv;
@@ -983,21 +952,16 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 
   EndAccelerator();
 
-  volatile Top_BatchNormalizationConfig *config =
-      &accelConfig->Top_BatchNormalization;
-  config->x.enabled = 0;
-  config->o.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(A);
-  free(B);
+  MarkPop(outerMark);
 
   return o;
 }
 
 void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
-  Tensor asTensor =
-      CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
+  Tensor asTensor = CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
   int size = Tensor_Size(asTensor);
 
   float *asFloatIn = (float *)input;
@@ -1011,15 +975,6 @@ void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
 }
 
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
-  // VERSAT IMPLEMENTATION
-  static Arena arenaInst = {};
-  static Arena *arena = &arenaInst;
-
-  if (!arena->mem) {
-    arena->allocated = 1024 * 1024 * 16;
-    arena->mem = malloc(arena->allocated); // 16 Megabytes
-  }
-
   ArenaMark outerMark = MarkArena(arena);
 
   int N = info->inputDims[0];
@@ -1031,6 +986,8 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
   float k = info->bias;
   float a = info->alpha;
   float b = info->beta;
+
+  float aDivSize = a / ((float) n);
 
   float *in = (float *)input;
   float *output = (float *)out;
@@ -1061,20 +1018,18 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
   Top_LRN_LoadMantissa(logMantissaTable, LOG_MANTISSA_TABLE_SIZE);
   Top_LRN_LoadExp(expTable, EXP_TABLE_SIZE);
   Top_LRN_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
-  Top_LRN_InitConsts(VERSAT_CONVERT(a, uint32_t), VERSAT_CONVERT(b, uint32_t),
+  Top_LRN_InitConsts(VERSAT_CONVERT(aDivSize, uint32_t), VERSAT_CONVERT(b, uint32_t),
                      VERSAT_CONVERT(k, uint32_t), log2Val);
 
   int size = CalculateSizeOfDim(info->inputDims, 4);
-  float *buffer = (float *)malloc(sizeof(float) * size);
+  float *buffer = PushArray(arena,size,float);
 
   AddressGen addrInst = StartAddress(NHWCDims, NHWCDims, info->numberInputDims);
   AddressGen *addr = &addrInst;
-  int loopCount = 0;
   for (; Address_IsValid(addr); Address_Advance(addr)) {
-    int c = Address_GetDim(addr, 3);
-
     int y = Address_GetDim(addr, 1);
     int x = Address_GetDim(addr, 2);
+    int c = Address_GetDim(addr, 3);
 
     int lowerBound = MAX(0, c - n / 2);
     int upperBound = MIN(C - 1, c + n / 2);
@@ -1083,14 +1038,13 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
 
     int yx = y * W * C + x * C;
 
-    float aDivSize = a / n;
-    Top_LRN_SetConstA(*((uint32_t *)&aDivSize));
     Top_LRN_Simple(&tempInput[yx], &buffer[index], lowerBound,
                    upperBound + 1 - lowerBound);
     StartAccelerator();
   }
 
-  RunAccelerator(3);
+  VERSAT_DisableReadsAndWrites();
+  RunAccelerator(2);
 
   for (int i = 0; i < size; i++) {
     tempOutput[i] = tempInput[i] / buffer[i];
@@ -1115,6 +1069,8 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
 
 void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
                   GemmInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
+
   ActivateMergedAccelerator(MergeType_Top_Gemm);
   volatile Top_GemmConfig *config = &accelConfig->Top_Gemm;
 
@@ -1126,14 +1082,8 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   int AH = info->aDims[0]; // 1
   int AW = info->aDims[1]; // 4
 
-  int totalASize = AH * AW;
-  float *tempA = (float *)malloc(sizeof(float) * totalASize);
-
   int BH = info->bDims[0];
   int BW = info->bDims[1];
-
-  int totalBSize = BH * BW;
-  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
 
   int CH = info->cDims[0];
   int CW = info->cDims[1];
@@ -1144,6 +1094,9 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
     trueAW = AH;
     trueAH = AW;
   }
+
+  // Since we only allocate one line no point in trying to simplify the allocation
+  float *tempA = PushArray(arena,AH,float);
 
   int trueBW = BW;
   int trueBH = BH;
@@ -1186,8 +1139,12 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   // By default we transpose B in order to implement the multiplication phase
   // directly. Which means that we do the opposite when we want to "transpose"
   // B.
+
   float *properBInput = viewB;
   if (!info->transB) {
+    int totalBSize = BH * BW;
+    float *tempB = PushArray(arena,totalBSize,float);
+
     for (int y = 0; y < BH; y++) {
       for (int x = 0; x < BW; x++) {
         // Transposing B
@@ -1247,8 +1204,7 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(tempA);
-  free(tempB);
+  MarkPop(outerMark);
 
   return viewOut;
 }

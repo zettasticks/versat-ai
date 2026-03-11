@@ -8,6 +8,9 @@
 // ======================================
 // Global stuff (versat side)
 
+Arena arenaInst;
+Arena *arena = &arenaInst;
+
 uint64_t Versat_DefaultMeasureTime() { return 0; }
 void Versat_DefaultClearCache(void *ptr, size_t size) {}
 
@@ -463,7 +466,7 @@ static inline float absf(float a) {
 }
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index,
-                       LayerInfo *info) {
+                       float precision, LayerInfo *info) {
   float *test = (float *)toTest;
   float *correct = (float *)correctValues;
 
@@ -476,7 +479,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
   if (outputSize == 0) {
     versat_printf(
         "Error, AssertAlmostEqual with output size of 0. Should not be "
-        "possible\n");
+        "possible. Check onnx generated info.\n");
     return;
   }
 
@@ -489,7 +492,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
 
   int incorrectFound = 0;
   for (int i = 0; i < outputSize; i++) {
-    if (absf(correct[i] - test[i]) > 0.001f) {
+    if (absf(correct[i] - test[i]) > precision) {
       if (incorrectFound == 0) {
         versat_printf("\n");
         versat_printf("[%s] (Layer %d) FAIL:\n", info->typeName, index);
@@ -1377,6 +1380,13 @@ uint32_t *logMantissaTable;
 #include <stdlib.h>
 
 void Versat_Init() {
+  // Careful on this amount. Any more than this and the Alexnet test runs out of
+  // memory.
+  arena->allocated = 1024 * 1024 * 6;
+  arena->mem = malloc(arena->allocated);
+
+  versat_printf("Arena %p - %p\n",arena->mem,arena->mem + arena->allocated);
+
 #if !EMBED_TABLES
   {
     logMantissaTable =

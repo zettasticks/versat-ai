@@ -104,8 +104,8 @@ module Top_AveragePool(){
 }
 
 module Top_Conv(){
-   VRead #(.ADDR_W(12)) features;
-   VRead #(.ADDR_W(12)) weights;
+   VRead #(.ADDR_W(17)) features;
+   VRead #(.ADDR_W(17)) weights;
    VRead bias;
    F_Mul muller;
    F_Add addBias;
@@ -287,7 +287,7 @@ module Exp(in){
 }
 
 module Top_Exp(){
-   VRead #(.ADDR_W(12)) in;
+   VRead #(.ADDR_W(14)) in;
   
    Exp exp;
 
@@ -342,11 +342,11 @@ module Pow(base,power){
 }
 
 module Top_Gemm(){
-   VRead #(.ADDR_W(14)) gemmLeftRow;
-   VRead #(.ADDR_W(14)) gemmRightRow;
+   VRead #(.ADDR_W(17)) gemmLeftRow;
+   VRead #(.ADDR_W(17)) gemmRightRow;
    F_Mul mat_muller;
    MyFloatAccum myAccum;
-   VWrite output;
+   VWrite #(.ADDR_W(17)) output;
 
    Const alpha;
    F_Mul alphaMul;
@@ -416,10 +416,6 @@ module Top_LRN(){
       constB.constant = valB;
       constK.constant = valK;
       pow.Init(log2Val);
-   }
-
-   config SetConstA(val){
-      constA.constant = val;
    }
 
    config Simple(inAddr: Address,outAddr: Address,lowerBound,width){
