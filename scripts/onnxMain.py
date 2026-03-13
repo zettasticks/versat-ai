@@ -34,11 +34,13 @@ def GetTensor(model, tensorName):
         if tensor.name == tensorName:
             return tensor
 
+
 def GetValueForDim(dim):
     if dim.WhichOneof("value") == "dim_value":
         return dim.dim_value
     else:
         return dim.dim_param
+
 
 def GetShape(model, name):
     assert name  # Make sure that we got a name, onnx models contain a lot of members that contain optional names, which might work for some models and not others. Care
@@ -600,8 +602,8 @@ def GenerateDebug(
 
     layersToRemove = []
     # HACK: See [1]
-    for index,c in enumerate(cModel.operations):
-        if(c.opName == "Dropout" or c.opName == "Reshape"):
+    for index, c in enumerate(cModel.operations):
+        if c.opName == "Dropout" or c.opName == "Reshape":
             layersToRemove.append(index)
 
     layersToKeep = []
@@ -614,14 +616,14 @@ def GenerateDebug(
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
 
-        layersToKeep = list(range(focusStart,focusEnd + 1))
+        layersToKeep = list(range(focusStart, focusEnd + 1))
 
     if len(layersToKeep):
         operations = []
         for layer in layersToKeep:
             operations.append(cModel.operations[layer])
 
-        #operations = cModel.operations[focusStart : focusEnd + 1]
+        # operations = cModel.operations[focusStart : focusEnd + 1]
         cModel.operations = operations
 
         inputIndexes = []
@@ -634,7 +636,7 @@ def GenerateDebug(
         nodeInputToIndexMap = {}
 
         for index, op in enumerate(operations):
-            #print(op.outputIndex)
+            # print(op.outputIndex)
             for inp in op.inputs:
                 if inp.sourceType == DataSourceType.MODEL_INPUT:
                     inputIndexes.append(inp.index)
@@ -662,9 +664,9 @@ def GenerateDebug(
         for x, k in nodeInputToIndexMap.items():
             nodeInputIndexes[k] = x
 
-        #print(inputIndexes)
-        #print(nodeInputIndexes)
-        #print(initializersIndexes)
+        # print(inputIndexes)
+        # print(nodeInputIndexes)
+        # print(initializersIndexes)
 
         # for layer in range(focusStart,focusEnd + 1):
         #    nodeInputIndexes.append(layer)
@@ -833,15 +835,19 @@ def GenerateDebug(
         if outputAll:
             OutputFunction(False, f"{namespace}_SoftwareRunInference", False, True)
             OutputFunction(False, f"{namespace}_VersatRunInference", True, True)
-            OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
+            OutputFunction(
+                True, f"{namespace}_DebugRunInference", not debugSoftware, False
+            )
         else:
-            OutputFunctionStart(False,f"{namespace}_SoftwareRunInference")
+            OutputFunctionStart(False, f"{namespace}_SoftwareRunInference")
             f.write("  (InferenceOutput){};\n")
             f.write("}\n")
-            OutputFunctionStart(False,f"{namespace}_VersatRunInference")
+            OutputFunctionStart(False, f"{namespace}_VersatRunInference")
             f.write("  (InferenceOutput){};\n")
             f.write("}\n")
-            OutputFunction(True, f"{namespace}_DebugRunInference", not debugSoftware, False)
+            OutputFunction(
+                True, f"{namespace}_DebugRunInference", not debugSoftware, False
+            )
 
     correctDataSize = 0
     inputSize = 0

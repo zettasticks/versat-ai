@@ -711,7 +711,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   }
 
   int totalBSize = BH * BW;
-  float *tempB = PushArray(arena,totalBSize,float);
+  float *tempB = PushArray(arena, totalBSize, float);
 
   int OS = info->numberOutputDims;
   int OH;
@@ -903,8 +903,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 
   int totalC = dim.data[1];
 
-  float *A = PushArray(arena,totalC,float);
-  float *B = PushArray(arena,totalC,float);
+  float *A = PushArray(arena, totalC, float);
+  float *B = PushArray(arena, totalC, float);
   for (int c = 0; c < totalC; c++) {
     float inv = my_invsqrt(v[c] + info->epsilon);
     A[c] = s[c] * inv;
@@ -961,7 +961,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 }
 
 void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
-  Tensor asTensor = CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
+  Tensor asTensor =
+      CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
   int size = Tensor_Size(asTensor);
 
   float *asFloatIn = (float *)input;
@@ -987,7 +988,7 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
   float a = info->alpha;
   float b = info->beta;
 
-  float aDivSize = a / ((float) n);
+  float aDivSize = a / ((float)n);
 
   float *in = (float *)input;
   float *output = (float *)out;
@@ -1018,11 +1019,12 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
   Top_LRN_LoadMantissa(logMantissaTable, LOG_MANTISSA_TABLE_SIZE);
   Top_LRN_LoadExp(expTable, EXP_TABLE_SIZE);
   Top_LRN_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
-  Top_LRN_InitConsts(VERSAT_CONVERT(aDivSize, uint32_t), VERSAT_CONVERT(b, uint32_t),
-                     VERSAT_CONVERT(k, uint32_t), log2Val);
+  Top_LRN_InitConsts(VERSAT_CONVERT(aDivSize, uint32_t),
+                     VERSAT_CONVERT(b, uint32_t), VERSAT_CONVERT(k, uint32_t),
+                     log2Val);
 
   int size = CalculateSizeOfDim(info->inputDims, 4);
-  float *buffer = PushArray(arena,size,float);
+  float *buffer = PushArray(arena, size, float);
 
   AddressGen addrInst = StartAddress(NHWCDims, NHWCDims, info->numberInputDims);
   AddressGen *addr = &addrInst;
@@ -1095,8 +1097,9 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
     trueAH = AW;
   }
 
-  // Since we only allocate one line no point in trying to simplify the allocation
-  float *tempA = PushArray(arena,AH,float);
+  // Since we only allocate one line no point in trying to simplify the
+  // allocation
+  float *tempA = PushArray(arena, AH, float);
 
   int trueBW = BW;
   int trueBH = BH;
@@ -1143,7 +1146,7 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   float *properBInput = viewB;
   if (!info->transB) {
     int totalBSize = BH * BW;
-    float *tempB = PushArray(arena,totalBSize,float);
+    float *tempB = PushArray(arena, totalBSize, float);
 
     for (int y = 0; y < BH; y++) {
       for (int x = 0; x < BW; x++) {

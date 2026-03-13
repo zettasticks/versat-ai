@@ -1385,7 +1385,7 @@ void Versat_Init() {
   arena->allocated = 1024 * 1024 * 6;
   arena->mem = malloc(arena->allocated);
 
-  versat_printf("Arena %p - %p\n",arena->mem,arena->mem + arena->allocated);
+  versat_printf("Arena %p - %p\n", arena->mem, arena->mem + arena->allocated);
 
 #if !EMBED_TABLES
   {
