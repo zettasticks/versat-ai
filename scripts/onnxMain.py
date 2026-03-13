@@ -610,8 +610,6 @@ def GenerateDebug(
         size = len(cModel.operations)
         layersToKeep = list(set(range(size)) - set(layersToRemove))
 
-    print(f"To keep:{layersToKeep}")
-
     if focusLayerRange != None:
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
@@ -664,9 +662,9 @@ def GenerateDebug(
         for x, k in nodeInputToIndexMap.items():
             nodeInputIndexes[k] = x
 
-        print(inputIndexes)
-        print(nodeInputIndexes)
-        print(initializersIndexes)
+        #print(inputIndexes)
+        #print(nodeInputIndexes)
+        #print(initializersIndexes)
 
         # for layer in range(focusStart,focusEnd + 1):
         #    nodeInputIndexes.append(layer)
