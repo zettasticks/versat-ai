@@ -168,7 +168,11 @@ def setup(py_params: dict):
                 "instance_description": "Versat accelerator",
                 "is_peripheral": True,
                 "parameters": {},
-                "connect": {"axi_out_m": "versat_axi"},
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "axi_out_m": "versat_axi",
+                    # Cbus connected automatically
+                },
             },
             # NOTE: Add other components/peripherals here.
         ],
@@ -181,7 +185,7 @@ def setup(py_params: dict):
     }
 
     core_dict = {
-        "version": "0.8",
+        "version": "0.8.0",
         "parent": {
             "core_name": "iob_system",
             "system_attributes": attributes_dict,

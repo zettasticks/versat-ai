@@ -13,7 +13,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         os.path.realpath(versat_spec),
         f"-b{axi_data_w}",
         "-p",
-        "iob_csrs_",
+        "csrs_",
         "-t",
         versat_top,
         "-u",
@@ -80,29 +80,30 @@ if __name__ == "__main__":
             "confs": [
                 {
                     "name": "DATA_W",
+                    "descr": "Data bus width",
                     "type": "P",
                     "val": "32",
                     "min": "NA",
                     "max": "NA",
-                    "descr": "Data bus width",
                 },
                 {
                     "name": "WDATA_W",
+                    "descr": "",
                     "type": "P",
                     "val": "1",
                     "min": "NA",
                     "max": "8",
-                    "descr": "",
                 },
             ],
             "ports": [
                 {
                     "name": "clk_en_rst_s",
-                    "signals": {"type": "iob_clk"},
                     "descr": "Clock, clock enable and reset",
+                    "signals": {"type": "iob_clk"},
                 },
                 {
                     "name": "axi_out_m",
+                    "descr": "AXI wires",
                     "signals": {
                         "type": "axi",
                         "ID_W": "AXI_ID_W",
@@ -111,7 +112,6 @@ if __name__ == "__main__":
                         "LEN_W": "AXI_LEN_W",
                         "LOCK_W": 1,
                     },
-                    "descr": "AXI wires",
                 },
             ],
             "wires": [
@@ -130,7 +130,7 @@ if __name__ == "__main__":
             "subblocks": [
                 {
                     "core_name": "iob_csrs",
-                    "instance_name": "iob_csrs",
+                    "instance_name": "csrs",  # Needs to be named 'csrs' for 'csrs_cbus_s´ port to be generated with correct name
                     "instance_description": "Control/Status Registers",
                     "csr_if": "iob",
                     "csrs": [
@@ -145,6 +145,7 @@ if __name__ == "__main__":
                     ],
                     "connect": {
                         "clk_en_rst_s": "clk_en_rst_s",
+                        # iob_csrs 'control_if_s' port is connected automatically by py2hwsw
                         "csr_interface_write_io": "interface",
                     },
                 }

@@ -28,7 +28,7 @@ iptr NoConvert(float f) {
 
 unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
 
-#define ALIGN(IN,ALIGNMENT) (((IN) + ((ALIGNMENT) - 1)) & ~((ALIGNMENT) - 1))
+#define ALIGN(IN, ALIGNMENT) (((IN) + ((ALIGNMENT)-1)) & ~((ALIGNMENT)-1))
 
 typedef struct Arena_t {
   void *mem;
@@ -37,7 +37,7 @@ typedef struct Arena_t {
 } Arena;
 
 void *PushBytes(Arena *arena, int size, int alignment) {
-  arena->used = ALIGN(arena->used,alignment);
+  arena->used = ALIGN(arena->used, alignment);
 
   int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
                                 // worry about alignment further
@@ -54,27 +54,31 @@ void *PushBytes(Arena *arena, int size, int alignment) {
   return res;
 }
 
-#define PushType(ARENA, TYPE) (TYPE *) PushBytes(ARENA, sizeof(TYPE),__alignof__(TYPE))
-#define PushArray(ARENA, COUNT, TYPE) \
-  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE),__alignof__(TYPE))
+#define PushType(ARENA, TYPE)                                                  \
+  (TYPE *)PushBytes(ARENA, sizeof(TYPE), __alignof__(TYPE))
+#define PushArray(ARENA, COUNT, TYPE)                                          \
+  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE), __alignof__(TYPE))
 
 typedef struct {
   unsigned int firstMarker;
   unsigned int *secondMarkerPtr;
 } CanaryHeader;
 
-bool CheckCanary(void *memory,int line) {
+bool CheckCanary(void *memory, int line) {
   CanaryHeader *asHeader = ((CanaryHeader *)memory) - 1;
 
   if (asHeader->firstMarker != 0x12345678) {
-    versat_printf("Canary check failed before at line: %d value: %08x \n",line,asHeader->firstMarker);
-    versat_printf("HeaderPtr: %p FirstMarkerPtr: %p\n",asHeader,&asHeader->firstMarker);
+    versat_printf("Canary check failed before at line: %d value: %08x \n", line,
+                  asHeader->firstMarker);
+    versat_printf("HeaderPtr: %p FirstMarkerPtr: %p\n", asHeader,
+                  &asHeader->firstMarker);
     return false;
   }
 
   if (*asHeader->secondMarkerPtr != 0x87654321) {
-    versat_printf("Canary check failed after at line: %d value: %08x\n",line,*asHeader->secondMarkerPtr);
-    versat_printf("SecondMarkerPtr: %p\n",asHeader->secondMarkerPtr);
+    versat_printf("Canary check failed after at line: %d value: %08x\n", line,
+                  *asHeader->secondMarkerPtr);
+    versat_printf("SecondMarkerPtr: %p\n", asHeader->secondMarkerPtr);
     return false;
   }
 
@@ -90,10 +94,10 @@ void *PushBytesWithCanary(Arena *arena, int size) {
   header->secondMarkerPtr = last;
 
   *last = 0x87654321;
-  
+
   // This should never fail, right?
-  if(!CheckCanary(memory,-1)){
-    versat_printf("%p %p %p\n",header,memory,last);
+  if (!CheckCanary(memory, -1)) {
+    versat_printf("%p %p %p\n", header, memory, last);
   }
 
   return memory;
@@ -133,8 +137,10 @@ Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
   return tensor;
 }
 
-static void Tensor_CheckCanary_(Tensor in,int line) { CheckCanary(in.data,line); }
-#define Tensor_CheckCanary(IN) Tensor_CheckCanary_(IN,__LINE__) 
+static void Tensor_CheckCanary_(Tensor in, int line) {
+  CheckCanary(in.data, line);
+}
+#define Tensor_CheckCanary(IN) Tensor_CheckCanary_(IN, __LINE__)
 
 Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
   int size = input.dims.size;
@@ -508,7 +514,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   static Arena arenaInst = {};
   static Arena *arena = &arenaInst;
 
-  if(!arena->mem){
+  if (!arena->mem) {
     arena->allocated = 1024 * 1024 * 16;
     arena->mem = malloc(arena->allocated); // 16 Megabytes
   }

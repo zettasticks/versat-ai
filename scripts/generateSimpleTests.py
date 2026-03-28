@@ -1228,8 +1228,8 @@ def GenerateSimpleTest():
 
             if testBig:
                 aP = [[3, 3], [5, 5]]
-                cP = [1, 3, 4, 6, 8, 16]        
-                fP = [1, 3, 4, 6, 8, 16]        
+                cP = [1, 3, 4, 6, 8, 16]
+                fP = [1, 3, 4, 6, 8, 16]
                 sP = [[3, 3], [5, 5], [9, 9]]
 
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
