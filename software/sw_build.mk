@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+-include VerilatorMake.mk
+
 #########################################
 #            Embedded targets           #
 #########################################
@@ -89,12 +91,19 @@ versat_ai_boot: iob_bsp
 versat_ai_preboot:
 	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_PREBOOT_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)" NO_HW_DRIVER=1
 
+versat_ai_boot.elf: $(TEMPLATE_LDS) $(HDR) $(SRC) $(EXTRA_SRC)
+	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) -fPIC $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
+	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ versat_ai_boot.bin
+
 
 .PHONY: build_versat_ai_software iob_bsp versat_ai_firmware versat_ai_boot versat_ai_preboot
 
 #########################################
 #         PC emulation targets          #
 #########################################
+EMUL_CFLAGS ?=-std=gnu99 -O0 -g -DPC #-fsanitize=address -static-libasan
+EMUL_CFLAGS+=-lm -lstdc++
+
 # Local pc-emul makefile settings for custom pc emulation targets.
 EMUL_HDR+=iob_bsp
 
@@ -106,6 +115,8 @@ EMUL_SRC+=$(wildcard src/*_code.c)
 EMUL_SRC+=src/versat_common.c
 EMUL_SRC+=src/versat_software.c
 EMUL_SRC+=src/versat_accel.c
+
+EMUL_SRC+=libaccel.a
 
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
