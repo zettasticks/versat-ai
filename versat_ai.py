@@ -20,14 +20,14 @@ def setup(py_params: dict):
         "use_extmem": True,
         "use_ethernet": False,  # ETHERNET: Changed from true to false
         "mem_addr_w": mem_addr_w,
-        "include_tester": False,
+        "include_tester": True,
         "cpu": "iob_vexriscv",
         "fw_addr_w": mem_addr_w,
     }
 
     py_params = update_params(iob_system_default_overrides, py_params)
 
-    # setup custom xbar
+    # setup custom xbar to include more subordinates (versat core)
     xbar_subblock = {
         "core_name": "iob_axi_full_xbar",
         "name": f"{name}_axi_full_xbar",
@@ -128,6 +128,15 @@ def setup(py_params: dict):
                     "type": "rs232",
                 },
             },
+            {
+                "name": "csrs_cbus_s",
+                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
+                "signals": {
+                    "type": "iob",
+                    "ADDR_W": 3,
+                    "DATA_W": data_w,
+                },
+            },
             # NOTE: Add other ports here.
         ],
         "wires": [
@@ -143,6 +152,12 @@ def setup(py_params: dict):
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
                 },
+            },
+            # CPU control wires
+            {"name": "rst", "signals": [{"name": "sw_reset", "width": 1}]},
+            {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one).
+                "name": "fw_base_addr",
+                "signals": [{"name": "fw_base_addr", "width": addr_w}],
             },
         ],
         "subblocks": [
@@ -182,6 +197,118 @@ def setup(py_params: dict):
                     "clk_en_rst_s": "clk_en_rst_s",
                     "axi_out_m": "versat_axi",
                     # Cbus connected automatically
+                },
+            },
+            {
+                "core_name": "iob_regfileif",
+                "instance_name": "REGFILEIF0",
+                "instance_description": "Provides Register file interface with registers used to configure, control and monitor the Versat system.",
+                "is_peripheral": True,
+                "internal_csr_if_widths": {
+                    "ADDR_W": 3,
+                    "DATA_W": 32,
+                },
+                "external_csr_if_widths": {
+                    "ADDR_W": 3,
+                    "DATA_W": 32,
+                },
+                "csrs": [
+                    {
+                        "name": "regfileif",
+                        "descr": "REGFILEIF software accessible registers.",
+                        "regs": [
+                            {
+                                "name": "start",
+                                "descr": "Set 1 to start. versat_ai sets this to 0 to acknowledge start received",
+                                "mode": "RW",
+                                "n_bits": 1,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "done",
+                                "descr": "Set to 1 by versat_ai when finished. 0 while running",
+                                "mode": "R",
+                                "n_bits": 1,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "metamodel_addr",
+                                "descr": "Metamodel address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "output_addr",
+                                "descr": "Model address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "temp_addr",
+                                "descr": "Model address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "model_addr",
+                                "descr": "Model address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "correctOutputs_addr",
+                                "descr": "Correct output address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            {
+                                "name": "inputsVector_addr",
+                                "descr": "Inputs address",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                            },
+                            # Versat-ai CPU control registers
+                            {
+                                "name": "rst",
+                                "descr": "Resets CPU (1) or not (0).",
+                                "mode": "W",
+                                "n_bits": 1,
+                                "rst_val": 0,  # Set to 1 to prevent versat from booting at startup
+                                "log2n_items": 0,
+                                "output": True,  # Generate dedicated output port with value of this CSR
+                            },
+                            {
+                                "name": "firm_addr",
+                                "descr": "Memory address of Versat firmware were CPU boots from.",
+                                "mode": "W",
+                                "n_bits": 32,
+                                "rst_val": 0,
+                                "log2n_items": 0,
+                                "output": True,  # Generate dedicated output port with value of this CSR
+                            },
+                        ],
+                    },
+                ],
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    # Cbus connected automatically
+                    "csrs_external_cbus_s": "csrs_cbus_s",
+                    "rst_o": "rst",
+                    "firm_addr_o": "fw_base_addr",
                 },
             },
             # NOTE: Add other components/peripherals here.
