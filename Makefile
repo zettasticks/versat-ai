@@ -23,6 +23,7 @@ BUILD_DIR ?= ../versat_ai_V$(VERSION)
 INIT_MEM ?= 1
 USE_EXTMEM ?= 1
 USE_INTMEM ?= 0
+USE_ETHERNET ?= 0
 
 
 ifneq ($(DEBUG),)
@@ -48,7 +49,7 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
 	mkdir -p hardware/simulation
 	cp software/*.bin hardware/simulation
 	cp software/*.bin hardware/fpga
-	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM)' $(EXTRA_ARGS);"
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET)' $(EXTRA_ARGS);"
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/ # Since python file was not being copied and we need a python script from inside software
 	cp -r ./software ../versat_ai_V$(VERSION)/
 

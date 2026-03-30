@@ -91,12 +91,12 @@ versat_ai_boot: iob_bsp
 versat_ai_preboot:
 	make $@.elf INCLUDES="$(VERSAT_AI_INCLUDES)" LFLAGS="$(VERSAT_AI_LFLAGS) -Wl,-Map,$@.map" SRC="$(VERSAT_AI_PREBOOT_SRC)" TEMPLATE_LDS="$(TEMPLATE_LDS)" NO_HW_DRIVER=1
 
+.PHONY: build_versat_ai_software iob_bsp versat_ai_firmware versat_ai_boot versat_ai_preboot
+
 versat_ai_boot.elf: $(TEMPLATE_LDS) $(HDR) $(SRC) $(EXTRA_SRC)
 	$(TOOLCHAIN_PREFIX)gcc -o $@ $(CFLAGS) -fPIC $(LFLAGS) $(INCLUDES) $(SRC) $(EXTRA_SRC) $(LLIBS)
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $@ versat_ai_boot.bin
 
-
-.PHONY: build_versat_ai_software iob_bsp versat_ai_firmware versat_ai_boot versat_ai_preboot
 
 #########################################
 #         PC emulation targets          #

@@ -25,7 +25,7 @@ def setup(py_params: dict):
         "fw_addr_w": mem_addr_w,
     }
 
-    py_params = {**iob_system_default_overrides, **py_params}
+    py_params = update_params(iob_system_default_overrides, py_params)
 
     # setup custom xbar
     xbar_subblock = {
@@ -51,6 +51,16 @@ def setup(py_params: dict):
         "lock_w": 1,
         "num_subordinates": 3,  # ETHERNET: CHANGED FROM 4 to 3
     }
+    # Add ethernet connections in xbar subblock if needed
+    if py_params["use_ethernet"]:
+        subordinate_if_number = xbar_subblock["num_subordinates"]
+        xbar_subblock["num_subordinates"] += 1
+        xbar_subblock["connect"] |= {
+            f"s{subordinate_if_number}_axi_s": (
+                "eth_axi",
+                ["eth_axi_awlock[0]", "eth_axi_arlock[0]"],
+            )
+        }
     xbar_manager_interfaces = {
         "use_extmem": (
             "axi_m",
@@ -194,3 +204,31 @@ def setup(py_params: dict):
     }
 
     return core_dict
+
+
+#
+# Utility functions
+#
+
+
+def update_params(params, py_params):
+    # Default parameters
+    new_params = params.copy()
+    # Process python parameters
+    for name, override_val in py_params.items():
+        # If py param is a new parameter, append it to dict
+        if name not in params:
+            new_params[name] = override_val
+            continue
+
+        # Otherwise, py param will override default one
+        default_val = params[name]
+        # If py_param corresponds to a bool, and matches string "0", convert it to False
+        # This is needed because running in python: bool("0") == True
+        if type(default_val) is bool and override_val == "0":
+            new_params[name] = False
+        # Otherwise, convert py_param to correct type (for example: bool(override_val), int(override_val), etc)
+        else:
+            new_params[name] = type(default_val)(override_val)
+
+    return new_params

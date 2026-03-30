@@ -13,16 +13,16 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
-// ETHERNET enabled for now to test Alexnet
-//#define USE_ETHERNET
+// Hardcoded ETHERNET enabled for now to test Alexnet
+//#define VERSAT_AI_USE_ETHERNET
 
 //#define DEBUG
 
 #ifdef PC
-#undef USE_ETHERNET
+#undef VERSAT_AI_USE_ETHERNET
 #endif
 
-#ifdef USE_ETHERNET
+#ifdef VERSAT_AI_USE_ETHERNET
 #include "iob_eth.h"
 #endif
 
@@ -54,7 +54,7 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#ifdef USE_ETHERNET
+#ifdef VERSAT_AI_USE_ETHERNET
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
   uart_puts(UART_PROGNAME);
   uart_puts(": requesting to receive file by ethernet\n");
@@ -110,7 +110,7 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   return;
 #endif
 
-#ifdef USE_ETHERNET
+#ifdef VERSAT_AI_USE_ETHERNET
   ethernet_receive_file(fullPath, buffer, expectedSize);
 #endif
 }
@@ -185,7 +185,7 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#ifdef USE_ETHERNET
+#ifdef VERSAT_AI_USE_ETHERNET
   uart_puts("\nGonna init ethernet\n");
   eth_init(ETH0_BASE, &silent_clear_cache);
   eth_wait_phy_rst();
