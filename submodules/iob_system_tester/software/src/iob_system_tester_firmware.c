@@ -11,9 +11,49 @@
 #include "iob_timer.h"
 #include "iob_uart.h"
 #include <string.h>
+#ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
+#include "iob_eth.h"
+#endif
 
 // Enable debug messages.
 #define DEBUG 0
+
+#ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
+
+// Ethernet utility functions
+void clear_cache() {
+  // Delay to ensure all data is written to memory
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
+}
+
+// Send signal by uart to receive file by ethernet
+uint32_t uart_recvfile_ethernet(const char *file_name) {
+
+  uart_puts(UART_PROGNAME);
+  uart_puts(": requesting to receive file by ethernet\n");
+
+  // send file receive by ethernet request
+  uart_putc(0x13);
+
+  // send file name (including end of string)
+  uart_puts(file_name);
+  uart_putc(0);
+
+  // receive file size
+  uint32_t file_size = uart_getc();
+  file_size |= ((uint32_t)uart_getc()) << 8;
+  file_size |= ((uint32_t)uart_getc()) << 16;
+  file_size |= ((uint32_t)uart_getc()) << 24;
+
+  // send ACK before receiving file
+  uart_putc(ACK);
+
+  return file_size;
+}
+#endif // IOB_SYSTEM_TESTER_USE_ETHERNET
 
 int main() {
   int i;
@@ -29,8 +69,25 @@ int main() {
   uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
   printf_init(&uart_putc);
 
+#ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
+  // Init ethernet
+  eth_init(ETH0_BASE, &clear_cache);
+  // Wait for PHY reset to finish
+  eth_wait_phy_rst();
+#endif // IOB_SYSTEM_TESTER_USE_ETHERNET
+
   // test puts
   uart_puts("\n\n\nHello world from Tester!\n\n\n");
+
+#ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
+  // Receive data from console via Ethernet
+  file_size = uart_recvfile_ethernet(
+      "xcelium_cov.tcl"); // NOTE: random file just for demo
+  eth_rcv_file(buffer, file_size);
+  uart_puts("\nFile received from console via ethernet:\n");
+  for (i = 0; i < file_size; i++)
+    uart_putc(buffer[i]);
+#endif // IOB_SYSTEM_TESTER_USE_ETHERNET
 
   //
   // Init SUT

@@ -4,28 +4,40 @@
 
 
 def setup(py_params: dict):
-    # Py2hwsw dictionary describing current core
     mem_addr_w = 25
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32
     data_w = 32
 
-    # ETHERNET: On hardware/simulation/src/ changed iob_uut to iob_uut_ethernet
-
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
     iob_system_default_overrides = {
+        "init_mem": False,
         "use_intmem": False,
         "use_extmem": True,
-        "use_ethernet": False,  # ETHERNET: Changed from true to false
+        "use_ethernet": False,
         "mem_addr_w": mem_addr_w,
-        "include_tester": True,
         "cpu": "iob_vexriscv",
         "fw_addr_w": mem_addr_w,
+        # Tester configuration
+        "include_tester": False,
+        "tester_use_ethernet": True,
     }
 
     py_params = update_params(iob_system_default_overrides, py_params)
+
+    # NOTE: Two configurations for this SUT core:
+    # 1) SUT only (versat-ai without tester):
+    #  - SUT uses ethernet
+    #  - SUT does not have (external) memory initialized
+    # 2) SUT+Tester (versat-ai and tester):
+    #  - SUT does not use ethernet
+    #  - SUT assumes external memory is initialized (tester handles initialization)
+
+    if py_params["include_tester"]:
+        py_params["use_ethernet"] = False  # No ethernet between SUT and Tester
+        py_params["init_mem"] = True  # Tester initializes memory
 
     # setup custom xbar to include more subordinates (versat core)
     xbar_subblock = {
@@ -43,13 +55,12 @@ def setup(py_params: dict):
             "s0_axi_s": "cpu_ibus",
             "s1_axi_s": "cpu_dbus",
             "s2_axi_s": "versat_axi",
-            # "s3_axi_s": "eth_axi",  # ETHERNET: Commented this line
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
         "data_w": data_w,
         "lock_w": 1,
-        "num_subordinates": 3,  # ETHERNET: CHANGED FROM 4 to 3
+        "num_subordinates": 3,
     }
     # Add ethernet connections in xbar subblock if needed
     if py_params["use_ethernet"]:
@@ -155,10 +166,10 @@ def setup(py_params: dict):
             },
             # CPU control wires
             {"name": "rst", "signals": [{"name": "sw_reset", "width": 1}]},
-            {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one).
-                "name": "fw_base_addr",
-                "signals": [{"name": "fw_base_addr", "width": addr_w}],
-            },
+            # {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one) (or use address translator in tester).
+            #     "name": "fw_base_addr",
+            #     "signals": [{"name": "fw_base_addr", "width": addr_w}],
+            # },
         ],
         "subblocks": [
             xbar_subblock,
@@ -291,15 +302,15 @@ def setup(py_params: dict):
                                 "log2n_items": 0,
                                 "output": True,  # Generate dedicated output port with value of this CSR
                             },
-                            {
-                                "name": "firm_addr",
-                                "descr": "Memory address of Versat firmware were CPU boots from.",
-                                "mode": "W",
-                                "n_bits": 32,
-                                "rst_val": 0,
-                                "log2n_items": 0,
-                                "output": True,  # Generate dedicated output port with value of this CSR
-                            },
+                            # {
+                            #     "name": "firm_addr",
+                            #     "descr": "Memory address of Versat firmware were CPU boots from.",
+                            #     "mode": "W",
+                            #     "n_bits": 32,
+                            #     "rst_val": 0,
+                            #     "log2n_items": 0,
+                            #     "output": True,  # Generate dedicated output port with value of this CSR
+                            # },
                         ],
                     },
                 ],
@@ -308,7 +319,7 @@ def setup(py_params: dict):
                     # Cbus connected automatically
                     "csrs_external_cbus_s": "csrs_cbus_s",
                     "rst_o": "rst",
-                    "firm_addr_o": "fw_base_addr",
+                    # "firm_addr_o": "fw_base_addr",
                 },
             },
             # NOTE: Add other components/peripherals here.
@@ -320,6 +331,15 @@ def setup(py_params: dict):
             },
         ],
     }
+    if py_params["include_tester"]:
+        attributes_dict["superblocks"] = [
+            {  # Override tester with this one to pass custom sut py parameters
+                "core_name": "iob_system_tester",
+                "instance_name": "iob_system_tester",
+                "sut_py_params": py_params,
+                "dest_dir": "tester",
+            },
+        ]
 
     core_dict = {
         "version": "0.8.0",
