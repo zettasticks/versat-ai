@@ -7,12 +7,12 @@ import subprocess
 
 
 def setup(py_params):
-    sut_py_params = py_params.get("sut_py_params", {})
-    mem_addr_w = sut_py_params.get("mem_addr_w", 25)
-    system_w = mem_addr_w
+    mem_addr_w = 18
     name = "versat_ai_tester"
     addr_w = 32
     data_w = 32
+    sut_py_params = py_params.get("sut_py_params", {})
+    sut_mem_addr_w = sut_py_params.get("mem_addr_w", 25)
 
     # NOTE: With current configuration, Tester runs from intmem; SUT runs from extmem.
 
@@ -141,7 +141,7 @@ def setup(py_params):
                     "type": "axi",
                     "prefix": "sut_",
                     "ID_W": "AXI_ID_W",
-                    "ADDR_W": mem_addr_w,
+                    "ADDR_W": sut_mem_addr_w,
                     "DATA_W": data_w,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
@@ -232,9 +232,9 @@ def setup(py_params):
                 "connect": {
                     "subordinate_s": (
                         "sut_axi",
-                        [  # SUT only connects mem_addr_w bits; Connect higher unused bits to zero.
-                            f"{{{addr_w - mem_addr_w}'b0, sut_axi_araddr}}",
-                            f"{{{addr_w - mem_addr_w}'b0, sut_axi_awaddr}}",
+                        [  # SUT only connects sut_mem_addr_w bits; Connect higher unused bits to zero.
+                            f"{{{addr_w - sut_mem_addr_w}'b0, sut_axi_araddr}}",
+                            f"{{{addr_w - sut_mem_addr_w}'b0, sut_axi_awaddr}}",
                         ],
                     ),
                     "manager_m": "translated_sut_axi",
