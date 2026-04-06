@@ -7,12 +7,12 @@ import subprocess
 
 
 def setup(py_params):
-    mem_addr_w = 25
+    sut_py_params = py_params.get("sut_py_params", {})
+    mem_addr_w = sut_py_params.get("mem_addr_w", 25)
     system_w = mem_addr_w
     name = "versat_ai_tester"
     addr_w = 32
     data_w = 32
-    sut_py_params = py_params.get("sut_py_params", {})
 
     # NOTE: With current configuration, Tester runs from intmem; SUT runs from extmem.
 
@@ -141,7 +141,7 @@ def setup(py_params):
                     "type": "axi",
                     "prefix": "sut_",
                     "ID_W": "AXI_ID_W",
-                    "ADDR_W": addr_w,
+                    "ADDR_W": mem_addr_w,
                     "DATA_W": data_w,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
@@ -160,6 +160,9 @@ def setup(py_params):
                     "LOCK_W": "1",
                 },
             },
+            # # GPIO wires for debug
+            # {"name": "gpio_input", "signals": [{"name": "gpio_input", "width": 32}]},
+            # {"name": "gpio_output", "signals": [{"name": "gpio_output", "width": 32}]},
         ],
         "subblocks": [
             xbar_subblock,
@@ -195,6 +198,20 @@ def setup(py_params):
                     "rs232_m": "sut_rs232_inverted",
                 },
             },
+            # {
+            #     # Instantiate a GPIO core for debug
+            #     "core_name": "iob_gpio",
+            #     "instance_name": "GPIO0",
+            #     "instance_description": "Tester GPIO for debug",
+            #     "is_peripheral": True,
+            #     "parameters": {},
+            #     "connect": {
+            #         "clk_en_rst_s": "clk_en_rst_s",
+            #         # Cbus connected automatically
+            #         "input_0_i": "gpio_input",
+            #         "output_0_o": "gpio_output",
+            #     },
+            # },
             # NOTE: Add other verification instruments (tester peripherals) here.
         ],
     }
@@ -213,15 +230,13 @@ def setup(py_params):
                     "LOCK_W": "1",
                 },
                 "connect": {
-                    "subordinate_s": "sut_axi",
-                    # VIVADO complaining about this size (34 given vs 30 expected). I think the proper thing to do was to remove this but we might have to put it back with a 2'b0 instead of a 6'b0
-                    # "subordinate_s": (
-                    #     "sut_axi",
-                    #     [
-                    #         "{6'b0, sut_axi_araddr}",
-                    #         "{6'b0, sut_axi_awaddr}",
-                    #     ],
-                    # ),
+                    "subordinate_s": (
+                        "sut_axi",
+                        [  # SUT only connects mem_addr_w bits; Connect higher unused bits to zero.
+                            f"{{{addr_w - mem_addr_w}'b0, sut_axi_araddr}}",
+                            f"{{{addr_w - mem_addr_w}'b0, sut_axi_awaddr}}",
+                        ],
+                    ),
                     "manager_m": "translated_sut_axi",
                 },
                 "memory_zones": [
@@ -256,10 +271,11 @@ def setup(py_params):
             "iob_regfileif_conf.h",
             # "versat_ai_conf.h",
         ]:
-            os.symlink(
-                f"{src}{src_file}",
-                f"{dst}{src_file}",
-            )
+            if not os.path.exists(f"{dst}{src_file}"):
+                os.symlink(
+                    f"{src}{src_file}",
+                    f"{dst}{src_file}",
+                )
 
     return core_dict
 

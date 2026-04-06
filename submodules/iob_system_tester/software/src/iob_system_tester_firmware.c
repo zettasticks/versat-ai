@@ -5,6 +5,7 @@
  */
 
 #include "iob_bsp.h"
+//#include "iob_gpio_csrs.h"
 #include "iob_printf.h"
 #include "iob_system_tester_conf.h"
 #include "iob_system_tester_mmap.h"
@@ -77,6 +78,11 @@ int main() {
   // Wait for PHY reset to finish
   eth_wait_phy_rst();
 #endif // IOB_SYSTEM_TESTER_USE_ETHERNET
+
+  // // init gpio
+  // iob_gpio_csrs_init_baseaddr(GPIO0_BASE);
+  // // Use GPIO output as timing flags for debug with VCD
+  // iob_gpio_csrs_set_output_0(0x0);
 
   // test puts
   uart_puts("\n\n\nHello world from Tester!\n\n\n");
@@ -151,17 +157,25 @@ int main() {
   uart_putc(ACK);
 
   i = 0;
-  // Read and store messages sent from SUT
+  // Read and store messages sent from SUT in a buffer to later be printed
+  // while ((c = uart_getc()) != EOT) {
+  //   buffer[i] = c;
+  //   if (DEBUG) {
+  //     iob_uart_csrs_init_baseaddr(UART0_BASE);
+  //     uart_putc(c);
+  //     iob_uart_csrs_init_baseaddr(UART1_BASE);
+  //   }
+  //   i++;
+  // }
+  // buffer[i] = EOT;
+
+  // Alternative: Print characters received from SUT as soon as they arrive
+  // This alternative is better to see satus of SUT in real time, but tester may miss/skip some characters if it cant read them fast enough. One solution to avoid skipping characters is using a UART that includes a FIFO (like uart16550).
   while ((c = uart_getc()) != EOT) {
-    buffer[i] = c;
-    if (DEBUG) {
-      iob_uart_csrs_init_baseaddr(UART0_BASE);
-      uart_putc(c);
-      iob_uart_csrs_init_baseaddr(UART1_BASE);
-    }
-    i++;
+    iob_uart_csrs_init_baseaddr(UART0_BASE);
+    uart_putc(c);
+    iob_uart_csrs_init_baseaddr(UART1_BASE);
   }
-  buffer[i] = EOT;
 
   //
   // Print (stored) SUT messages
@@ -170,14 +184,14 @@ int main() {
   // Switch back to UART0
   iob_uart_csrs_init_baseaddr(UART0_BASE);
 
-  // Send messages previously stored from SUT
-  uart_puts("[Tester]: #### Messages received from SUT: ####\n\n");
-  if (!DEBUG) {
-    for (i = 0; buffer[i] != EOT; i++) {
-      uart_putc(buffer[i]);
-    }
-  }
-  uart_puts("\n[Tester]: #### End of messages received from SUT ####\n\n");
+  // // Print messages previously stored from SUT in the buffer
+  // uart_puts("[Tester]: #### Messages received from SUT: ####\n\n");
+  // if (!DEBUG) {
+  //   for (i = 0; buffer[i] != EOT; i++) {
+  //     uart_putc(buffer[i]);
+  //   }
+  // }
+  // uart_puts("\n[Tester]: #### End of messages received from SUT ####\n\n");
 
   //
   // End test
