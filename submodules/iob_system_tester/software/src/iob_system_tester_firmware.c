@@ -170,7 +170,10 @@ int main() {
   // buffer[i] = EOT;
 
   // Alternative: Print characters received from SUT as soon as they arrive
-  // This alternative is better to see satus of SUT in real time, but tester may miss/skip some characters if it cant read them fast enough. One solution to avoid skipping characters is using a UART that includes a FIFO (like uart16550).
+  // This alternative is better to see satus of SUT in real time, but tester may
+  // miss/skip some characters if it cant read them fast enough. One solution to
+  // avoid skipping characters is using a UART that includes a FIFO (like
+  // uart16550).
   while ((c = uart_getc()) != EOT) {
     iob_uart_csrs_init_baseaddr(UART0_BASE);
     uart_putc(c);

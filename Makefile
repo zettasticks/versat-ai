@@ -72,6 +72,13 @@ fpga-run: test-setup
 	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
+# For some reason the vivado build.tcl is being overwritten by py2. Need to copy it before 
+tester-fpga-run:
+	make test-setup TESTER=1
+	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/tester/ fpga-sw-build BOARD=$(BOARD)"
+	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/tester/hardware/fpga/vivado
+	make -C ../$(CORE)_V$(VERSION)/tester/ fpga-run BOARD=$(BOARD)
+
 fpga-build: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)"
 	cp ./hardware/fpga/vivado/build.tcl ../$(CORE)_V$(VERSION)/hardware/fpga/vivado
@@ -83,7 +90,7 @@ fpga-build-2: test-setup
 fpga-run-2: fpga-build-2
 	make -C ../$(CORE)_V*/tester/ fpga-run BOARD=$(BOARD)
 
-.PHONY: pc-emul-run sim-run tester-sim-run fpga-run fpga-build fpga-build-2 fpga-run-2
+.PHONY: pc-emul-run sim-run tester-sim-run fpga-run tester-fpga-run fpga-build fpga-build-2 fpga-run-2
 
 # Need to be inside nix-shell for fast rules to work. Mostly used to speed up development instead of waiting for setup everytime
 fast-versat:
