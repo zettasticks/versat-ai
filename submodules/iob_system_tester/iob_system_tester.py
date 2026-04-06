@@ -7,7 +7,7 @@ import subprocess
 
 
 def setup(py_params):
-    mem_addr_w = 18
+    mem_addr_w = 20
     name = "versat_ai_tester"
     addr_w = 32
     data_w = 32
