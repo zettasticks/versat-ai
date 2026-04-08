@@ -144,9 +144,9 @@ fast-fpga:
 
 fast-fpga-tester:
 	cp -r software ../versat_ai_V$(VERSION)/
-	cp -r submodules/iob_soc_tester/software ../versat_ai_V$(VERSION)/tester
-	make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)
-	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
+	cp -r submodules/iob_system_tester/software ../versat_ai_V$(VERSION)/tester
+	make -C ../$(CORE)_V$(VERSION)/tester fpga-sw-build BOARD=$(BOARD)
+	make -C ../$(CORE)_V$(VERSION)/tester fpga-run BOARD=$(BOARD)
 
 .PHONY: fast-versat fast-pc-no-generate fast-pc-soft fast-pc-hard fast-sim-run fast-tester fast-only-sim-run fast-fpga fast-fpga-tester
 

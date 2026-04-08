@@ -54,7 +54,7 @@ def setup(py_params: dict):
             "rst_i": "rst",
             "s0_axi_s": "cpu_ibus",
             "s1_axi_s": "cpu_dbus",
-            "s2_axi_s": "versat_axi",
+            # "s2_axi_s": "versat_axi",
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
@@ -151,19 +151,19 @@ def setup(py_params: dict):
             # NOTE: Add other ports here.
         ],
         "wires": [
-            {
-                "name": "versat_axi",
-                "descr": "Versat axi wires",
-                "signals": {
-                    "type": "axi",
-                    "prefix": "versat_",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": addr_w,
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": "1",
-                },
-            },
+            # {
+            #    "name": "versat_axi",
+            #    "descr": "Versat axi wires",
+            #    "signals": {
+            #        "type": "axi",
+            #        "prefix": "versat_",
+            #        "ID_W": "AXI_ID_W",
+            #        "ADDR_W": addr_w,
+            #        "DATA_W": data_w,
+            #        "LEN_W": "AXI_LEN_W",
+            #        "LOCK_W": "1",
+            #    },
+            # },
             # CPU control wires
             {"name": "rst", "signals": [{"name": "sw_reset", "width": 1}]},
             # {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one) (or use address translator in tester).
@@ -198,18 +198,18 @@ def setup(py_params: dict):
                     # Cbus connected automatically
                 },
             },
-            {
-                "core_name": "iob_versat",
-                "instance_name": "VERSAT0",
-                "instance_description": "Versat accelerator",
-                "is_peripheral": True,
-                "parameters": {},
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    "axi_out_m": "versat_axi",
-                    # Cbus connected automatically
-                },
-            },
+            # {
+            #    "core_name": "iob_versat",
+            #    "instance_name": "VERSAT0",
+            #    "instance_description": "Versat accelerator",
+            #    "is_peripheral": True,
+            #    "parameters": {},
+            #    "connect": {
+            #        "clk_en_rst_s": "clk_en_rst_s",
+            #        "axi_out_m": "versat_axi",
+            #        # Cbus connected automatically
+            #    },
+            # },
             {
                 "core_name": "iob_regfileif",
                 "instance_name": "REGFILEIF0",

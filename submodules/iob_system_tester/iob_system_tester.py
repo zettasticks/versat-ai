@@ -19,6 +19,7 @@ def setup(py_params):
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
     iob_system_default_overrides = {
+        "init_mem": False,
         "use_intmem": True,
         "use_extmem": True,
         "use_ethernet": False,

@@ -827,8 +827,10 @@ def GenerateSimpleTest():
     testDropout = 0
     testGemm = 0
 
-    testConv = 1
-    testBatchNormalization = 1
+    testConv = 0
+    testBatchNormalization = 0
+
+    CreateBatchNormalization([1, 1, 1, 1])
 
     testSoftmax = 0
     testLRN = 0

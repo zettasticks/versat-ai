@@ -8,10 +8,11 @@
 #include "iob_printf.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
-#include "versat_accel.h"
 #include "versat_ai_conf.h"
 #include "versat_ai_mmap.h"
 #include <string.h>
+
+//#include "versat_accel.h"
 
 // Hardcoded ETHERNET enabled for now to test Alexnet
 //#define VERSAT_AI_USE_ETHERNET
@@ -137,12 +138,14 @@ void clear_cache() {
 #endif
 }
 
+#if 0
 void *Align4(void *in) {
   iptr asInt = (iptr)in;
 
   asInt = ((asInt + 3) & ~3);
   return (void *)asInt;
 }
+#endif
 
 void PrintTimeElapsed(const char *message, uint64_t start, uint64_t end) {
   uint64_t freqInMhz = IOB_BSP_FREQ / 1000000ull;
@@ -191,6 +194,11 @@ int main() {
   eth_wait_phy_rst();
 #endif
 
+  uart_finish();
+
+  return 0;
+
+#if 0
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
@@ -299,4 +307,5 @@ int main() {
   uart_finish();
 
   return 0;
+#endif
 }

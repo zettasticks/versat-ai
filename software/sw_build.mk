@@ -48,12 +48,12 @@ VERSAT_AI_FW_SRC=src/versat_ai_firmware.S
 VERSAT_AI_FW_SRC+=src/versat_ai_firmware.c
 VERSAT_AI_FW_SRC+=src/iob_printf.c
 
-VERSAT_AI_FW_SRC+=$(wildcard src/*_code.c)
-VERSAT_AI_FW_SRC+=src/versat_common.c
-VERSAT_AI_FW_SRC+=src/versat_software.c
-VERSAT_AI_FW_SRC+=src/versat_accel.c
-VERSAT_AI_FW_SRC+=src/iob-versat.c
-
+#VERSAT_AI_FW_SRC+=$(wildcard src/*_code.c)
+#VERSAT_AI_FW_SRC+=src/versat_common.c
+#VERSAT_AI_FW_SRC+=src/versat_software.c
+#VERSAT_AI_FW_SRC+=src/versat_accel.c
+#VERSAT_AI_FW_SRC+=src/iob-versat.c
+ 
 # PERIPHERAL SOURCES
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 # Only add driver files if they exist
