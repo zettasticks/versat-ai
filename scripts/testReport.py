@@ -112,7 +112,7 @@ ReportOperatorsTestedByModel(report)
 
 # TODO: I want to keep track of every combination of operators that are tested.
 #       I want to run a tester and the tester will tell me if:
-#         For operators with multiple padding schemes, which shcemes where tested or not.
+#         For operators with multiple padding schemes, which schemes where tested or not.
 #         For operators with broadcasting, which broadcasting types where applied.
 #         For operators with multiple optional outputs, which amount was used or not.
 #         For operators with integer parameters with no limit, which amount where used and their values.

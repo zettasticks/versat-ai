@@ -8,6 +8,9 @@
 // ======================================
 // Global stuff (versat side)
 
+Arena arenaInst;
+Arena *arena = &arenaInst;
+
 uint64_t Versat_DefaultMeasureTime() { return 0; }
 void Versat_DefaultClearCache(void *ptr, size_t size) {}
 
@@ -463,7 +466,7 @@ static inline float absf(float a) {
 }
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index,
-                       LayerInfo *info) {
+                       float precision, LayerInfo *info) {
   float *test = (float *)toTest;
   float *correct = (float *)correctValues;
 
@@ -476,7 +479,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
   if (outputSize == 0) {
     versat_printf(
         "Error, AssertAlmostEqual with output size of 0. Should not be "
-        "possible\n");
+        "possible. Check onnx generated info.\n");
     return;
   }
 
@@ -489,7 +492,7 @@ void AssertAlmostEqual(void *toTest, void *correctValues, int index,
 
   int incorrectFound = 0;
   for (int i = 0; i < outputSize; i++) {
-    if (absf(correct[i] - test[i]) > 0.001f) {
+    if (absf(correct[i] - test[i]) > precision) {
       if (incorrectFound == 0) {
         versat_printf("\n");
         versat_printf("[%s] (Layer %d) FAIL:\n", info->typeName, index);
@@ -561,19 +564,25 @@ void ExtraInfo_Print(ExtraInfo e) {
 ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
   ExtraInfo res = {};
 
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
+  int64_t *inputDims = VERSAT_MaxPoolInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_MaxPoolInfo_outputDims(info);
+  int *kernelDims = VERSAT_MaxPoolInfo_kernelDims(info);
+  int *strideDims = VERSAT_MaxPoolInfo_strideDims(info);
+  int *padsDims = VERSAT_MaxPoolInfo_padsDims(info);
 
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
+  res.strideW = strideDims[1];
+  res.strideH = strideDims[0];
 
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
+  res.kernelW = kernelDims[1];
+  res.kernelH = kernelDims[0];
 
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
+  res.inputImageW = inputDims[3];
+  res.inputImageH = inputDims[2];
+  res.inputImageC = inputDims[1];
+
+  res.outputImageC = outputDims[1];
+  res.outputImageH = outputDims[2];
+  res.outputImageW = outputDims[3];
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -582,14 +591,14 @@ ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
       return (ExtraInfo){};
     }
 
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
+    res.leftPadW = padsDims[1];
+    res.leftPadH = padsDims[0];
 
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
+    res.rightPadW = padsDims[3];
+    res.rightPadH = padsDims[2];
 
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
+    res.padW = padsDims[1] + padsDims[3];
+    res.padH = padsDims[0] + padsDims[2];
   } else if (info->padding == PaddingType_SAME_LOWER ||
              info->padding == PaddingType_SAME_UPPER) {
     res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
@@ -628,19 +637,25 @@ ExtraInfo CalculateExtraInfo_MaxPool(MaxPoolInfo *info) {
 ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
   ExtraInfo res = {};
 
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
+  int64_t *inputDims = VERSAT_AveragePoolInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_AveragePoolInfo_outputDims(info);
+  int *kernelDims = VERSAT_AveragePoolInfo_kernelDims(info);
+  int *strideDims = VERSAT_AveragePoolInfo_strideDims(info);
+  int *padsDims = VERSAT_AveragePoolInfo_padsDims(info);
 
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
+  res.strideW = strideDims[1];
+  res.strideH = strideDims[0];
 
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
+  res.kernelW = kernelDims[1];
+  res.kernelH = kernelDims[0];
 
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
+  res.inputImageW = inputDims[3];
+  res.inputImageH = inputDims[2];
+  res.inputImageC = inputDims[1];
+
+  res.outputImageC = outputDims[1];
+  res.outputImageH = outputDims[2];
+  res.outputImageW = outputDims[3];
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -650,14 +665,14 @@ ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
       return (ExtraInfo){};
     }
 
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
+    res.leftPadW = padsDims[1];
+    res.leftPadH = padsDims[0];
 
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
+    res.rightPadW = padsDims[3];
+    res.rightPadH = padsDims[2];
 
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
+    res.padW = padsDims[1] + padsDims[3];
+    res.padH = padsDims[0] + padsDims[2];
   } else if (info->padding == PaddingType_SAME_LOWER ||
              info->padding == PaddingType_SAME_UPPER) {
     res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
@@ -696,19 +711,25 @@ ExtraInfo CalculateExtraInfo_AveragePool(AveragePoolInfo *info) {
 ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
   ExtraInfo res = {};
 
-  res.strideW = info->strideDims[1];
-  res.strideH = info->strideDims[0];
+  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
+  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
+  int *strideDims = VERSAT_ConvInfo_strideDims(info);
+  int *padsDims = VERSAT_ConvInfo_padsDims(info);
 
-  res.kernelW = info->kernelDims[1];
-  res.kernelH = info->kernelDims[0];
+  res.strideW = strideDims[1];
+  res.strideH = strideDims[0];
 
-  res.inputImageW = info->inputDims[3];
-  res.inputImageH = info->inputDims[2];
-  res.inputImageC = info->inputDims[1];
+  res.kernelW = kernelDims[1];
+  res.kernelH = kernelDims[0];
 
-  res.outputImageC = info->outputDims[1];
-  res.outputImageH = info->outputDims[2];
-  res.outputImageW = info->outputDims[3];
+  res.inputImageW = inputDims[3];
+  res.inputImageH = inputDims[2];
+  res.inputImageC = inputDims[1];
+
+  res.outputImageC = outputDims[1];
+  res.outputImageH = outputDims[2];
+  res.outputImageW = outputDims[3];
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -717,14 +738,14 @@ ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
       return (ExtraInfo){};
     }
 
-    res.leftPadW = info->padsDims[1];
-    res.leftPadH = info->padsDims[0];
+    res.leftPadW = padsDims[1];
+    res.leftPadH = padsDims[0];
 
-    res.rightPadW = info->padsDims[3];
-    res.rightPadH = info->padsDims[2];
+    res.rightPadW = padsDims[3];
+    res.rightPadH = padsDims[2];
 
-    res.padW = info->padsDims[1] + info->padsDims[3];
-    res.padH = info->padsDims[0] + info->padsDims[2];
+    res.padW = padsDims[1] + padsDims[3];
+    res.padH = padsDims[0] + padsDims[2];
   } else if (info->padding == PaddingType_SAME_LOWER ||
              info->padding == PaddingType_SAME_UPPER) {
     res.padW = MAX(0, (res.outputImageW - 1) * res.strideW + res.kernelW -
@@ -1006,3 +1027,684 @@ void Tensor_Print(Tensor tensor) {
     versat_printf("%f\n", tensor.data[i]);
   }
 }
+
+typedef struct {
+  void *outputMem;
+  void *tempMem;
+  void **inputs;
+  void *modelMem;
+  void *correctInput;
+} InferenceState;
+
+void *GetSourcePointer(InferenceState *state, DataSource source) {
+  switch (source.type) {
+  case SourceType_OUTPUT_MEM: {
+    return VERSAT_OFFSET_PTR(state->outputMem, source.memOffset);
+  } break;
+  case SourceType_TEMP_MEM: {
+    return VERSAT_OFFSET_PTR(state->tempMem, source.memOffset);
+  } break;
+  case SourceType_INPUT: {
+    return state->inputs[source.inputIndex];
+  } break;
+  case SourceType_MODEL_MEM: {
+    return VERSAT_OFFSET_PTR(state->modelMem, source.memOffset);
+  } break;
+  case SourceType_CORRECT_MEM: {
+    return VERSAT_OFFSET_PTR(state->correctInput, source.memOffset);
+  } break;
+  }
+}
+
+void DataSource_Print(DataSource source) {
+  switch (source.type) {
+  case SourceType_OUTPUT_MEM: {
+    versat_printf("Output_Mem: %d", source.memOffset);
+  } break;
+  case SourceType_TEMP_MEM: {
+    versat_printf("Temp_Mem: %d", source.memOffset);
+  } break;
+  case SourceType_INPUT: {
+    versat_printf("Input index: %d", source.inputIndex);
+  } break;
+  case SourceType_MODEL_MEM: {
+    versat_printf("Model_Mem: %d", source.memOffset);
+  } break;
+  case SourceType_CORRECT_MEM: {
+    versat_printf("Correct_Mem: %d", source.memOffset);
+  } break;
+  default: {
+    versat_printf("Unknown data source type: %d\n", source.type);
+  } break;
+  }
+}
+
+void Operation_Print(Operation *op) {
+  versat_printf("Operation size: %d\n", op->operatorSize);
+  versat_printf("Operation type: %d\n", op->type);
+  versat_printf("Uses versat: %s\n", op->useVersat ? "True" : "False");
+  versat_printf("Output:\n");
+  versat_printf("  ");
+  DataSource_Print(op->output);
+  versat_printf("\n");
+
+  versat_printf("Correct Output:\n");
+  versat_printf("  ");
+  DataSource_Print(op->correctOutput);
+  versat_printf("\n");
+
+  versat_printf("Inputs: %d\n", op->nInputs);
+  for (uint32_t i = 0; i < op->nInputs; i++) {
+    versat_printf("  ");
+    DataSource_Print(op->inputs[i]);
+    versat_printf("\n");
+  }
+}
+
+void *Operation_GetOperationInfo(Operation *op) {
+  void *res = VERSAT_OFFSET_PTR(
+      op, (sizeof(Operation) + sizeof(DataSource) * op->nInputs));
+  return res;
+}
+
+InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
+                                     void *temporaryMemory, void **inputs,
+                                     void *modelMemory, void *correctInput) {
+  Operation *ptr = CompiledModel_Operations(model);
+
+  versat_printf("Input values: %p %p\n", inputs[0], inputs[1]);
+
+  InferenceState stateInst = {.outputMem = outputMemory,
+                              .tempMem = temporaryMemory,
+                              .inputs = inputs,
+                              .modelMem = modelMemory,
+                              .correctInput = correctInput};
+
+  InferenceState *state = &stateInst;
+
+  for (uint32_t i = 0; i < model->nOperations; i++) {
+    // Operation_Print(ptr);
+
+    bool useVersat = ptr->useVersat;
+    // useVersat = false;
+
+    void *info = Operation_GetOperationInfo(ptr);
+    void *out = NULL;
+    void *correctOutput = GetSourcePointer(state, ptr->correctOutput);
+
+    void *input0 = NULL;
+    void *input1 = NULL;
+    void *input2 = NULL;
+    void *input3 = NULL;
+    void *input4 = NULL;
+    if (ptr->nInputs > 0) {
+      input0 = GetSourcePointer(state, ptr->inputs[0]);
+    }
+    if (ptr->nInputs > 1) {
+      input1 = GetSourcePointer(state, ptr->inputs[1]);
+    }
+    if (ptr->nInputs > 2) {
+      input2 = GetSourcePointer(state, ptr->inputs[2]);
+    }
+    if (ptr->nInputs > 3) {
+      input3 = GetSourcePointer(state, ptr->inputs[3]);
+    }
+    if (ptr->nInputs > 4) {
+      input3 = GetSourcePointer(state, ptr->inputs[4]);
+    }
+
+    void *output = GetSourcePointer(state, ptr->output);
+
+    // versat_printf("IO: %p %p %p %p %p
+    // %p\n",input0,input1,input2,input3,input4,output);
+
+    switch (ptr->type) {
+    case OperatorType_Add: {
+      if (useVersat) {
+        out = Versat_Add(input0, input1, output, i, info);
+      } else {
+        out = Software_Add(input0, input1, output, i, info);
+      }
+    } break;
+    case OperatorType_Relu: {
+      if (useVersat) {
+        out = Versat_Relu(input0, output, i, info);
+      } else {
+        out = Software_Relu(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_MaxPool: {
+      if (useVersat) {
+        out = Versat_MaxPool(input0, output, i, info);
+      } else {
+        out = Software_MaxPool(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_AveragePool: {
+      if (useVersat) {
+        out = Versat_AveragePool(input0, output, i, info);
+      } else {
+        out = Software_AveragePool(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_Conv: {
+      if (useVersat) {
+        out = Versat_ConvWithBias(input0, input1, input2, output, i, info);
+      } else {
+        out = Software_ConvWithBias(input0, input1, input2, output, i, info);
+      }
+    } break;
+    case OperatorType_Reshape: {
+      if (useVersat) {
+        out = Versat_Reshape(input0, input1, output, i, info);
+      } else {
+        out = Software_Reshape(input0, input1, output, i, info);
+      }
+    } break;
+    case OperatorType_MatMul: {
+      if (useVersat) {
+        out = Versat_MatMul(input0, input1, output, i, info);
+      } else {
+        out = Software_MatMul(input0, input1, output, i, info);
+      }
+    } break;
+    case OperatorType_Softmax: {
+      if (useVersat) {
+        out = Versat_Softmax(input0, output, i, info);
+      } else {
+        out = Software_Softmax(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_Transpose: {
+      out = Software_Transpose(input0, output, i, info);
+    } break;
+    case OperatorType_BatchNormalization: {
+      if (useVersat) {
+        out = Versat_BatchNormalization(input0, input1, input2, input3, input4,
+                                        output, i, info);
+      } else {
+        out = Software_BatchNormalization(input0, input1, input2, input3,
+                                          input4, output, i, info);
+      }
+    } break;
+    case OperatorType_Dropout: {
+      if (useVersat) {
+        out = Versat_Dropout(input0, output, i, info);
+      } else {
+        out = Software_Dropout(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_LRN: {
+      if (useVersat) {
+        out = Versat_LRN(input0, output, i, info);
+      } else {
+        out = Software_LRN(input0, output, i, info);
+      }
+    } break;
+    case OperatorType_Gemm: {
+      if (useVersat) {
+        out = Versat_Gemm(input0, input1, input2, output, i, info);
+      } else {
+        out = Software_Gemm(input0, input1, input2, output, i, info);
+      }
+    } break;
+
+    default: {
+      versat_printf("Unknown operation type: %d\n", ptr->type);
+    } break;
+    }
+
+    LayerInfo layer = {};
+    layer.outputSize = ptr->outputSize;
+    layer.typeName = VERSAT_OperatorName(ptr->type, useVersat);
+    AssertAlmostEqual(out, correctOutput, i, 0.001f, &layer);
+
+    ptr = VERSAT_OFFSET_PTR(ptr, ptr->operatorSize);
+  }
+}
+
+// ===============
+//  Math utils
+
+#define MATH_E 2.71828182846
+#define MATH_PI 3.14159265359
+
+double ABS(double x) { return x < 0 ? -x : x; }
+
+typedef uint32_t u32;
+typedef int32_t i32;
+
+typedef uint8_t u8;
+
+typedef struct {
+  u32 mantissa : 23;
+  u32 exponent : 8;
+  u32 sign : 1;
+} PackedFP;
+
+typedef struct {
+  u32 mantissa;
+  i32 exponent;
+  u8 sign;
+} UnpackedFP;
+
+UnpackedFP Unpack(float f, bool addImplicitBit) {
+  PackedFP fp = *((PackedFP *)&f);
+
+  UnpackedFP res = {};
+  res.mantissa = fp.mantissa;
+
+  if (addImplicitBit) {
+    res.mantissa |= (1 << 23);
+  }
+
+  res.exponent = -127 + fp.exponent;
+  res.sign = fp.sign;
+
+  return res;
+}
+
+float Pack(UnpackedFP fp) {
+  PackedFP res = {};
+  res.sign = fp.sign;
+  res.exponent = fp.exponent + 127;
+  res.mantissa = fp.mantissa & ((1 << 24) - 1);
+
+  return *((float *)&res);
+}
+
+static inline int Clamp(int min, int val, int max) {
+  if (val < min) {
+    return min;
+  }
+  if (val > max) {
+    return max;
+  }
+  return val;
+}
+
+u32 Downsize(float f, int totalSize, int exponentAmount) {
+  UnpackedFP unpacked = Unpack(f, false);
+
+  int mantissaAmount = totalSize - 1 - exponentAmount;
+  int signPos = totalSize - 1;
+
+  u32 sign = (unpacked.sign) ? 1 : 0;
+
+  int bias = (((1 << exponentAmount) / 2) - 1);
+
+  u32 trueMantissa = Clamp(0, unpacked.mantissa >> (23 - mantissaAmount),
+                           (1 << mantissaAmount) - 1);
+  u32 trueExponent = Clamp(0, unpacked.exponent + (bias - 1), 31) &
+                     ((1 << exponentAmount) - 1);
+
+  u32 res =
+      (trueMantissa | (trueExponent << mantissaAmount) | (sign << signPos));
+
+  if (res >= (1 << totalSize)) {
+    versat_printf("ERROR\n");
+  }
+
+  return res;
+}
+
+float Upsize(u32 in, int totalSize, int exponentAmount) {
+  int mantissaAmount = totalSize - 1 - exponentAmount;
+
+  u32 mantissaMask = ((1 << mantissaAmount) - 1);
+  u32 exponentMask = ((1 << exponentAmount) - 1);
+
+  u32 exponent = ((in >> mantissaAmount) & exponentMask);
+  u32 mantissa = (in & mantissaMask) << (23 - mantissaAmount);
+  int sign = ((in) >> (totalSize - 1)) & 1;
+
+  bool subnormal = (exponent == 0);
+
+  int bias = (((1 << exponentAmount) / 2) - 1);
+
+  UnpackedFP unpacked = {};
+  unpacked.sign = sign;
+  unpacked.exponent = exponent - (bias - 1);
+  unpacked.mantissa = mantissa;
+
+  return Pack(unpacked);
+}
+
+void PrintBinary(u32 val) {
+  for (int i = 31; i >= 0; i--) {
+    u32 v = (val) & (1 << i);
+    if (v) {
+      versat_printf("1");
+    } else {
+      versat_printf("0");
+    }
+  }
+
+  versat_printf("\n");
+}
+
+#define MAX_ITERS 20
+double thetah_table[MAX_ITERS] = {
+    0.549306, 0.255413, 0.125657, 0.062582, 0.031260, 0.015626, 0.007813,
+    0.003906, 0.001953, 0.000977, 0.000488, 0.000244, 0.000122, 0.000061,
+    0.000031, 0.000015, 0.000008, 0.000004, 0.000002, 0.000001};
+
+double Cordic_arctanh(double y, double x) {
+  double angle = 0.0;
+  double P2i = 0.5;
+  int k = 4;
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (y < 0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  return angle;
+}
+
+double Cordic_log(double in) {
+  double val = in;
+
+  if (in < 0.0f) {
+    u32 minusInf = 0x7fffffff;
+    return (double)VERSAT_CONVERT(minusInf, float);
+  }
+
+  double extra = 0;
+  while (val > MATH_E) {
+    val /= MATH_E;
+    extra += 1;
+  }
+
+  while (val < 1.0f) {
+    val *= MATH_E;
+    extra -= 1;
+  }
+
+  double res = (2.0 * Cordic_arctanh(val - 1, val + 1)) + extra;
+  return res;
+}
+
+double Cordic_exp(double exponent) {
+  int k = 4;
+  double angle = exponent;
+  double y = 1.207497067763;
+  double x = 1.207497067763;
+  double P2i = 0.5;
+
+  int extra = 0;
+  while (angle > 1.0) {
+    angle -= 1.0;
+    extra += 1;
+  }
+
+  while (angle < 0) {
+    angle += 1.0;
+    extra -= 1;
+  }
+
+  for (int i = 1; i < MAX_ITERS; i++) {
+    double arc_tangent = thetah_table[i - 1];
+
+    int iters = 1;
+    if (i == k) {
+      iters = 2;
+      k = (3 * k) + 1;
+    }
+
+    for (int k = 0; k < iters; k++) {
+      double sigma = 1.0;
+      if (angle > 0.0) {
+        sigma = -1.0;
+      }
+
+      angle = angle + sigma * arc_tangent;
+      double calcX = x - sigma * y * P2i;
+      double calcY = y - sigma * x * P2i;
+
+      x = calcX;
+      y = calcY;
+    }
+
+    P2i /= 2.0;
+  }
+
+  for (int i = 0; i < extra; i++) {
+    x *= MATH_E;
+  }
+  for (int i = 0; i > extra; i--) {
+    x /= MATH_E;
+  }
+
+  return x;
+}
+
+double Cordic_pow(double b, double e) {
+  double result = Cordic_exp(e * Cordic_log(b));
+  return result;
+}
+
+u32 LogCalculateIndex(UnpackedFP unpacked) {
+  // Hardcoded for a fractional precision of 12
+  u32 fracIndex = (unpacked.mantissa >> 11);
+
+  return fracIndex;
+}
+
+double Table_log(double in) {
+  UnpackedFP unpacked = Unpack(in, false);
+
+  float exp = (float)unpacked.exponent;
+  u32 fracIndex = LogCalculateIndex(unpacked);
+
+  float logMantissa = logMantissaTable[fracIndex];
+  float result = exp * VERSAT_CONVERT(log2Val, float) + logMantissa;
+
+  return result;
+}
+
+double Table_exp(double exponent) {
+  float data = exponent;
+
+  int expPrecision = 8;
+  int halfExpPrecision = expPrecision - 1;
+  int expMax = (1 << halfExpPrecision) - 1;
+
+  // Hardware unit that calculates real part and also returns a floating point
+  // "view" of the real part.
+  int asInteger = (int)data;
+  int realPart = asInteger;
+  if (realPart >= expMax) {
+    realPart = expMax;
+  }
+  if (realPart <= -expMax) {
+    realPart = -expMax;
+  }
+
+  bool isNegative = false;
+  if (data < 0.0) {
+    realPart = -realPart;
+    isNegative = true;
+    data = -data;
+  }
+
+  // NOTE: If the realPart goes is outside the [-127,127] range, then
+  //       we do not actually care about the fractional part since we are in the
+  //       range of infinity anyway.
+
+  // Should be between 0 and 1
+  float asFraction = data - (float)realPart;
+  u32 mantissaPartU32 = *((u32 *)&asFraction);
+
+  UnpackedFP unpacked = Unpack(asFraction, true);
+
+  // Hardware unit that performs this calculation and outputs the fracIndex.
+  u32 fracIndex = (unpacked.mantissa >>
+                   (8 + (16 - EXP_MANTISSA_PRECISION) - unpacked.exponent)) &
+                  ((1 << EXP_MANTISSA_PRECISION) - 1);
+  u32 expIndex = realPart + (isNegative ? 128 : 0);
+
+  if (isNegative) {
+    fracIndex += (1 << EXP_MANTISSA_PRECISION);
+  }
+
+  float exp = expTable[expIndex];
+  float frac = expMantissaTable[fracIndex];
+
+  float res = exp * frac;
+
+  return res;
+}
+
+double Table_pow(double base, double power) {
+  double result = Table_exp(power * Table_log(base));
+  return result;
+}
+
+double Taylor_log(double in) {
+  double start = 0.0;
+
+  for (int i = 0; i < 1000; i++) {
+    double last = start;
+    start = start + 2.0 * ((in - Taylor_exp(start)) / (in + Taylor_exp(start)));
+    if (last == start) {
+      break;
+    }
+  }
+
+  return start;
+}
+
+double Taylor_exp(double exponent) {
+  double result = 1.0;
+  double term = 1.0;
+  double div = 1.0;
+  int maxTerms = 100000; // Failsafe
+
+  double lastResult = result;
+  for (int n = 1; n < maxTerms; n++) {
+    term *= exponent / div;
+    div += 1.0;
+    result += term;
+
+    // As term gets smaller eventually we will reach a point where addition does
+    // not change anything
+    if (lastResult == result) {
+      break;
+    }
+    lastResult = result;
+  }
+
+  return result;
+}
+
+double Taylor_pow(double base, double power) {
+  double result = Taylor_exp(power * Taylor_log(base));
+  return result;
+}
+
+#if !EMBED_TABLES
+uint32_t *expMantissaTable;
+uint32_t *expTable;
+uint32_t *logMantissaTable;
+#endif
+
+#include <stdlib.h>
+
+void Versat_Init() {
+  // Careful on this amount. Any more than this and the Alexnet test runs out of
+  // memory.
+  arena->allocated = 1024 * 1024 * 6;
+  arena->mem = malloc(arena->allocated);
+
+  versat_printf("Arena %p - %p\n", arena->mem, arena->mem + arena->allocated);
+
+#if !EMBED_TABLES
+  {
+    logMantissaTable =
+        (uint32_t *)malloc(sizeof(uint32_t) * LOG_MANTISSA_TABLE_SIZE);
+
+    u32 increment =
+        0x00000800; // TODO: Hardcoded for a fractionalPrecision of 12
+    float f = 1.0f;
+    for (int i = 0; i < LOG_MANTISSA_TABLE_SIZE; i++) {
+      float val = Cordic_log(f);
+      logMantissaTable[i] = VERSAT_CONVERT(val, u32);
+
+      u32 asU32 = VERSAT_CONVERT(f, u32);
+      asU32 += increment;
+      f = VERSAT_CONVERT(asU32, float);
+    }
+  }
+
+  {
+    expTable = (uint32_t *)malloc(sizeof(uint32_t) * EXP_TABLE_SIZE);
+
+    int halfSize = EXP_TABLE_SIZE / 2;
+
+    float f = 0.0f;
+    for (int i = 0; i < halfSize; i++) {
+      float posExp = Cordic_exp(f);
+      float negExp = Cordic_exp(-f);
+
+      expTable[i] = VERSAT_CONVERT(posExp, u32);
+      expTable[i + halfSize] = VERSAT_CONVERT(negExp, u32);
+      f += 1.0f;
+    }
+  }
+
+  {
+    expMantissaTable =
+        (uint32_t *)malloc(sizeof(uint32_t) * EXP_MANTISSA_TABLE_SIZE);
+
+    float incr = 1.0 / (float)(1 << EXP_MANTISSA_PRECISION);
+    float p = incr;
+
+    float oneVal = 1.0f;
+
+    expMantissaTable[0] = VERSAT_CONVERT(oneVal, u32);
+    expMantissaTable[(1 << EXP_MANTISSA_PRECISION)] =
+        VERSAT_CONVERT(oneVal, u32);
+
+    for (int i = 1; i < (1 << EXP_MANTISSA_PRECISION); i++) {
+      float posExp = Cordic_exp(p);
+      float negExp = Cordic_exp(p);
+
+      expMantissaTable[i] = VERSAT_CONVERT(posExp, u32);
+      expMantissaTable[i + (1 << EXP_MANTISSA_PRECISION)] =
+          VERSAT_CONVERT(negExp, u32);
+      p += incr;
+    }
+  }
+#endif
+}
+
+#if EMBED_TABLES
+#define VERSAT_DO_EMBED_TABLES
+#include "versat_embed_tables.h"
+
+uint32_t *expMantissaTable = expMantissaTableArray;
+uint32_t *expTable = expTableArray;
+uint32_t *logMantissaTable = logMantissaTableArray;
+#endif

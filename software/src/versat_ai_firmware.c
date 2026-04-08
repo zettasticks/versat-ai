@@ -4,43 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+#if 0
+
 #include "iob_bsp.h"
 #include "iob_printf.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
+#include "versat_accel.h"
 #include "versat_ai_conf.h"
 #include "versat_ai_mmap.h"
 #include <string.h>
 
-//#include "versat_accel.h"
-
-// Hardcoded ETHERNET enabled for now to test Alexnet
-//#define VERSAT_AI_USE_ETHERNET
-
-//#define DEBUG
-
-#ifdef PC
-#undef VERSAT_AI_USE_ETHERNET
-#endif
-
-#ifdef VERSAT_AI_USE_ETHERNET
+#if USE_ETHERNET
 #include "iob_eth.h"
 #endif
 
 #include "versat_ai.h"
 
-// Contains info for each test.
-#include "testInfo.h"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
-#endif
-
-#ifndef OFFSET_PTR
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-#endif
-
-#ifdef PC
+#if PC
 #include <stdio.h>
 #include <unistd.h> // for sleep()
 long int GetFileSize(FILE *file) {
@@ -55,7 +36,7 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#ifdef VERSAT_AI_USE_ETHERNET
+#if USE_ETHERNET
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
   uart_puts(UART_PROGNAME);
   uart_puts(": requesting to receive file by ethernet\n");
@@ -83,12 +64,11 @@ void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
   if (expectedSize == 0) {
     return;
   }
+  // printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
+
+  // printf("Gonna send uart request\n");
   uint32_t size = uart_request_ethernet_recvfile(path);
-#if 0
-  printf(
-      "Gonna call eth to receive file of size: %u and expected size of: %u\n",
-      size, expectedSize);
-#endif
+  printf("Sent uart request\n");
   eth_rcv_file(buffer, size);
 }
 #endif
@@ -98,7 +78,7 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   char fullPath[128];
   snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
 
-#ifdef PC
+#if PC
   FILE *f = fopen(fullPath, "r");
   if (!f) {
     printf("Problem opening file for reading: %s\n", fullPath);
@@ -111,13 +91,16 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   return;
 #endif
 
-#ifdef VERSAT_AI_USE_ETHERNET
+#if USE_ETHERNET
   ethernet_receive_file(fullPath, buffer, expectedSize);
+#else
+  uart_recvfile(fullPath, buffer);
+  printf("Received file by uart\n");
 #endif
 }
 
 void silent_clear_cache() {
-#ifndef PC
+#if !PC
   for (unsigned int i = 0; i < 10; i++)
     asm volatile("nop");
   // Flush VexRiscv CPU internal cache
@@ -128,7 +111,7 @@ void silent_clear_cache() {
 void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
 
 void clear_cache() {
-#ifndef PC
+#if !PC
   // Delay to ensure all data is written to memory
   printf("Gonna clear the cache\n");
   for (unsigned int i = 0; i < 10; i++)
@@ -138,14 +121,12 @@ void clear_cache() {
 #endif
 }
 
-#if 0
 void *Align4(void *in) {
   iptr asInt = (iptr)in;
 
   asInt = ((asInt + 3) & ~3);
   return (void *)asInt;
 }
-#endif
 
 void PrintTimeElapsed(const char *message, uint64_t start, uint64_t end) {
   uint64_t freqInMhz = IOB_BSP_FREQ / 1000000ull;
@@ -188,22 +169,17 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#ifdef VERSAT_AI_USE_ETHERNET
+#if USE_ETHERNET
   uart_puts("\nGonna init ethernet\n");
   eth_init(ETH0_BASE, &silent_clear_cache);
   eth_wait_phy_rst();
 #endif
 
-  uart_finish();
-
-  return 0;
-
-#if 0
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   PrintU64InHex(1ull << 0);
   PrintU64InHex(1ull << 8);
   PrintU64InHex(1ull << 16);
@@ -219,19 +195,26 @@ int main() {
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   int stackVar;
   printf("Stack  : %p\n", &stackVar);
 #endif
 
+#if EMPTY_TABLES
+  printf("\n\n[WARNING] Running without computing or embedding tables. Any "
+         "operator that uses any transcendental functions should fail.\n\n");
+#endif
+
+#if 0
   // We allocate a little bit more just in case.
   // Also need to allocate a bit more to ensure that Align4 works fine.
   int extra = 16;
 
-  for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
+  for (int i = 0; i < VERSAT_ARRAY_SIZE(testModels); i++) {
     TestModelInfo info = *testModels[i];
 
     printf("\n==============================\n");
@@ -246,17 +229,17 @@ int main() {
 
     void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
     for (int i = 0; i < info.inputCount; i++) {
-      inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
+      inputs[i] = VERSAT_OFFSET_PTR(inputMemory, info.inputOffsets[i]);
     }
 
     void *total;
     if (info.inputCount == 0) {
-      total = OFFSET_PTR(correct, info.correctSize);
+      total = VERSAT_OFFSET_PTR(correct, info.correctSize);
     } else {
       total = inputs[info.inputCount - 1];
     }
 
-#ifdef DEBUG
+#if DEBUG
     printf("Output : %p\n", output);
     printf("Temp   : %p\n", temp);
     printf("Model  : %p\n", model);
@@ -292,7 +275,331 @@ int main() {
     free(inputMemory);
   }
 
-#ifdef PC
+#if PC
+  sleep(1);
+#endif
+
+#endif
+
+  uart_sendfile("test.log", strlen(pass_string), pass_string);
+
+  // read current timer count, compute elapsed time
+  unsigned long long elapsed = timer_get_count();
+  unsigned int elapsedu = elapsed / (IOB_BSP_FREQ / 1000000);
+
+  PrintTimeElapsed("\nTotal time elasped", 0, elapsed);
+
+  uart_finish();
+
+  return 0;
+}
+
+#endif
+
+#if 1
+
+#if 0
+
+#include "iob_bsp.h"
+#include "iob_printf.h"
+#include "iob_timer.h"
+#include "iob_uart.h"
+#include "versat_accel.h"
+#include "versat_ai_conf.h"
+#include "versat_ai_mmap.h"
+#include <string.h>
+
+#if USE_ETHERNET
+#include "iob_eth.h"
+#endif
+
+#include "versat_ai.h"
+
+// Contains info for each test.
+#include "testInfo.h"
+
+#if PC
+#include <stdio.h>
+#include <unistd.h> // for sleep()
+long int GetFileSize(FILE *file) {
+  long int mark = ftell(file);
+
+  fseek(file, 0, SEEK_END);
+  long int size = ftell(file);
+
+  fseek(file, mark, SEEK_SET);
+
+  return size;
+}
+#endif
+
+#if USE_ETHERNET
+uint32_t uart_request_ethernet_recvfile(const char *file_name) {
+  uart_puts(UART_PROGNAME);
+  uart_puts(": requesting to receive file by ethernet\n");
+
+  // send file receive by ethernet request
+  uart_putc(0x13);
+
+  // send file name (including end of string)
+  uart_puts(file_name);
+  uart_putc(0);
+
+  // receive file size
+  uint32_t file_size = uart_getc();
+  file_size |= ((uint32_t)uart_getc()) << 8;
+  file_size |= ((uint32_t)uart_getc()) << 16;
+  file_size |= ((uint32_t)uart_getc()) << 24;
+
+  // send ACK before receiving file
+  uart_putc(ACK);
+
+  return file_size;
+}
+
+void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
+  if (expectedSize == 0) {
+    return;
+  }
+  // printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
+
+  // printf("Gonna send uart request\n");
+  uint32_t size = uart_request_ethernet_recvfile(path);
+  printf("Sent uart request\n");
+  eth_rcv_file(buffer, size);
+}
+#endif
+
+void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
+                     int expectedSize) {
+  char fullPath[128];
+  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
+
+#if PC
+  FILE *f = fopen(fullPath, "r");
+  if (!f) {
+    printf("Problem opening file for reading: %s\n", fullPath);
+    return;
+  }
+
+  long int size = GetFileSize(f);
+  fread(buffer, sizeof(char), size, f);
+  fclose(f);
+  return;
+#endif
+
+#if USE_ETHERNET
+  ethernet_receive_file(fullPath, buffer, expectedSize);
+#else
+  uart_recvfile(fullPath, buffer);
+  printf("Received file by uart\n");
+#endif
+}
+
+void silent_clear_cache() {
+#if !PC
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
+#endif
+}
+
+void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
+
+void clear_cache() {
+#if !PC
+  // Delay to ensure all data is written to memory
+  printf("Gonna clear the cache\n");
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
+#endif
+}
+
+void *Align4(void *in) {
+  iptr asInt = (iptr)in;
+
+  asInt = ((asInt + 3) & ~3);
+  return (void *)asInt;
+}
+
+void PrintTimeElapsed(const char *message, uint64_t start, uint64_t end) {
+  uint64_t freqInMhz = IOB_BSP_FREQ / 1000000ull;
+
+  uint64_t elapsed = (end - start) / freqInMhz;
+
+  uint64_t secondsElapsed = elapsed / 1000000;
+  uint64_t remainingTime = elapsed % 1000000;
+
+  printf("%s: %d.%06d (@%dMHz)\n\n", message, (int)secondsElapsed,
+         (int)remainingTime, IOB_BSP_FREQ / 1000000);
+}
+
+void PrintU64InHex(uint64_t n) {
+  union {
+    uint64_t u64;
+    uint32_t u32[2];
+  } conv;
+
+  conv.u64 = n;
+
+  printf("%08x%08x\n", conv.u32[1], conv.u32[0]);
+}
+
+#if USE_TESTER
+int main() {
+  // init timer
+  timer_init(TIMER0_BASE);
+
+  // init uart
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&uart_putc);
+
+  uart_finish();
+
+  return 0;
+}
+#else
+int main() {
+  char pass_string[] = "Test passed!";
+  char fail_string[] = "Test failed!";
+
+  // init timer
+  timer_init(TIMER0_BASE);
+
+  // init uart
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&uart_putc);
+
+  // test puts
+  uart_puts("\n\n\nHello world from versat_ai!\n\n\n");
+
+#if USE_TESTER
+  uart_finish();
+
+  return 0;
+#endif
+
+#ifdef TEST_NAME
+  printf("\n\nRunning test %s\n\n", TEST_NAME);
+#endif
+
+#if USE_ETHERNET
+  uart_puts("\nGonna init ethernet\n");
+  eth_init(ETH0_BASE, &silent_clear_cache);
+  eth_wait_phy_rst();
+#endif
+
+  uart_puts("\nGonna init versat!\n");
+  SetVersatDebugPrintfFunction(printf);
+  versat_init(VERSAT0_BASE);
+
+#if DEBUG
+  PrintU64InHex(1ull << 0);
+  PrintU64InHex(1ull << 8);
+  PrintU64InHex(1ull << 16);
+  PrintU64InHex(1ull << 24);
+  PrintU64InHex(1ull << 32);
+  PrintU64InHex(1ull << 40);
+  PrintU64InHex(1ull << 48);
+  PrintU64InHex(1ull << 56);
+  PrintU64InHex(1ull << 63);
+#endif
+
+  ConfigCreateVCD(false);
+
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
+
+  printf("Versat base: %x\n", VERSAT0_BASE);
+
+#if DEBUG
+  int stackVar;
+  printf("Stack  : %p\n", &stackVar);
+#endif
+
+#if EMPTY_TABLES
+  printf("\n\n[WARNING] Running without computing or embedding tables. Any "
+         "operator that uses any transcendental functions should fail.\n\n");
+#endif
+
+  void *ptr = malloc(16 * 1024 * 1024);
+
+  printf("%p\n", ptr);
+
+  // void* ptr2 = malloc(256 * 1024 * 1024);
+
+  // printf("%p\n",ptr2);
+
+  // We allocate a little bit more just in case.
+  // Also need to allocate a bit more to ensure that Align4 works fine.
+  int extra = 16;
+
+  for (int i = 0; i < VERSAT_ARRAY_SIZE(testModels); i++) {
+    TestModelInfo info = *testModels[i];
+
+    printf("\n==============================\n");
+    printf("Gonna run the full test named: %s", info.nameSpace);
+    printf("\n==============================\n\n\n");
+
+    void *output = Align4(malloc(info.outputSize + extra));
+    void *temp = Align4(malloc(info.tempSize + extra));
+    void *model = Align4(malloc(info.modelSize + extra));
+    void *correct = Align4(malloc(info.correctSize + extra));
+    void *inputMemory = Align4(malloc(info.totalInputSize + extra));
+
+    void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
+    for (int i = 0; i < info.inputCount; i++) {
+      inputs[i] = VERSAT_OFFSET_PTR(inputMemory, info.inputOffsets[i]);
+    }
+
+    void *total;
+    if (info.inputCount == 0) {
+      total = VERSAT_OFFSET_PTR(correct, info.correctSize);
+    } else {
+      total = inputs[info.inputCount - 1];
+    }
+
+#if DEBUG
+    printf("Output : %p\n", output);
+    printf("Temp   : %p\n", temp);
+    printf("Model  : %p\n", model);
+    printf("Correct: %p\n", correct);
+    printf("Input  : %p\n", inputMemory);
+    printf("Total  : %p\n", total);
+
+    if (((void *)total) > ((void *)&stackVar)) {
+      printf(
+          "Error, we run out of memory, increase the value of firm_w argument "
+          "and setup again\n");
+      uart_finish();
+      return 0;
+    }
+#endif
+
+    FastReceiveFile(info.nameSpace, "correctOutputs.bin", correct,
+                    info.correctSize);
+    FastReceiveFile(info.nameSpace, "model.bin", model, info.modelSize);
+    FastReceiveFile(info.nameSpace, "inputs.bin", inputMemory,
+                    info.totalInputSize);
+
+    uint64_t start = timer_get_count();
+    info.debugInferenceFunction(output, temp, inputs, model, correct);
+    uint64_t end = timer_get_count();
+
+    PrintTimeElapsed("\nTest individual time", start, end);
+
+    free(output);
+    free(temp);
+    free(model);
+    free(correct);
+    free(inputMemory);
+  }
+
+#if PC
   sleep(1);
 #endif
 
@@ -307,5 +614,142 @@ int main() {
   uart_finish();
 
   return 0;
+}
+#endif
+#endif
+
+#include "iob_bsp.h"
+#include "iob_printf.h"
+#include "versat_ai_conf.h"
+#include "versat_ai_mmap.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "iob_regfileif_inverted_csrs.h"
+#include "iob_timer.h"
+#include "iob_uart.h"
+
+#include "versat_ai.h"
+
+void silent_clear_cache() {
+#if !PC
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
 #endif
 }
+
+void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
+
+void init_peripherals() {
+  // init uart
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&uart_putc);
+
+  // init timer
+  timer_init(TIMER0_BASE);
+
+  SetVersatDebugPrintfFunction(printf);
+  versat_init(VERSAT0_BASE);
+  ConfigCreateVCD(false);
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
+
+  // init regfileif
+  iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
+}
+
+int main() {
+  // init timer
+  timer_init(TIMER0_BASE);
+
+  // init uart
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&uart_putc);
+
+  iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
+
+#if 0
+  while (iob_regfileif_inverted_csrs_get_start() == 0);
+
+  printf("Inside SUT\n");
+
+  CompiledModel *compiledModel =
+      (CompiledModel *)iob_regfileif_inverted_csrs_get_metamodel_addr();
+  char *output = (char *)iob_regfileif_inverted_csrs_get_output_addr();
+  char *temp = (char *)iob_regfileif_inverted_csrs_get_temp_addr();
+  char *model = (char *)iob_regfileif_inverted_csrs_get_model_addr();
+  void **inputs = (void **)iob_regfileif_inverted_csrs_get_inputsVector_addr();
+  char *correct = (char *)iob_regfileif_inverted_csrs_get_correctOutputs_addr();
+
+  printf("Output:%p\n", output);
+  printf("Temp:%p\n", temp);
+  printf("Model:%p\n", model);
+  printf("Inputs:%p\n", inputs);
+  printf("Correct:%p\n", correct);
+
+  printf("Value of output is: %d\n", *output);
+
+  //iob_regfileif_inverted_csrs_set_start(0);
+  //iob_regfileif_inverted_csrs_set_done(1);
+
+#endif
+
+#if 0
+  iob_regfileif_inverted_csrs_set_done(0);
+  iob_regfileif_inverted_csrs_set_start(0);
+
+  iob_regfileif_inverted_csrs_set_done((int)1);
+#endif
+
+  printf("Start is:%d\n",iob_regfileif_inverted_csrs_get_start());
+
+  uart_puts("WE ARE INSIDE THE SUT\n");
+
+  uart_finish();
+
+  return 0;
+
+#if 0
+  init_peripherals();
+
+  while (iob_regfileif_inverted_csrs_get_start() == 0)
+    ;
+
+  iob_regfileif_inverted_csrs_set_done(0);
+  iob_regfileif_inverted_csrs_set_start(0);
+
+  printf("Inside SUT\n");
+
+  CompiledModel *compiledModel =
+      (CompiledModel *)iob_regfileif_inverted_csrs_get_metamodel_addr();
+  char *output = (char *)iob_regfileif_inverted_csrs_get_output_addr();
+  char *temp = (char *)iob_regfileif_inverted_csrs_get_temp_addr();
+  char *model = (char *)iob_regfileif_inverted_csrs_get_model_addr();
+  void **inputs = (void **)iob_regfileif_inverted_csrs_get_inputsVector_addr();
+  char *correct = (char *)iob_regfileif_inverted_csrs_get_correctOutputs_addr();
+
+  printf("Output:%p\n", output);
+  printf("Temp:%p\n", temp);
+  printf("Model:%p\n", model);
+  printf("Inputs:%p\n", inputs);
+  printf("Correct:%p\n", correct);
+
+  printf("Value of output is: %d\n", *output);
+
+  printf("Gonna run versat\n");
+
+  RunCompiledInference(compiledModel, output, temp, inputs, model, correct);
+
+  iob_regfileif_inverted_csrs_set_done((int)1);
+
+  uart_finish();
+
+  return 0;
+#endif
+}
+
+#endif

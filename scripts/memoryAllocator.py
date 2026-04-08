@@ -1,4 +1,5 @@
 from versatDefs import *
+from versatCommons import *
 
 import pulp  # TODO: Not sure how stable this is. Helpful for now, later we will see
 import itertools
@@ -53,7 +54,7 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
     # Layers are just a list of ordered ranges. No point making a proper struct for such simple use case
     totalCycles = max([x.lastCycle for x in memoryAllocations])
     layers: list[list[int | int]] = [[] for x in range(totalCycles)]
-    offsets: list[int] = [None] * (totalCycles - 1)
+    offsets: list[int] = [0] * (totalCycles - 1)
     totalMemoryNeeded = 0
     for index, memAlloc in enumerate(memoryAllocations):
         size = memAlloc.amount
@@ -185,7 +186,7 @@ def CalculateMemoryAllocations(cModel):
         # TODO: We are also not handling the fact that some layers might support different tensor types.
         memoryRequired = 4  # Size of a float
         for dim in c.outputDimensions:
-            memoryRequired *= dim
+            memoryRequired *= TensorSize(dim)
 
         memoryAllocations.append(MemoryAllocation(index, lastCycle, memoryRequired))
 
@@ -224,7 +225,7 @@ def CalculateMemoryAllocations(cModel):
         # TODO: Support different tensor types and whatnot.
         memoryRequired = 4  # Size of a float
         for dim in c.outputDimensions:
-            memoryRequired *= dim
+            memoryRequired *= TensorSize(dim)
 
         outputOffsets.append(totalOutputMemory)
         c.outputMemoryAddress = MemoryLocation(totalOutputMemory, MemoryType.OUTPUT)

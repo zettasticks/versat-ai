@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import os
 import sys
 import json
 import argparse
@@ -40,7 +41,7 @@ def OverrideTestMode(stronger, weaker):
 
 @dataclass
 class TestConfiguraton:
-    focusLayer: int | None = None
+    focusLayerRange: [int, int] = None
     mode: TestMode = TestMode.DEFAULT
 
 
@@ -63,6 +64,8 @@ def ParseTestName(testName):
     originalName = splitted[0]
 
     config = TestConfiguraton()
+    focusLayerRange = [-1, -1]
+    seenOneInt = False
     for x in splitted[1:]:
         if x == "PC":
             config.mode = TestMode.SOFTWARE
@@ -72,8 +75,18 @@ def ParseTestName(testName):
         try:
             asInt = int(x)
             config.focusLayer = asInt
+
+            if not seenOneInt:
+                focusLayerRange[0] = asInt
+                focusLayerRange[1] = asInt
+                seenOneInt = True
+            else:
+                focusLayerRange[1] = asInt
         except:
             pass
+
+    if seenOneInt:
+        config.focusLayerRange = focusLayerRange
 
     return originalName, config
 
@@ -105,18 +118,6 @@ def ParseTests(testInfoJson):
     return tests
 
 
-def SubTestName(subTest):
-    name = str(subTest.name)
-
-    if subTest.config.mode == TestMode.SOFTWARE:
-        name = name + "_PC"
-
-    if subTest.config.focusLayer:
-        name = name + "_" + str(subTest.config.focusLayer)
-
-    return name
-
-
 if __name__ == "__main__":
     testInfoJson = None
     jsonTestInfoPath = "tests.json"
@@ -133,7 +134,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 2:
         print(
-            "Need one and only one argument, the test name (append a final _<focusLayer> to only perform one layer of the test)"
+            "Need one and only one argument, the test name (append a final _<focusLayer> to only perform one layer of the test or _<focusStart>_<focusEnd> to perform N layers)"
         )
         sys.exit(-1)
 
@@ -144,8 +145,8 @@ if __name__ == "__main__":
 
     for subTest in test.subTest:
         subTest.config.mode = OverrideTestMode(subTest.config.mode, configs.mode)
-        if configs.focusLayer:
-            subTest.config.focusLayer = configs.focusLayer
+        if configs.focusLayerRange:
+            subTest.config.focusLayerRange = configs.focusLayerRange
 
     # NOTE: We run from the makefile since we need to enter the python environment but we do not want to run this script from inside the environment.
     # TODO: Can we run from inside the environment and call nix? We cannot do the inverse I think but I do not know if we tried nix from inside python env.
@@ -154,27 +155,37 @@ if __name__ == "__main__":
     if test.type == TestType.GENERATED:
         createVCD = True
 
+    print("HERE")
+    os.makedirs("resources", exist_ok=True)
+
     boolStr = "true" if createVCD else "false"
-    with open("./software/src/testInfo.h", "w") as f:
-        f.write("\n".join([f'#include "{x.name}_modelInfo.h"' for x in test.subTest]))
-        f.write("\n\n")
+    if False:
+        with open("./resources/testInfo.h", "w") as f:
+            f.write(
+                "\n".join([f'#include "{x.name}_modelInfo.h"' for x in test.subTest])
+            )
+            f.write("\n\n")
 
-        f.write(f'#define TEST_NAME "{properName}"\n')
-        f.write(f"#define CREATE_VCD {boolStr}\n\n")
+            f.write(f'#define TEST_NAME "{properName}"\n')
+            f.write(f"#define CREATE_VCD {boolStr}\n\n")
 
-        f.write(f"static TestModelInfo* testModels[] = " + "{\n")
-        f.write(",\n".join([f"  &{x.name}_ModelInfo" for x in test.subTest]))
-        f.write("\n};\n")
+            f.write(f"static TestModelInfo* testModels[] = " + "{\n")
+            f.write(",\n".join([f"  &{x.name}_ModelInfo" for x in test.subTest]))
+            f.write("\n};\n")
+    else:
+        with open("./resources/VERSAT_TEST_METADATA.txt", "w") as f:
+            for subTest in test.subTest:
+                f.write(subTest.name + "\n")
 
     if test.type == TestType.GENERATED:
         GenerateTest("./tests/generated/")
         GenerateDebug(
             "tests/generated/",
             "model.onnx",
-            "software/",
+            "resources/",
             "software/src",
             properName,
-            test.subTest[0].config.focusLayer,
+            test.subTest[0].config.focusLayerRange,
             test.subTest[0].config.mode == TestMode.SOFTWARE,
         )
     elif test.type == TestType.FIXED or test.type == TestType.FIXED_LIST:
@@ -183,9 +194,9 @@ if __name__ == "__main__":
             GenerateDebug(
                 properTest.path,
                 "model.onnx",
-                "software/",
+                "resources/",
                 "software/src",
                 subTest.name,
-                subTest.config.focusLayer,
+                subTest.config.focusLayerRange,
                 subTest.config.mode == TestMode.SOFTWARE,
             )

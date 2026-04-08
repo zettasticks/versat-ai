@@ -104,8 +104,8 @@ module Top_AveragePool(){
 }
 
 module Top_Conv(){
-   VRead #(.ADDR_W(18)) features;
-   VRead #(.ADDR_W(18)) weights;
+   VRead #(.ADDR_W(17)) features;
+   VRead #(.ADDR_W(17)) weights;
    VRead bias;
    F_Mul muller;
    F_Add addBias;
@@ -207,12 +207,146 @@ module Top_BatchNormalization(){
    }
 }
 
+module Log(in){
+   ExtractExpAsFloat expAsFloat;
+   ExtractMantissa   mantissaIndex;
+
+   LookupTable #(.ADDR_W(14)) mantissaLookup;
+
+   Const log2Value;
+
+   F_Mul mul;
+   F_Add adder;
+#
+   in -> expAsFloat;
+   in -> mantissaIndex;
+
+   mantissaIndex -> mantissaLookup;
+
+   {expAsFloat,log2Value} -> mul:0..1;
+   {mul,mantissaLookup} -> adder:0..1;
+
+   adder -> out;
+##
+   config LoadLog2(log2Val){
+      log2Value.constant = log2Val;
+   }
+
+   mem LoadMantissa(addr: Address, width){
+      for x 0..width {
+         mantissaLookup[x] = addr[x];
+      }
+   } 
+}
+
+module Exp(in){
+   ExtractRealPart ext;
+   F_Neg neg;
+   F_Add asFraction;
+   F_IsNeg isNeg;
+
+   FracIndex frac;
+
+   // Index bit is the precision.
+   AddSignToIndex #(.INDEX_BIT(12)) fracIndex;
+
+   LookupTable #(.ADDR_W(10)) expLookup;
+   LookupTable #(.ADDR_W(15)) fracLookup;
+
+   F_Mul mul;
+#
+   in -> ext;
+   in -> isNeg;
+
+   ext:1 -> neg;
+
+   {in,neg} -> asFraction:0..1;
+
+   asFraction -> frac;
+
+   {frac,isNeg} -> fracIndex:0..1;
+
+   ext:0 -> expLookup;
+   fracIndex -> fracLookup;
+
+   {expLookup,fracLookup} -> mul:0..1;
+
+   mul -> out;   
+##
+   mem LoadExp(addr: Address, width){
+      for x 0..width {
+         expLookup[x] = addr[x];
+      }
+   }   
+
+   mem LoadFrac(addr: Address, width){
+      for x 0..width {
+         fracLookup[x] = addr[x];
+      }
+   }
+}
+
+module Top_Exp(){
+   VRead #(.ADDR_W(14)) in;
+  
+   Exp exp;
+
+   VWrite output;
+#
+   in -> exp;
+
+   exp -> output;
+##
+   config Simple(addr: Address,addr2: Address, width: Dyn){
+      for x 0..width {
+         in = addr[x];
+         output = addr2[x];
+      }
+   }
+
+   mem LoadExp(addr: Address, width){
+      exp.LoadExp(addr,width);
+   }
+
+   mem LoadFrac(addr: Address, width){
+      exp.LoadFrac(addr,width);
+   }
+}
+
+module Pow(base,power){
+   // base ^ power  = exp(power * ln(base))
+   Exp exp;
+   Log log;
+   F_Mul mul;
+#
+   base -> log;
+   {log,power} -> mul:0..1;
+
+   mul -> exp;
+
+   exp -> out;
+##
+   config Init(log2Val){
+      log.LoadLog2(log2Val);
+   }
+
+   mem LoadMantissa(addr: Address, width){
+      log.LoadMantissa(addr,width);
+   }
+   mem LoadExp(addr: Address,width){
+      exp.LoadExp(addr,width);
+   }
+   mem LoadFrac(addr: Address,width){
+      exp.LoadFrac(addr,width);
+   }
+}
+
 module Top_Gemm(){
-   VRead #(.ADDR_W(14)) gemmLeftRow;
-   VRead #(.ADDR_W(14)) gemmRightRow;
+   VRead #(.ADDR_W(17)) gemmLeftRow;
+   VRead #(.ADDR_W(17)) gemmRightRow;
    F_Mul mat_muller;
    MyFloatAccum myAccum;
-   VWrite output;
+   VWrite #(.ADDR_W(17)) output;
 
    Const alpha;
    F_Mul alphaMul;
@@ -251,4 +385,59 @@ module Top_Gemm(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm;
+module Top_LRN(){
+   Const constK;
+   Const constA;
+   Const constB;
+
+   MyFloatAccum accum;
+   F_Mul pow2;
+   F_Mul alphaMul;
+
+   F_Add adder;
+
+   Pow pow;
+
+   VRead in;
+   VWrite output;
+#
+   {in,in} -> pow2:0..1;
+   pow2 -> accum;
+
+   {accum,constA}    -> alphaMul:0..1;
+   {alphaMul,constK} -> adder:0..1;
+
+   {adder,constB} -> pow:0..1;
+
+   pow -> output;
+##
+   config InitConsts(valA,valB,valK,log2Val){
+      constA.constant = valA;
+      constB.constant = valB;
+      constK.constant = valK;
+      pow.Init(log2Val);
+   }
+
+   config Simple(inAddr: Address,outAddr: Address,lowerBound,width){
+      accum.strideMinusOne = width - 1;
+      for x 0..width{
+         in = inAddr[lowerBound + x];
+      }
+      for x 0..1 {
+         output = outAddr[x];
+      }
+      output.extra_delay = width - 1;
+   }
+
+   mem LoadMantissa(addr: Address, width){
+      pow.LoadMantissa(addr,width);
+   }
+   mem LoadExp(addr: Address,width){
+      pow.LoadExp(addr,width);
+   }
+   mem LoadFrac(addr: Address,width){
+      pow.LoadFrac(addr,width);
+   }
+}
+
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;

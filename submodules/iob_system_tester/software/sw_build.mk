@@ -41,7 +41,7 @@ TB_INCLUDES ?=-I./simulation/src
 
 TEMPLATE_LDS=src/$@.lds
 
-IOB_SYSTEM_TESTER_INCLUDES=-Isrc
+IOB_SYSTEM_TESTER_INCLUDES=-Isrc -I../../software/src
 
 IOB_SYSTEM_TESTER_LFLAGS=-Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS),--strip-debug
 

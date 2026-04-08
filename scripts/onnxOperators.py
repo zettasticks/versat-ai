@@ -9,6 +9,7 @@ from versatDefs import (
     OnnxAttributeType,
     OnnxOperatorSpec,
     BroadcastType,
+    PaddingType,
 )
 from enum import Enum, auto
 
@@ -37,6 +38,10 @@ def BroadCastShape(op0, op1):
     for a, b in zip(op0, op1):
         res.append(max(a, b))
     return res
+
+
+def MakeAttrEnum(enumType, default):
+    return OnnxAttribute(OnnxAttributeType.ENUM, enumType, default)
 
 
 def MakeAttrBoundedString(allowedStringValues: list[str], default: str = None):
@@ -95,7 +100,7 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
                 attrType.attrType == OnnxAttributeType.AXIS_LIST
                 or attrType.attrType == OnnxAttributeType.AXIS_PAIR_LIST
             ):
-                spatialAxes = 2 * (len(op.outputDimensions) - 2)
+                spatialAxes = 2 * (len(op.outputDimensions[0]) - 2)
                 trueDefaultValue = [attrType.defaultValue] * spatialAxes
 
                 res[name] = InstantiatedAttribute(attrType, trueDefaultValue)
@@ -105,96 +110,125 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
     return res
 
 
+# This must match with the result of the EmitFunction
+# It must also be ordered. Any "static" info comes first and all the variable info must come last
+addStructure = [
+    ["maxDims", "int"],
+    ["firstInputDims", ("int64_t", "maxDims")],
+    ["secondInputDims", ("int64_t", "maxDims")],
+    ["broadCastedShape", ("int64_t", "maxDims")],
+]
+
+
 def EmitAdd(emitter, op: Operation):
     maxDims = max(len(op.inputDimensions[0]), len(op.inputDimensions[1]))
-
     op0 = ExtendShape(op.inputDimensions[0], maxDims)
     op1 = ExtendShape(op.inputDimensions[1], maxDims)
 
     broadCastedShape = BroadCastShape(op0, op1)
 
-    aux_0 = emitter.EmitArray("int64_t", op0)
-    aux_1 = emitter.EmitArray("int64_t", op1)
-    aux_2 = emitter.EmitArray("int64_t", broadCastedShape)
+    emitter.I32(maxDims)
+    emitter.I64Array(op0, maxDims)
+    emitter.I64Array(op1, maxDims)
+    emitter.I64Array(broadCastedShape, maxDims)
 
-    return [maxDims, aux_0, aux_1, aux_2]
+
+reluStructure = [["dims", "int"], ["inputDims", ("int64_t", "dims")]]
 
 
 def EmitRelu(emitter, op: Operation):
-    aux = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    dims = len(op.inputDimensions[0])
-    return [dims, aux]
+    emitter.I32(len(op.inputDimensions[0]))
+    emitter.I64Array(op.inputDimensions[0])
+
+
+maxPoolStructure = [
+    ["dims", "int"],
+    ["kernelSize", "int"],
+    ["strideSize", "int"],
+    ["padsSize", "int"],
+    ["padding", "PaddingType"],
+    ["kernelDims", ("int", "kernelSize")],
+    ["strideDims", ("int", "strideSize")],
+    ["padsDims", ("int", "padsSize")],
+    ["inputDims", ("int64_t", "dims")],
+    ["outputDims", ("int64_t", "dims")],
+]
 
 
 def EmitMaxPool(emitter, op: Operation):
-    dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    outputShape = emitter.EmitArray("int64_t", op.outputDimensions)
-
     attr = GetAttributesForOperator(op)
 
-    kernel = attr["kernel_shape"].value
-    kernelShape = emitter.EmitArray("int", kernel)
-
+    dims = len(op.inputDimensions[0])
     stride = attr["strides"].value
-    strideShape = emitter.EmitArray("int", stride)
-
+    kernel = attr["kernel_shape"].value
     pads = attr["pads"].value
-    padsShape = emitter.EmitArray("int", pads)
 
-    return [
-        dims,
-        inputShape,
-        outputShape,
-        len(kernel),
-        kernelShape,
-        len(stride),
-        strideShape,
-        "PaddingType_" + attr["auto_pad"].value,
-        len(pads),
-        padsShape,
-    ]
+    emitter.I32(dims)
+    emitter.I32(len(kernel))
+    emitter.I32(len(stride))
+    emitter.I32(len(pads))
+    emitter.I32(attr["auto_pad"].value)
+    emitter.I32Array(kernel)
+    emitter.I32Array(stride)
+    emitter.I32Array(pads)
+
+    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(op.outputDimensions[0])
+
+
+convStructure = [
+    ["dims", "int"],
+    ["group", "int"],
+    ["featureMaps", "int"],
+    ["kernelSize", "int"],
+    ["strideSize", "int"],
+    ["dilationsSize", "int"],
+    ["padsSize", "int"],
+    ["padding", "PaddingType"],
+    ["kernelDims", ("int", "kernelSize")],
+    ["strideDims", ("int", "strideSize")],
+    ["dilationsDims", ("int", "dilationsSize")],
+    ["padsDims", ("int", "padsSize")],
+    ["inputDims", ("int64_t", "dims")],
+    ["outputDims", ("int64_t", "dims")],
+]
 
 
 def EmitConv(emitter, op: Operation):
-    dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    outShape = emitter.EmitArray("int64_t", op.outputDimensions)
-
     attr = GetAttributesForOperator(op)
+
+    dims = len(op.inputDimensions[0])
+    kernel = attr["kernel_shape"].value
+    stride = attr["strides"].value
+    dilations = attr["dilations"].value
+    pads = attr["pads"].value
+    group = attr["group"].value
+    padType = attr["auto_pad"].value
 
     featureMaps = op.inputDimensions[1][0]
 
-    kernel = attr["kernel_shape"].value
-    kernelShape = emitter.EmitArray("int", kernel)
+    emitter.I32(dims)
+    emitter.I32(group)
+    emitter.I32(featureMaps)
+    emitter.I32(len(kernel))
+    emitter.I32(len(stride))
+    emitter.I32(len(dilations))
+    emitter.I32(len(pads))
+    emitter.I32(padType)
 
-    stride = attr["strides"].value
-    strideShape = emitter.EmitArray("int", stride)
+    emitter.I32Array(kernel)
+    emitter.I32Array(stride)
+    emitter.I32Array(dilations)
+    emitter.I32Array(pads)
+    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(op.outputDimensions[0])
 
-    dilations = attr["dilations"].value
-    dilationsShape = emitter.EmitArray("int", dilations)
 
-    pads = attr["pads"].value
-    padsShape = emitter.EmitArray("int", pads)
-
-    group = attr["group"].value
-
-    return [
-        dims,
-        inputShape,
-        outShape,
-        featureMaps,
-        len(kernel),
-        kernelShape,
-        len(stride),
-        strideShape,
-        len(dilations),
-        dilationsShape,
-        "PaddingType_" + attr["auto_pad"].value,
-        len(pads),
-        padsShape,
-        group,
-    ]
+reshapeStructure = [
+    ["numberInputDims", "int"],
+    ["numberShapeDims", "int"],
+    ["inputDims", ("int64_t", "numberInputDims")],
+]
 
 
 def EmitReshape(emitter, op: Operation):
@@ -202,58 +236,120 @@ def EmitReshape(emitter, op: Operation):
     dimIn = len(op.inputDimensions[0])
     dimOut = op.inputDimensions[1][0]
 
-    aux_0 = emitter.EmitArray("int64_t", op0)
+    emitter.I32(dimIn)
+    emitter.I32(dimOut)
+    emitter.I64Array(op0)
 
-    return [aux_0, dimIn, dimOut]
+
+matMulStructure = [
+    ["numberInputADims", "int"],
+    ["numberInputBDims", "int"],
+    ["numberOutputDims", "int"],
+    ["inputADims", ["int64_t", "numberInputADims"]],
+    ["inputBDims", ["int64_t", "numberInputBDims"]],
+    ["outputDims", ["int64_t", "numberOutputDims"]],
+]
 
 
 def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
-    res = op.outputDimensions
+    res = op.outputDimensions[0]
 
-    aux_0 = emitter.EmitArray("int64_t", op0)
-    aux_1 = emitter.EmitArray("int64_t", op1)
-    aux_2 = emitter.EmitArray("int64_t", res)
+    emitter.I32(len(op0))
+    emitter.I32(len(op1))
+    emitter.I32(len(res))
 
-    return [aux_0, len(op0), aux_1, len(op1), aux_2, len(res)]
+    emitter.I64Array(op0)
+    emitter.I64Array(op1)
+    emitter.I64Array(res)
+
+
+softmaxStructure = [
+    ["numberInputDims", "int"],
+    ["axis", "int"],
+    ["inputDims", ["int64_t", "numberInputDims"]],
+]
 
 
 def EmitSoftmax(emitter, op: Operation):
-    dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
 
-    return [inputShape, dims, attr["axis"]]
+    dims = len(op.inputDimensions[0])
+    axis = attr["axis"].value
+
+    emitter.I32(dims)
+    emitter.I32(axis)
+    emitter.I64Array(op.inputDimensions[0])
+
+
+transposeStructure = [
+    ["numberInputDims", "int"],
+    ["permSize", "int"],
+    ["inputDims", ["int64_t", "numberInputDims"]],
+    ["perm", ["int64_t", "permSize"]],
+]
 
 
 def EmitTranspose(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-
     attr = GetAttributesForOperator(op)
-
     perm = attr["perm"].value
-    permShape = emitter.EmitArray("int64_t", perm)
 
-    return [inputShape, dims, permShape, len(perm)]
+    emitter.I32(dims)
+    emitter.I32(len(perm))
+    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(perm)
+
+
+batchNormalizationStructure = [
+    ["numberInputDims", "int"],
+    ["epsilon", "float"],
+    ["momentum", "float"],
+    ["inputDims", ["int64_t", "numberInputDims"]],
+]
 
 
 def EmitBatchNormalization(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
 
     attr = GetAttributesForOperator(op)
     epsilon = attr["epsilon"].value
     momentum = attr["momentum"].value
 
-    return [inputShape, dims, epsilon, momentum]
+    emitter.I32(dims)
+    emitter.F32(epsilon)
+    emitter.F32(momentum)
+    emitter.I64Array(op.inputDimensions[0])
+
+
+dropoutStructure = [
+    ["numberInputDims", "int"],
+    ["ratio", "float"],
+    ["inputDims", ["int64_t", "numberInputDims"]],
+]
+
+
+def EmitDropout(emitter, op: Operation):
+    dims = len(op.inputDimensions[0])
+
+    emitter.I32(dims)
+    emitter.F32(0.0)
+    emitter.I64Array(op.inputDimensions[0])
+
+
+lrnStructure = [
+    ["numberInputDims", "int"],
+    ["alpha", "float"],
+    ["beta", "float"],
+    ["bias", "float"],
+    ["size", "int"],
+    ["inputDims", ["int64_t", "numberInputDims"]],
+]
 
 
 def EmitLRN(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
-    inputShape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-
     attr = GetAttributesForOperator(op)
 
     alpha = attr["alpha"].value
@@ -261,20 +357,29 @@ def EmitLRN(emitter, op: Operation):
     bias = attr["bias"].value
     size = attr["size"].value
 
-    return [inputShape, dims, alpha, beta, bias, size]
+    emitter.I32(dims)
+    emitter.F32(alpha)
+    emitter.F32(beta)
+    emitter.F32(bias)
+    emitter.I32(size)
+
+    emitter.I64Array(op.inputDimensions[0])
 
 
-class ConType(Enum):
-    NORMAL = auto()
-    OPTIONAL = auto()
+gemmStructure = [
+    ["numberInputDims", "int"],
+    ["alpha", "float"],
+    ["beta", "float"],
+    ["transA", "int"],
+    ["transB", "int"],
+    ["aDims", ["int64_t", "numberInputDims"]],
+    ["bDims", ["int64_t", "numberInputDims"]],
+    ["cDims", ["int64_t", "numberInputDims"]],
+]
 
 
 def EmitGemm(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
-    in0Shape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-    in1Shape = emitter.EmitArray("int64_t", op.inputDimensions[1])
-    in2Shape = emitter.EmitArray("int64_t", op.inputDimensions[2])
-
     attr = GetAttributesForOperator(op)
 
     alpha = attr["alpha"].value
@@ -282,14 +387,15 @@ def EmitGemm(emitter, op: Operation):
     transA = attr["transA"].value
     transB = attr["transB"].value
 
-    return [in0Shape, in1Shape, in2Shape, dims, alpha, beta, transA, transB]
+    emitter.I32(dims)
+    emitter.F32(alpha)
+    emitter.F32(beta)
+    emitter.I32(transA)
+    emitter.I32(transB)
 
-
-def EmitDropout(emitter, op: Operation):
-    dims = len(op.inputDimensions[0])
-    shape = emitter.EmitArray("int64_t", op.inputDimensions[0])
-
-    return [shape, dims]
+    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(op.inputDimensions[1])
+    emitter.I64Array(op.inputDimensions[2])
 
 
 def IsOperatorRegistered(opName: str):
@@ -312,9 +418,7 @@ def EmitParameterList(emitter, op: Operation):
 
 
 convAttributes = {
-    "auto_pad": MakeAttrBoundedString(
-        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
-    ),
+    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
     "dilations": MakeAttrAxisList(1),
     "group": MakeAttrInteger(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -323,9 +427,7 @@ convAttributes = {
 }
 
 maxPoolAttributes = {
-    "auto_pad": MakeAttrBoundedString(
-        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
-    ),
+    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -335,9 +437,7 @@ maxPoolAttributes = {
 }
 
 averagePoolAttributes = {
-    "auto_pad": MakeAttrBoundedString(
-        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
-    ),
+    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -404,35 +504,73 @@ def OperationToLayerName(op: Operation, useVersat: bool):
         return op.opName
 
 
+def GetAllOperatorSpecs():
+    return operatorNameToSpec
+
+
 # Register new operators here
 # Remember, currently we only care about supporting up to version 7 operators.
 
 # name,emitFunction,attributesDict,supportedByVersat,broadcastType
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec(
-    "Add", EmitAdd, [], True, BroadcastType.UNIDIRECTIONAL
+operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", 0, EmitAdd, addStructure, [], True)
+operatorNameToSpec["Relu"] = OnnxOperatorSpec(
+    "Relu", 1, EmitRelu, reluStructure, [], True
 )
-operatorNameToSpec["Conv"] = OnnxOperatorSpec("Conv", EmitConv, convAttributes, True)
-operatorNameToSpec["Relu"] = OnnxOperatorSpec("Relu", EmitRelu, [], True)
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
-    "MaxPool", EmitMaxPool, maxPoolAttributes, True
+    "MaxPool",
+    2,
+    EmitMaxPool,
+    maxPoolStructure,
+    maxPoolAttributes,
+    True,
+    BroadcastType.NO_BROADCAST,
+    0.001,
 )
-operatorNameToSpec["Reshape"] = OnnxOperatorSpec("Reshape", EmitReshape, [], True)
-operatorNameToSpec["MatMul"] = OnnxOperatorSpec("MatMul", EmitMatMul, [], True)
 operatorNameToSpec["AveragePool"] = OnnxOperatorSpec(
-    "AveragePool", EmitMaxPool, averagePoolAttributes, True
+    "AveragePool", 3, EmitMaxPool, maxPoolStructure, averagePoolAttributes, True
+)
+operatorNameToSpec["Conv"] = OnnxOperatorSpec(
+    "Conv", 4, EmitConv, convStructure, convAttributes, True
+)
+operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
+    "Reshape", 5, EmitReshape, reshapeStructure, [], True
+)
+operatorNameToSpec["MatMul"] = OnnxOperatorSpec(
+    "MatMul", 6, EmitMatMul, matMulStructure, [], True
 )
 operatorNameToSpec["Softmax"] = OnnxOperatorSpec(
-    "Softmax", EmitSoftmax, softmaxAttributes, False
+    "Softmax", 7, EmitSoftmax, softmaxStructure, softmaxAttributes, True
 )
 operatorNameToSpec["Transpose"] = OnnxOperatorSpec(
-    "Transpose", EmitTranspose, transposeAttributes, False
+    "Transpose", 8, EmitTranspose, transposeStructure, transposeAttributes, False
 )
 operatorNameToSpec["BatchNormalization"] = OnnxOperatorSpec(
-    "BatchNormalization", EmitBatchNormalization, batchNormalizationAttributes, True
+    "BatchNormalization",
+    9,
+    EmitBatchNormalization,
+    batchNormalizationStructure,
+    batchNormalizationAttributes,
+    True,
 )
-operatorNameToSpec["LRN"] = OnnxOperatorSpec("LRN", EmitLRN, lrnAttributes, False)
-operatorNameToSpec["Gemm"] = OnnxOperatorSpec("Gemm", EmitGemm, gemmAttributes, True)
+
 operatorNameToSpec["Dropout"] = OnnxOperatorSpec(
-    "Dropout", EmitDropout, dropoutAttributes, True
+    "Dropout", 10, EmitDropout, dropoutStructure, dropoutAttributes, True
+)
+
+# NOTE: We could improve LRN precision by using more internal memory but we are kinda
+#       trying to keep memory usage low (while making sure that everything works fine)
+#       and later on we can handle the tradeoff between performance vs memory vs precision.
+operatorNameToSpec["LRN"] = OnnxOperatorSpec(
+    "LRN",
+    11,
+    EmitLRN,
+    lrnStructure,
+    lrnAttributes,
+    True,
+    BroadcastType.NO_BROADCAST,
+    0.1,
+)
+operatorNameToSpec["Gemm"] = OnnxOperatorSpec(
+    "Gemm", 12, EmitGemm, gemmStructure, gemmAttributes, True
 )

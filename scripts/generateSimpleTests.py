@@ -759,6 +759,7 @@ class GemmArgs:
             return False
         if cShape[1] != 1 and cShape[1] != outShape[1]:
             return False
+
         return True
 
     def Create(self, linear=False):
@@ -816,6 +817,21 @@ def CreateGemm(aShape, bShape, cShape=None, alpha=1.0, beta=1.0, transA=0, trans
 def GenerateSimpleTest():
     testComplexity = 0
 
+    # MARK4
+    # Small test
+
+    CreateSoftmax([1], 0)
+    CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+    CreateUnaryOpTest("Relu", [4])
+    CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
+    CreateBatchNormalization([1, 1, 1, 1])
+    CreateBinaryOpTest("Add", [3, 2], [3, 2])
+    CreateTranspose([2, 2], [0, 1])
+    CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
+    CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+    CreateGemm([2, 2], [2, 2])
+    CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
+
     # MARK1
     testAdd = 0
     testRelu = 0
@@ -830,13 +846,75 @@ def GenerateSimpleTest():
     testConv = 0
     testBatchNormalization = 0
 
-    CreateBatchNormalization([1, 1, 1, 1])
-
     testSoftmax = 0
     testLRN = 0
 
-    generativeTests = 1
+    generativeTests = 0
     testBig = 0
+
+    if False:
+        p = PaddingType("NOTSET", [2, 2, 2, 2])
+        p2 = PaddingType("NOTSET", [0, 0, 0, 0])
+
+        CreateConvolution(
+            [1, 96, 26, 26], 48, [5, 5], [1, 1], [1, 1], 2, True, p.kind, p.padding
+        )
+
+        # Does not work
+        CreateConvolution(
+            [1, 96 // 2, 7, 7],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p.kind,
+            p.padding,
+        )
+
+        CreateConvolution(
+            [1, 96 // 2, 7, 7],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p2.kind,
+            p2.padding,
+        )
+        CreateConvolution(
+            [1, 96 // 2, 5, 5],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p.kind,
+            p.padding,
+        )
+        CreateConvolution(
+            [1, 96 // 2, 5, 5],
+            48 // 2,
+            [5, 5],
+            [1, 1],
+            [1, 1],
+            2,
+            True,
+            p2.kind,
+            p2.padding,
+        )
+
+        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
+        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
+        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
+
+        # Works
+        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
+
+        # CreateGemm([1, 9216], [4096, 9216], [1, 4096], 1.0, 1.0, 0, 1)
 
     if testGemm:
         CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0, 1, 0)
@@ -868,8 +946,8 @@ def GenerateSimpleTest():
                                         CreateGemm(a, b, c, alpha, beta, tA, tB)
 
     if testLRN:
+        CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
         CreateLRN([1, 4, 4, 4], int(3), 0.0001, 0.75, 1.0)
-
         CreateLRN([1, 11, 6, 6], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 8, 8], int(5), 0.0001, 0.75, 1.0)
         CreateLRN([1, 11, 10, 10], int(5), 0.0001, 0.75, 1.0)
@@ -1226,6 +1304,8 @@ def GenerateSimpleTest():
             pP = [
                 PaddingType("NOTSET", [1, 1, 1, 1]),
                 PaddingType("NOTSET", [4, 2, 1, 6]),
+                PaddingType("SAME_LOWER"),
+                PaddingType("SAME_UPPER"),
             ]
 
             if testBig:
@@ -1235,7 +1315,6 @@ def GenerateSimpleTest():
                 sP = [[3, 3], [5, 5], [9, 9]]
 
             # pP = [PaddingType("SAME_LOWER"), PaddingType("SAME_UPPER"), PaddingType("NOTSET",[1,1,1,1])]
-            # gP = [1, 2, 3, 4, 8]
             gP = [1, 2, 3, 4, 8]
 
             args = []
@@ -1422,21 +1501,20 @@ def GenerateTest(outputPath):
     global tests
 
     GenerateSimpleTest()
-
     testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
-
-    # MARK2
-    focusOnOneTest = 0
 
     # MARK3
     if 0:
         random.shuffle(testList)
 
+    # NOTE: Use the setupTest way of selecting test ranges instead if possible.
+    # MARK2
+    focusOnOneTest = 0
     if 0:
-        testList = testList[0:70]
+        testList = testList[0:10]
 
     if focusOnOneTest:
-        testToFocus = 64
+        testToFocus = 4
 
         testList = [testList[testToFocus]]
         print(testList[0])

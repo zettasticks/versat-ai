@@ -48,11 +48,14 @@ generate-test:
 
 test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
 	mkdir -p hardware/simulation
-	cp software/*.bin hardware/simulation
-	cp software/*.bin hardware/fpga
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER)' $(EXTRA_ARGS);"
+	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/ # Since python file was not being copied and we need a python script from inside software
 	cp -r ./software ../versat_ai_V$(VERSION)/
+	cp ./scripts/console.py ../versat_ai_V$(VERSION)/scripts
+	cp ./scripts/console.py ../versat_ai_V$(VERSION)/tester/scripts
+	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/scripts
+	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/tester/scripts
 
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
@@ -114,35 +117,32 @@ fast-pc-hard: fast-versat
 	make -C ../versat_ai_V$(VERSION)/ pc-emul-run
 
 fast-sim-run:
+	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r hardware ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_soc_tester/software ../versat_ai_V$(VERSION)/tester
-	cp software/*.bin ../versat_ai_V$(VERSION)/hardware/simulation
 	cp -r submodules/iob_versat/hardware ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
 	make -C ../versat_ai_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
 fast-tester:
+	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
-	#cp -r hardware ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_soc_tester/software ../versat_ai_V$(VERSION)/tester
-	#cp -r submodules/iob_soc_tester/hardware ../versat_ai_V$(VERSION)/tester
-	#cp software/*.bin ../versat_ai_V$(VERSION)/hardware/simulation
-	#cp -r submodules/iob_versat/hardware ../versat_ai_V$(VERSION)/
-	#cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
 	make -C ../versat_ai_V$(VERSION)/tester sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
 fast-only-sim-run:
 	make -C ../versat_ai_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
 fast-fpga:
+	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/	
-	cp    software/*.bin ../versat_ai_V$(VERSION)/hardware/fpga
 	make -C ../$(CORE)_V$(VERSION)/ fpga-sw-build BOARD=$(BOARD)
 	make -C ../$(CORE)_V$(VERSION)/ fpga-run BOARD=$(BOARD)
 
 fast-fpga-tester:
+	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_system_tester/software ../versat_ai_V$(VERSION)/tester
 	make -C ../$(CORE)_V$(VERSION)/tester fpga-sw-build BOARD=$(BOARD)
@@ -155,17 +155,11 @@ versat-generate:
 	$(MAKE) $(VERSAT_ACCEL)
 
 clean-test:
-	@rm -rf ./software/*.bin
-	@rm -f  ./software/src/*_code.c ./software/src/*_modelInfo.h ./software/src/testInfo.h 
-	@rm -f  ../$(CORE)_V$(VERSION)/software/src/*_code.c ../$(CORE)_V$(VERSION)/software/src/*_modelInfo.h ../$(CORE)_V$(VERSION)/software/src/testInfo.h 
+	@rm -rf ./resources
 
 clean:
 	nix-shell --run "py2hwsw $(CORE) clean --build_dir '$(BUILD_DIR)'"
 	@rm -rf ./submodules/iob_versat
-	@rm -rf ./hardware/simulation/*.bin
-	@rm -rf ./hardware/fpga/*.bin
-	@rm -rf ./software/*.bin
-	@rm -f  ./software/src/*_code.c ./software/src/*_modelInfo.h ./software/src/testInfo.h 
 	@rm -rf ../*.summary ../*.rpt
 	@rm -rf ./*.rpt
 	@find . -name \*~ -delete
