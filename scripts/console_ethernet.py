@@ -9,6 +9,7 @@ import sys
 
 from contextlib import contextmanager
 
+
 @contextmanager
 def chdir(directory):
     owd = os.getcwd()
@@ -80,7 +81,7 @@ def cnsl_sendfile_ethernet(resourceDir):
     name = cnsl_recvstr().decode("utf-8")
 
     print(name)
-    resourceName = os.path.join(resourceDir,name)
+    resourceName = os.path.join(resourceDir, name)
     print(resourceName)
 
     file_size = os.path.getsize(resourceName)

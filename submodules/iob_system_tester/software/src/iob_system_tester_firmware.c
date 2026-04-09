@@ -116,12 +116,12 @@ int main() {
       uart_recvfile_ethernet("../../../software/versat_ai_firmware.bin");
   eth_rcv_file((char *)0x40000000,
                file_size); // Place SUT fw in external memory
-#else                      // NOT IOB_SYSTEM_TESTER_USE_ETHERNET
+#else  // NOT IOB_SYSTEM_TESTER_USE_ETHERNET
   // Receive data from console via UART
   file_size =
       uart_recvfile("../../../software/versat_ai_firmware.bin",
                     (char *)0x40000000); // Place SUT fw in external memory
-#endif                     // IOB_SYSTEM_TESTER_USE_ETHERNET
+#endif // IOB_SYSTEM_TESTER_USE_ETHERNET
 
   uart_puts("[Tester]: Initializing SUT via UART...\n");
 
@@ -209,15 +209,6 @@ int main() {
 
 #endif
 
-
-
-
-
-
-
-
-
-
 /* Includes */
 #include "iob_bsp.h"
 #include "iob_printf.h"
@@ -225,14 +216,15 @@ int main() {
 #include "iob_system_tester_mmap.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
+#include "iob_uart16550.h"
 #include <string.h>
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
 #include "iob_eth.h"
 #endif
 
 #include "iob_regfileif_csrs.h"
-#include <stdbool.h>
 #include "versat_ai.h"
+#include <stdbool.h>
 
 void clear_cache() {
   // Delay to ensure all data is written to memory
@@ -241,38 +233,6 @@ void clear_cache() {
 
   // Flush VexRiscv CPU internal cache
   asm volatile(".word 0x500F" ::: "memory");
-}
-
-void init_peripherals() {
-  // init uart1 (connected to the SUT)
-  uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-
-  // init uart0
-  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-  printf_init(&uart_putc);
-
-  // Init SUT (connected through REGFILEIF)
-  //iob_regfileif_csrs_init_baseaddr(SUT0_BASE);
-}
-
-void relay_messages() {
-  uint8_t c;
-
-  iob_uart_csrs_init_baseaddr(UART1_BASE);
-  c = uart_getc();
-  iob_uart_csrs_init_baseaddr(UART0_BASE);
-  uart_putc(c);
-}
-
-void test_loop() {
-  while (!iob_regfileif_csrs_get_done()) {
-    relay_messages();
-  }
-
-  // Print remaining messages
-  while (iob_uart_csrs_get_rxready()) {
-    relay_messages();
-  }
 }
 
 void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
@@ -405,6 +365,33 @@ uint32_t uart_recvfile_ethernet(const char *file_name) {
 }
 #endif // IOB_SYSTEM_TESTER_USE_ETHERNET
 
+void relay_messages() {
+  uint8_t c = 0;
+
+  iob_uart_csrs_init_baseaddr(UART1_BASE);
+  if (iob_uart_csrs_get_rxready()) {
+    c = uart_getc();
+  }
+  iob_uart_csrs_init_baseaddr(UART0_BASE);
+  if (c != 0) {
+    uart_putc(c);
+  }
+}
+
+void clear_sut_messages() {
+  char ch = 0;
+  for (int i = 0; i < 10000; i++) {
+    iob_uart_csrs_init_baseaddr(UART1_BASE);
+    if (!iob_uart_csrs_get_rxready()) {
+      break;
+    }
+    ch = uart_getc();
+    iob_uart_csrs_init_baseaddr(UART0_BASE);
+    uart_putc(ch);
+  }
+  iob_uart_csrs_init_baseaddr(UART0_BASE);
+}
+
 int main() {
   int i;
   uint32_t file_size = 0;
@@ -418,9 +405,12 @@ int main() {
   // Init SUT UART
   // uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
 
-  // init uart
+  // Init uart0 (Outside communication)
   uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
   printf_init(&uart_putc);
+
+  // Init uart1 (connected to the SUT)
+  uart16550_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
 
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
   // Init ethernet
@@ -441,8 +431,7 @@ int main() {
   // Load SUT firmware into SUT's memory zone (external memory)
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
   // Receive data from console via Ethernet
-  file_size =
-      uart_recvfile_ethernet("../software/versat_ai_firmware.bin");
+  file_size = uart_recvfile_ethernet("../software/versat_ai_firmware.bin");
   eth_rcv_file((char *)0x40000000,
                file_size); // Place SUT fw in external memory
 #else                      // NOT IOB_SYSTEM_TESTER_USE_ETHERNET
@@ -459,11 +448,8 @@ int main() {
 
 #if 1
 
-  // Init and switch to uart1 (connected to the SUT)
-  uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-
   // Wait for ENQ signal from SUT
-  while ((c = uart_getc()) != ENQ)
+  while ((c = uart16550_getc()) != ENQ)
     if (DEBUG) {
       iob_uart_csrs_init_baseaddr(UART0_BASE);
       uart_putc(c);
@@ -483,39 +469,49 @@ int main() {
   // Read SUT messages
   //
 
-#if 1
+  // Allows SUT to progress the boot.
+  iob_regfileif_csrs_set_start(0);
+  // uart_putc(ACK);
+
+  // At this point the SUT is running freely
+
   uart_puts("\n[Tester]: Reading SUT messages...\n");
   iob_uart_csrs_init_baseaddr(UART1_BASE);
 
   // Delay to ensure SUT is waiting for ack
   for (unsigned int i = 0; i < 100; i++)
     asm volatile("nop");
-  // Send second ack to SUT to continue boot
+
+  iob_regfileif_csrs_set_start(0);
+
+  // Send ack to SUT to continue boot
   uart_putc(ACK);
 
-  i = 0;
-  // Read and store messages sent from SUT in a buffer to later be printed
-  // while ((c = uart_getc()) != EOT) {
-  //   buffer[i] = c;
-  //   if (DEBUG) {
-  //     iob_uart_csrs_init_baseaddr(UART0_BASE);
-  //     uart_putc(c);
-  //     iob_uart_csrs_init_baseaddr(UART1_BASE);
-  //   }
-  //   i++;
-  // }
-  // buffer[i] = EOT;
+  // At this point the SUT is running, right?
 
-  // Alternative: Print characters received from SUT as soon as they arrive
-  // This alternative is better to see satus of SUT in real time, but tester may
-  // miss/skip some characters if it cant read them fast enough. One solution to
-  // avoid skipping characters is using a UART that includes a FIFO (like
-  // uart16550).
-  while ((c = uart_getc()) != EOT) {
+  clear_sut_messages();
+
+  printf("Cleared SUT messages\n");
+
+  // Where does TESTER get stuck?
+
+#if 0
+  iob_uart_csrs_init_baseaddr(UART1_BASE);
+  while(1){
+  //while ((c = uart_getc()) != EOT) {
     iob_uart_csrs_init_baseaddr(UART0_BASE);
-    uart_putc(c);
+    printf("We are inside the Tester\n");
+
+    printf("TesterStart: %d\n",iob_regfileif_csrs_get_start());
     iob_uart_csrs_init_baseaddr(UART1_BASE);
+
+    // This is the main loop.
+    // After this the SUT has terminated.
+
+    iob_regfileif_csrs_set_start(1);
   }
+
+  // At this point the SUT has terminated, right?
 
   //
   // Print (stored) SUT messages
@@ -524,18 +520,7 @@ int main() {
   // Switch back to UART0
   iob_uart_csrs_init_baseaddr(UART0_BASE);
 
-  // // Print messages previously stored from SUT in the buffer
-  // uart_puts("[Tester]: #### Messages received from SUT: ####\n\n");
-  // if (!DEBUG) {
-  //   for (i = 0; buffer[i] != EOT; i++) {
-  //     uart_putc(buffer[i]);
-  //   }
-  // }
-  // uart_puts("\n[Tester]: #### End of messages received from SUT ####\n\n");
-
-  //
-  // End test
-  //
+  printf("Tester start is: %d\n",iob_regfileif_csrs_get_start());
 
   uart_sendfile("test.log", strlen(pass_string), pass_string);
 
@@ -670,34 +655,28 @@ int main() {
 
     printf("Cache was cleared\n");
 
+    // Clear any messages from the SUT before setting start
+    clear_sut_messages();
     iob_regfileif_csrs_set_start(1);
+    clear_sut_messages();
 
     printf("Set start\n");
 
-    for(int i = 0; i < 1000; i++){
-      printf("Start value: %d\n",iob_regfileif_csrs_get_start());
-
-      iob_uart_csrs_init_baseaddr(UART1_BASE);
-      while (iob_uart_csrs_get_rxready()) {
-        relay_messages();
-      }
-      iob_uart_csrs_init_baseaddr(UART0_BASE);
+    while (iob_regfileif_csrs_get_start() != 0) {
+      relay_messages();
     }
-
-    //while (iob_regfileif_csrs_get_start() != 0) {
-    //  relay_messages();
-    //}
-
-#if 0
+    clear_sut_messages();
 
     printf("Start was received and deasserted\n");
+    clear_sut_messages();
 
     while (iob_regfileif_csrs_get_done() != 1) {
       relay_messages();
     }
-#endif
+    clear_sut_messages();
 
     printf("Done was asserted\n");
+    clear_sut_messages();
 
     while (1) {
       iob_uart_csrs_init_baseaddr(UART1_BASE);
