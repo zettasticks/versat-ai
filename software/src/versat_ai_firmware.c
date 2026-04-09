@@ -628,7 +628,7 @@ int main() {
 
 #include "iob_regfileif_inverted_csrs.h"
 #include "iob_timer.h"
-#include "iob_uart16550.h"
+#include "iob_uart.h"
 
 #include "versat_ai.h"
 
@@ -669,22 +669,21 @@ int main() {
   timer_init(TIMER0_BASE);
 
   // init uart
-  uart16550_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-  printf_init(&uart16550_putc);
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&uart_putc);
+
+  printf("Gonna init versat\n");
+
+  SetVersatDebugPrintfFunction(printf);
+  versat_init(VERSAT0_BASE);
+  ConfigCreateVCD(false);
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
 
   iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
 
   while (1) {
-#if 0
-    if(iob_regfileif_inverted_csrs_get_start() == 1){
-      iob_regfileif_inverted_csrs_set_start(0);
-      iob_regfileif_inverted_csrs_set_done(1);
-    }
-
-    // Without a printf the Tester is getting stuck, right?
-
-    //printf("Start is: %d\n",iob_regfileif_inverted_csrs_get_start());
-#endif
 
 #if 1
     while (iob_regfileif_inverted_csrs_get_start() == 0)
@@ -694,33 +693,41 @@ int main() {
 
     printf("Inside SUT\n");
 
-    uint32_t val = iob_regfileif_inverted_csrs_get_output_addr();
+    void **recvData0 = (void **) 0x00100000;
+    void **recvData1 = (void **) 0x00100004;
+    void **recvData2 = (void **) 0x00100008;
+    void **recvData3 = (void **) 0x0010000c;
+    void **recvData4 = (void **) 0x00100010;
+    void **recvData5 = (void **) 0x00100014;
 
-    if (val) {
-      printf("We seen val\n");
-      iob_regfileif_inverted_csrs_set_done(0);
-    }
+    printf("Address of stack: %p\n", &recvData0);
 
-    // char *output = (char *) iob_regfileif_inverted_csrs_get_output_addr();
-    // printf("Output: %x\n", val);
+    CompiledModel *compiledModel = (CompiledModel *) *recvData0;
+    char *output = (char *) *recvData1;
+    char *temp = (char *) *recvData2;
+    char *model = (char *) *recvData3;
+    void **inputs = (void **) *recvData4;
+    char *correct = (char *) *recvData5;
 
-#if 0
-    CompiledModel *compiledModel =
-        (CompiledModel *)iob_regfileif_inverted_csrs_get_metamodel_addr();
-    char *temp = (char *)iob_regfileif_inverted_csrs_get_temp_addr();
-    char *model = (char *)iob_regfileif_inverted_csrs_get_model_addr();
-    void **inputs = (void **)iob_regfileif_inverted_csrs_get_inputsVector_addr();
-    char *correct = (char *)iob_regfileif_inverted_csrs_get_correctOutputs_addr();
-
+    printf("Output: %x\n", output);
     printf("Temp:%p\n", temp);
     printf("Model:%p\n", model);
     printf("Inputs:%p\n", inputs);
     printf("Correct:%p\n", correct);
-#endif
+    printf("Inputs Vector val: %p %p\n", inputs[0], inputs[1]);
 
-#if 0
-    printf("Value of output is: %d\n", *output);
-#endif
+    uint32_t val = iob_regfileif_inverted_csrs_get_output_addr();
+
+    uint32_t tempVal = iob_regfileif_inverted_csrs_get_temp_addr();
+
+    printf("Before we seen val\n");
+
+    printf("ModelVal: %x\n", val);
+    printf("TempVal: %x\n", tempVal);
+
+    printf("After we seen val\n");
+
+    RunCompiledInference(compiledModel, output, temp, inputs, model, correct);
 
     iob_regfileif_inverted_csrs_set_done(1);
 #endif

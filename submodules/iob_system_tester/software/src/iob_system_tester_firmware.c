@@ -216,7 +216,6 @@ int main() {
 #include "iob_system_tester_mmap.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
-#include "iob_uart16550.h"
 #include <string.h>
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
 #include "iob_eth.h"
@@ -403,14 +402,14 @@ int main() {
   timer_init(TIMER0_BASE);
 
   // Init SUT UART
-  // uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
 
   // Init uart0 (Outside communication)
   uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
   printf_init(&uart_putc);
 
   // Init uart1 (connected to the SUT)
-  uart16550_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  // uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
 
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
   // Init ethernet
@@ -449,12 +448,16 @@ int main() {
 #if 1
 
   // Wait for ENQ signal from SUT
-  while ((c = uart16550_getc()) != ENQ)
+  iob_uart_csrs_init_baseaddr(UART1_BASE);
+  while ((c = uart_getc()) != ENQ)
     if (DEBUG) {
       iob_uart_csrs_init_baseaddr(UART0_BASE);
       uart_putc(c);
       iob_uart_csrs_init_baseaddr(UART1_BASE);
     };
+
+  // Send ack to SUT to continue boot
+  uart_putc(ACK);
 
   // NOTE: Does this need to be after or before the ENQ signal loop?
   // iob_regfileif_csrs_set_start(1);
@@ -483,9 +486,6 @@ int main() {
     asm volatile("nop");
 
   iob_regfileif_csrs_set_start(0);
-
-  // Send ack to SUT to continue boot
-  uart_putc(ACK);
 
   // At this point the SUT is running, right?
 
@@ -533,16 +533,26 @@ int main() {
 
   printf("Tester Malloc gave pointer: %p\n", malloced);
 
-  int *memPtr0 = (int *)0x00007000;
-  int *memPtr1 = (int *)0x10007000;
-  int *memPtr2 = (int *)0x20007000;
-  int *memPtr3 = (int *)0x30007000;
-  int *memPtr4 = (int *)0x40007000;
-  int *memPtr5 = (int *)0x50007000;
-  int *memPtr6 = (int *)0x60007000;
-  int *memPtr7 = (int *)0x70007000;
+  int *memPtr0 = (int *)0x00100000;
+  int *memPtr1 = (int *)0x10100000;
+  int *memPtr2 = (int *)0x20100000;
+  int *memPtr3 = (int *)0x30100000;
+  int *memPtr4 = (int *)0x40100000;
+  int *memPtr5 = (int *)0x50100000;
+  int *memPtr6 = (int *)0x60100000;
+  int *memPtr7 = (int *)0x70100000;
 
-  char *sutMemoryBase = (char *)0x40010000;
+  // Need to make sure that we do not overwrite code or stack.
+  // The first 256 bytes are reserved for passing values around.
+  char *sutMemoryBase = (char *)0x40100100;
+
+  int32_t sutMemoryOffset = 0x40000000;
+
+  printf("Gonna set memPtr4 value\n");
+  *memPtr4 = 0x67676767;
+  //*memPtr5 = 0x67676767;
+  //*memPtr6 = 0x67676767;
+  //*memPtr7 = 0x67676767;
 
   printf("Value of 0: %x\n", *memPtr0);
   printf("Value of 1: %x\n", *memPtr1);
@@ -552,8 +562,6 @@ int main() {
   printf("Value of 5: %x\n", *memPtr5);
   printf("Value of 6: %x\n", *memPtr6);
   printf("Value of 7: %x\n", *memPtr7);
-
-  printf("Gonna store value in com ptr\n");
 
 #if 0
   *memPtr0 = 0x01010101;
@@ -621,13 +629,17 @@ int main() {
     char *correct = model + compiledModel->modelSize + 16;
     char *inputs = correct + compiledModel->correctSize + 16;
 
+    printf("Output: %p\n", output);
+    printf("Temp: %p\n", temp);
+    printf("Model: %p\n", model);
+    printf("Correct: %p\n", correct);
+    printf("Input: %p\n", inputs);
+
     void **inputsVector = inputs + compiledModel->totalInputSize;
     uint32_t *inputOffsets = CompiledModel_InputOffsets(compiledModel);
     for (int i = 0; i < compiledModel->inputCount; i++) {
-      inputsVector[i] = VERSAT_OFFSET_PTR(inputs, inputOffsets[i]);
+      inputsVector[i] = VERSAT_OFFSET_PTR(inputs, -sutMemoryOffset + inputOffsets[i]);
     }
-
-    *output = 67;
 
     printf("Inputs: %p\n", inputs);
     printf("Inputs Vector: %p\n", inputsVector);
@@ -650,13 +662,27 @@ int main() {
 
     // printf("Gonna start versat_ai\n");
 
+    // Clear any messages from the SUT before setting start
+    clear_sut_messages();
+    void **sendData0 = (void **)0x40100000;
+    void **sendData1 = (void **)0x40100004;
+    void **sendData2 = (void **)0x40100008;
+    void **sendData3 = (void **)0x4010000c;
+    void **sendData4 = (void **)0x40100010;
+    void **sendData5 = (void **)0x40100014;
+
+    *sendData0 = VERSAT_OFFSET_PTR(compiledModel,-sutMemoryOffset);
+    *sendData1 = VERSAT_OFFSET_PTR(output,-sutMemoryOffset);
+    *sendData2 = VERSAT_OFFSET_PTR(temp,-sutMemoryOffset);
+    *sendData3 = VERSAT_OFFSET_PTR(model,-sutMemoryOffset);
+    *sendData4 = VERSAT_OFFSET_PTR(inputsVector,-sutMemoryOffset);
+    *sendData5 = VERSAT_OFFSET_PTR(correct,-sutMemoryOffset);
+
     printf("Gonna clear cache\n");
     clear_cache();
 
     printf("Cache was cleared\n");
 
-    // Clear any messages from the SUT before setting start
-    clear_sut_messages();
     iob_regfileif_csrs_set_start(1);
     clear_sut_messages();
 
@@ -665,18 +691,12 @@ int main() {
     while (iob_regfileif_csrs_get_start() != 0) {
       relay_messages();
     }
-    clear_sut_messages();
-
-    printf("Start was received and deasserted\n");
-    clear_sut_messages();
-
     while (iob_regfileif_csrs_get_done() != 1) {
       relay_messages();
     }
     clear_sut_messages();
 
-    printf("Done was asserted\n");
-    clear_sut_messages();
+    printf("\n");
 
     while (1) {
       iob_uart_csrs_init_baseaddr(UART1_BASE);

@@ -188,7 +188,7 @@ def setup(py_params):
             },
             {
                 # Instantiate a UART core to communicate with SUT
-                "core_name": "iob_uart16550",
+                "core_name": "iob_uart",
                 "instance_name": "UART1",
                 "instance_description": "UART peripheral for communication with SUT.",
                 "is_peripheral": True,
