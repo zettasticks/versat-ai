@@ -34,7 +34,7 @@ The A-IQ Ready project is supported by the Chips Joint Undertaking (Chips JU) - 
 
 <table>
     <tr>
-        <td align="center" width="50%"><img src="assets/A-IQ_Ready_logo_blue_transp.png" alt="AI-Q Ready logo" style="width:50%"></td>
+        <td align="center" width="50%"><img src="assets/A-IQ_Ready_logo_blue_transp.png" alt="A-IQ Ready logo" style="width:50%"></td>
         <td align="center"><img src="assets/Chips-JU_logo.jpeg" alt="Chips JU logo" style="width:50%"></td>
     </tr>
 </table>
