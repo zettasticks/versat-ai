@@ -162,12 +162,13 @@ def EmitMaxPool(emitter, op: Operation):
     stride = attr["strides"].value
     kernel = attr["kernel_shape"].value
     pads = attr["pads"].value
+    padType = attr["auto_pad"].value
 
     emitter.I32(dims)
     emitter.I32(len(kernel))
     emitter.I32(len(stride))
     emitter.I32(len(pads))
-    emitter.I32(attr["auto_pad"].value)
+    emitter.I32(padType.value)
     emitter.I32Array(kernel)
     emitter.I32Array(stride)
     emitter.I32Array(pads)
@@ -214,7 +215,7 @@ def EmitConv(emitter, op: Operation):
     emitter.I32(len(stride))
     emitter.I32(len(dilations))
     emitter.I32(len(pads))
-    emitter.I32(padType)
+    emitter.I32(padType.value)
 
     emitter.I32Array(kernel)
     emitter.I32Array(stride)
@@ -461,15 +462,15 @@ batchNormalizationAttributes = {
 }
 
 lrnAttributes = {
-    "alpha": MakeAttrFloat("0.0001"),
-    "beta": MakeAttrFloat("0.75"),
-    "bias": MakeAttrFloat("1.0"),
+    "alpha": MakeAttrFloat(0.0001),
+    "beta": MakeAttrFloat(0.75),
+    "bias": MakeAttrFloat(1.0),
     "size": MakeAttrInteger(None),
 }
 
 gemmAttributes = {
-    "alpha": MakeAttrFloat("1.0"),
-    "beta": MakeAttrFloat("1.0"),
+    "alpha": MakeAttrFloat(1.0),
+    "beta": MakeAttrFloat(1.0),
     "transA": MakeAttrInteger(0),
     "transB": MakeAttrInteger(0),
 }

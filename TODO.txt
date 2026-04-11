@@ -8,3 +8,5 @@ every place that needs it. We can also try to figure out if we can find a simple
 [3] The memory interface is not big enough. In simulation and for small problems it is enough but eventually we will reach a point where it is not enough. The easy way of increasing it using py2 is also the slowest since we end up waiting minutes for the hex script to run. And when using fpga we are gonna wait minutes for gigabyte files to transfer between computers.
 
 [4] Need INIT_MEM=1 to speedup sim-run and need INIT_MEM=0 to run fpga and give correct values.
+
+[5] Is there a need for InstantiatedAttribute? It only contains 2 members and it appears we do not use the first one ever.

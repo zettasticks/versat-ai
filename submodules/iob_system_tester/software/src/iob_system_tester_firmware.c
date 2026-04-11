@@ -217,9 +217,6 @@ int main() {
 #include "iob_timer.h"
 #include "iob_uart.h"
 #include <string.h>
-#ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
-#include "iob_eth.h"
-#endif
 
 #include "iob_regfileif_csrs.h"
 #include "versat_ai.h"
@@ -233,6 +230,41 @@ void clear_cache() {
   // Flush VexRiscv CPU internal cache
   asm volatile(".word 0x500F" ::: "memory");
 }
+
+#ifdef USE_ETHERNET
+#include "iob_eth.h"
+
+uint32_t uart_request_ethernet_recvfile(const char *file_name) {
+  uart_puts(UART_PROGNAME);
+  uart_puts(": requesting to receive file by ethernet\n");
+
+  // send file receive by ethernet request
+  uart_putc(0x13);
+
+  // send file name (including end of string)
+  uart_puts(file_name);
+  uart_putc(0);
+
+  // receive file size
+  uint32_t file_size = uart_getc();
+  file_size |= ((uint32_t)uart_getc()) << 8;
+  file_size |= ((uint32_t)uart_getc()) << 16;
+  file_size |= ((uint32_t)uart_getc()) << 24;
+
+  // send ACK before receiving file
+  uart_putc(ACK);
+
+  return file_size;
+}
+
+void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
+  if (expectedSize == 0) {
+    return;
+  }
+  uint32_t size = uart_request_ethernet_recvfile(path);
+  eth_rcv_file(buffer, size);
+}
+#endif
 
 void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
                      int expectedSize) {
@@ -391,6 +423,8 @@ void clear_sut_messages() {
   iob_uart_csrs_init_baseaddr(UART0_BASE);
 }
 
+volatile char* eth_frame_ptr = NULL;
+
 int main() {
   int i;
   uint32_t file_size = 0;
@@ -410,6 +444,9 @@ int main() {
 
   // Init uart1 (connected to the SUT)
   // uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+
+  // Allocate the last portion for the ethernet.
+  eth_frame_ptr = (volatile char*) 0x5fff0000;
 
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
   // Init ethernet
@@ -493,102 +530,20 @@ int main() {
 
   printf("Cleared SUT messages\n");
 
-  // Where does TESTER get stuck?
-
-#if 0
-  iob_uart_csrs_init_baseaddr(UART1_BASE);
-  while(1){
-  //while ((c = uart_getc()) != EOT) {
-    iob_uart_csrs_init_baseaddr(UART0_BASE);
-    printf("We are inside the Tester\n");
-
-    printf("TesterStart: %d\n",iob_regfileif_csrs_get_start());
-    iob_uart_csrs_init_baseaddr(UART1_BASE);
-
-    // This is the main loop.
-    // After this the SUT has terminated.
-
-    iob_regfileif_csrs_set_start(1);
-  }
-
-  // At this point the SUT has terminated, right?
-
-  //
-  // Print (stored) SUT messages
-  //
-
-  // Switch back to UART0
-  iob_uart_csrs_init_baseaddr(UART0_BASE);
-
-  printf("Tester start is: %d\n",iob_regfileif_csrs_get_start());
-
-  uart_sendfile("test.log", strlen(pass_string), pass_string);
-
-  uart_finish();
-#endif
-
 #endif
 
   int *malloced = (int *)malloc(sizeof(int));
 
   printf("Tester Malloc gave pointer: %p\n", malloced);
 
-  int *memPtr0 = (int *)0x00100000;
-  int *memPtr1 = (int *)0x10100000;
-  int *memPtr2 = (int *)0x20100000;
-  int *memPtr3 = (int *)0x30100000;
-  int *memPtr4 = (int *)0x40100000;
-  int *memPtr5 = (int *)0x50100000;
-  int *memPtr6 = (int *)0x60100000;
-  int *memPtr7 = (int *)0x70100000;
-
   // Need to make sure that we do not overwrite code or stack.
   // The first 256 bytes are reserved for passing values around.
-  char *sutMemoryBase = (char *)0x40100100;
+  //char *sutMemoryBase = (char *)0x41000100;
 
   int32_t sutMemoryOffset = 0x40000000;
+  int32_t transferOffset  = 0x02000000;
 
-  printf("Gonna set memPtr4 value\n");
-  *memPtr4 = 0x67676767;
-  //*memPtr5 = 0x67676767;
-  //*memPtr6 = 0x67676767;
-  //*memPtr7 = 0x67676767;
-
-  printf("Value of 0: %x\n", *memPtr0);
-  printf("Value of 1: %x\n", *memPtr1);
-  printf("Value of 2: %x\n", *memPtr2);
-  printf("Value of 3: %x\n", *memPtr3);
-  printf("Value of 4: %x\n", *memPtr4);
-  printf("Value of 5: %x\n", *memPtr5);
-  printf("Value of 6: %x\n", *memPtr6);
-  printf("Value of 7: %x\n", *memPtr7);
-
-#if 0
-  *memPtr0 = 0x01010101;
-  *memPtr1 = 0x11111111;
-  *memPtr2 = 0x22222222;
-  *memPtr3 = 0x33333333;
-  *memPtr4 = 0x44444444;
-  *memPtr5 = 0x55555555;
-  *memPtr6 = 0x66666666;
-  *memPtr7 = 0x77777777;
-#endif
-
-#if 0
-  iob_regfileif_csrs_set_start(1);
-  while (iob_regfileif_csrs_get_start() != 0) {
-    relay_messages();
-  }
-
-  while (iob_regfileif_csrs_get_done() != 1) {
-    relay_messages();
-  }
-
-  // End UART0 connection
-  uart_finish();
-
-  return 0;
-#endif
+  char *sutMemoryBase = (char *) (sutMemoryOffset + transferOffset + 0x00000100);
 
   File metadata = GetFile("VERSAT_TEST_METADATA.txt");
 
@@ -638,7 +593,8 @@ int main() {
     void **inputsVector = inputs + compiledModel->totalInputSize;
     uint32_t *inputOffsets = CompiledModel_InputOffsets(compiledModel);
     for (int i = 0; i < compiledModel->inputCount; i++) {
-      inputsVector[i] = VERSAT_OFFSET_PTR(inputs, -sutMemoryOffset + inputOffsets[i]);
+      inputsVector[i] =
+          VERSAT_OFFSET_PTR(inputs, -sutMemoryOffset + inputOffsets[i]);
     }
 
     printf("Inputs: %p\n", inputs);
@@ -653,40 +609,29 @@ int main() {
     FastReceiveFile(pathBuffer, "inputs.bin", inputs,
                     compiledModel->totalInputSize);
 
-    iob_regfileif_csrs_set_metamodel_addr(compiledModel);
-    iob_regfileif_csrs_set_output_addr(output);
-    iob_regfileif_csrs_set_temp_addr(temp);
-    iob_regfileif_csrs_set_model_addr(model);
-    iob_regfileif_csrs_set_inputsVector_addr(inputsVector);
-    iob_regfileif_csrs_set_correctOutputs_addr(correct);
-
-    // printf("Gonna start versat_ai\n");
-
     // Clear any messages from the SUT before setting start
     clear_sut_messages();
-    void **sendData0 = (void **)0x40100000;
-    void **sendData1 = (void **)0x40100004;
-    void **sendData2 = (void **)0x40100008;
-    void **sendData3 = (void **)0x4010000c;
-    void **sendData4 = (void **)0x40100010;
-    void **sendData5 = (void **)0x40100014;
+    void **sendData0 = (void **) (sutMemoryOffset + transferOffset + 0x00000000);
+    void **sendData1 = (void **) (sutMemoryOffset + transferOffset + 0x00000004);
+    void **sendData2 = (void **) (sutMemoryOffset + transferOffset + 0x00000008);
+    void **sendData3 = (void **) (sutMemoryOffset + transferOffset + 0x0000000c);
+    void **sendData4 = (void **) (sutMemoryOffset + transferOffset + 0x00000010);
+    void **sendData5 = (void **) (sutMemoryOffset + transferOffset + 0x00000014);
 
-    *sendData0 = VERSAT_OFFSET_PTR(compiledModel,-sutMemoryOffset);
-    *sendData1 = VERSAT_OFFSET_PTR(output,-sutMemoryOffset);
-    *sendData2 = VERSAT_OFFSET_PTR(temp,-sutMemoryOffset);
-    *sendData3 = VERSAT_OFFSET_PTR(model,-sutMemoryOffset);
-    *sendData4 = VERSAT_OFFSET_PTR(inputsVector,-sutMemoryOffset);
-    *sendData5 = VERSAT_OFFSET_PTR(correct,-sutMemoryOffset);
+    *sendData0 = VERSAT_OFFSET_PTR(compiledModel, -sutMemoryOffset);
+    *sendData1 = VERSAT_OFFSET_PTR(output, -sutMemoryOffset);
+    *sendData2 = VERSAT_OFFSET_PTR(temp, -sutMemoryOffset);
+    *sendData3 = VERSAT_OFFSET_PTR(model, -sutMemoryOffset);
+    *sendData4 = VERSAT_OFFSET_PTR(inputsVector, -sutMemoryOffset);
+    *sendData5 = VERSAT_OFFSET_PTR(correct, -sutMemoryOffset);
 
     printf("Gonna clear cache\n");
     clear_cache();
 
     printf("Cache was cleared\n");
 
-    iob_regfileif_csrs_set_start(1);
     clear_sut_messages();
-
-    printf("Set start\n");
+    iob_regfileif_csrs_set_start(1);
 
     while (iob_regfileif_csrs_get_start() != 0) {
       relay_messages();
@@ -697,29 +642,7 @@ int main() {
     clear_sut_messages();
 
     printf("\n");
-
-    while (1) {
-      iob_uart_csrs_init_baseaddr(UART1_BASE);
-      bool doBreak = true;
-      if (iob_uart_csrs_get_rxready()) {
-        doBreak = false;
-      }
-      iob_uart_csrs_init_baseaddr(UART0_BASE);
-      if (doBreak) {
-        break;
-      }
-      relay_messages();
-    }
   }
-
-  printf("Value of 0: %x\n", *memPtr0);
-  printf("Value of 1: %x\n", *memPtr1);
-  printf("Value of 2: %x\n", *memPtr2);
-  printf("Value of 3: %x\n", *memPtr3);
-  printf("Value of 4: %x\n", *memPtr4);
-  printf("Value of 5: %x\n", *memPtr5);
-  printf("Value of 6: %x\n", *memPtr6);
-  printf("Value of 7: %x\n", *memPtr7);
 
   uart_puts("\n");
   uart_puts("[Tester]: Finished processing\n");

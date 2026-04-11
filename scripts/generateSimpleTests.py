@@ -833,23 +833,23 @@ def GenerateSimpleTest():
     CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
 
     # MARK1
-    testAdd = 0
-    testRelu = 0
-    testReshape = 0
-    testTranspose = 0
-    testMaxPool = 0
-    testAveragePool = 0
-    testMatMul = 0
-    testDropout = 0
-    testGemm = 0
+    testAdd = 1
+    testRelu = 1
+    testReshape = 1
+    testTranspose = 1
+    testMaxPool = 1
+    testAveragePool = 1
+    testMatMul = 1
+    testDropout = 1
+    testGemm = 1
 
-    testConv = 0
-    testBatchNormalization = 0
+    testConv = 1
+    testBatchNormalization = 1
 
-    testSoftmax = 0
-    testLRN = 0
+    testSoftmax = 1
+    testLRN = 1
 
-    generativeTests = 0
+    generativeTests = 1
     testBig = 0
 
     if False:

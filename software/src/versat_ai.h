@@ -13,7 +13,7 @@
 #define EMBED_TABLES 1
 #define COMPUTE_TABLES 0
 
-#define USE_ETHERNET 0
+#define USE_ETHERNET 1
 #define DEBUG 1
 
 #define USE_CORDIC 1
@@ -133,6 +133,7 @@ typedef struct {
 
   uint32_t type;
   uint32_t useVersat;
+  float precision;
   DataSource output;
 
   uint32_t outputSize;

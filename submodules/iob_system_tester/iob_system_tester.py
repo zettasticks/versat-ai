@@ -12,7 +12,7 @@ def setup(py_params):
     addr_w = 32
     data_w = 32
     sut_py_params = py_params.get("sut_py_params", {})
-    sut_mem_addr_w = sut_py_params.get("mem_addr_w", 25)
+    sut_mem_addr_w = sut_py_params.get("mem_addr_w", 30)
 
     # NOTE: With current configuration, Tester runs from intmem; SUT runs from extmem.
 
@@ -23,10 +23,10 @@ def setup(py_params):
         "use_intmem": True,
         "use_extmem": True,
         "use_ethernet": False,
-        "mem_addr_w": mem_addr_w,
+        "mem_addr_w": 30,
         "include_tester": False,  # This is already the tester. We don't want to include another one.
         "cpu": "iob_vexriscv",
-        "fw_addr_w": mem_addr_w,
+        "fw_addr_w": 17,
     }
 
     py_params = update_params(iob_system_default_overrides, py_params)
@@ -242,7 +242,7 @@ def setup(py_params):
                 },
                 "memory_zones": [
                     # (Start addr, End addr, Translation offset)
-                    (0x00000000, 0x0FFFFFFF, 0x40000000),
+                    (0x00000000, 0x1FFFFFFF, 0x40000000),
                 ],
             },
         ]

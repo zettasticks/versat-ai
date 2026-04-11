@@ -155,7 +155,6 @@ if __name__ == "__main__":
     if test.type == TestType.GENERATED:
         createVCD = True
 
-    print("HERE")
     os.makedirs("resources", exist_ok=True)
 
     boolStr = "true" if createVCD else "false"

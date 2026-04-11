@@ -643,27 +643,6 @@ void silent_clear_cache() {
 
 void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
 
-#if 0
-void init_peripherals() {
-  // init uart
-  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-  printf_init(&uart_putc);
-
-  // init timer
-  timer_init(TIMER0_BASE);
-
-  SetVersatDebugPrintfFunction(printf);
-  versat_init(VERSAT0_BASE);
-  ConfigCreateVCD(false);
-  Versat_SetTimeMeasurementFunction(timer_get_count);
-  Versat_SetClearCache(silent_clear_cache_args);
-  Versat_Init();
-
-  // init regfileif
-  iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
-}
-#endif
-
 int main() {
   // init timer
   timer_init(TIMER0_BASE);
@@ -693,21 +672,21 @@ int main() {
 
     printf("Inside SUT\n");
 
-    void **recvData0 = (void **) 0x00100000;
-    void **recvData1 = (void **) 0x00100004;
-    void **recvData2 = (void **) 0x00100008;
-    void **recvData3 = (void **) 0x0010000c;
-    void **recvData4 = (void **) 0x00100010;
-    void **recvData5 = (void **) 0x00100014;
+    void **recvData0 = (void **)0x02000000;
+    void **recvData1 = (void **)0x02000004;
+    void **recvData2 = (void **)0x02000008;
+    void **recvData3 = (void **)0x0200000c;
+    void **recvData4 = (void **)0x02000010;
+    void **recvData5 = (void **)0x02000014;
 
     printf("Address of stack: %p\n", &recvData0);
 
-    CompiledModel *compiledModel = (CompiledModel *) *recvData0;
-    char *output = (char *) *recvData1;
-    char *temp = (char *) *recvData2;
-    char *model = (char *) *recvData3;
-    void **inputs = (void **) *recvData4;
-    char *correct = (char *) *recvData5;
+    CompiledModel *compiledModel = (CompiledModel *)*recvData0;
+    char *output = (char *)*recvData1;
+    char *temp = (char *)*recvData2;
+    char *model = (char *)*recvData3;
+    void **inputs = (void **)*recvData4;
+    char *correct = (char *)*recvData5;
 
     printf("Output: %x\n", output);
     printf("Temp:%p\n", temp);

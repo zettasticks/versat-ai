@@ -20,12 +20,15 @@ GET_MACRO = $(shell grep "define $(1)" $(2) | rev | cut -d" " -f1 | rev)
 #Function to obtain parameter named $(1) from versat_ai_conf.vh
 GET_VERSAT_AI_CONF_MACRO = $(call GET_MACRO,VERSAT_AI_$(1),$(ROOT_DIR)/hardware/src/versat_ai_conf.vh)
 
+../../scripts/makeHex: ../../software/makehex.c
+	gcc -o ../../scripts/makeHex ../../software/makehex.c
+
 versat_ai_bootrom.hex: ../../software/versat_ai_preboot.bin ../../software/versat_ai_boot.bin
 	../../scripts/makehex.py $^ 00000080 $(call GET_VERSAT_AI_CONF_MACRO,BOOTROM_ADDR_W) $@
 
-versat_ai_firmware.hex: versat_ai_firmware.bin
-	../../scripts/makehex.py $< $(call GET_VERSAT_AI_CONF_MACRO,MEM_ADDR_W) $@
-	../../scripts/makehex.py --split $< $(call GET_VERSAT_AI_CONF_MACRO,MEM_ADDR_W) $@
+versat_ai_firmware.hex: versat_ai_firmware.bin ../../scripts/makeHex
+	#../../scripts/makehex.py --split $< $(call GET_VERSAT_AI_CONF_MACRO,MEM_ADDR_W) $@
+	../../scripts/makeHex $< $(call GET_VERSAT_AI_CONF_MACRO,MEM_ADDR_W) $@
 
 versat_ai_firmware.bin: ../../software/versat_ai_firmware.bin
 	cp $< $@

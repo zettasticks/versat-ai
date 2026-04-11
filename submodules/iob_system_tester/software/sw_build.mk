@@ -22,12 +22,15 @@ GET_MACRO = $(shell grep "define $(1)" $(2) | rev | cut -d" " -f1 | rev)
 #Function to obtain parameter named $(1) from iob_system_tester_conf.vh
 GET_IOB_SYSTEM_TESTER_CONF_MACRO = $(call GET_MACRO,IOB_SYSTEM_TESTER_$(1),$(ROOT_DIR)/hardware/src/iob_system_tester_conf.vh)
 
+../../scripts/makeHex: ../../software/makehex.c
+	gcc -o ../../scripts/makeHex ../../software/makehex.c
+
 iob_system_tester_bootrom.hex: ../../software/iob_system_tester_preboot.bin ../../software/iob_system_tester_boot.bin
 	../../scripts/makehex.py $^ 00000080 $(call GET_IOB_SYSTEM_TESTER_CONF_MACRO,BOOTROM_ADDR_W) $@
 
-iob_system_tester_firmware.hex: iob_system_tester_firmware.bin
-	../../scripts/makehex.py $< $(call GET_IOB_SYSTEM_TESTER_CONF_MACRO,MEM_ADDR_W) $@
-	../../scripts/makehex.py --split $< $(call GET_IOB_SYSTEM_TESTER_CONF_MACRO,MEM_ADDR_W) $@
+iob_system_tester_firmware.hex: iob_system_tester_firmware.bin ../../scripts/makeHex
+	#../../scripts/makehex.py --split $< $(call GET_IOB_SYSTEM_TESTER_CONF_MACRO,MEM_ADDR_W) $@
+	../../scripts/makeHex $< $(call GET_IOB_SYSTEM_TESTER_CONF_MACRO,MEM_ADDR_W) $@
 
 iob_system_tester_firmware.bin: ../../software/iob_system_tester_firmware.bin
 	cp $< $@

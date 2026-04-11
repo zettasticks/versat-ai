@@ -243,7 +243,7 @@ def GenerateModelFromOnnxModel(onnxModel):
                 parsedAttribute = InstantiatedAttribute(spec, float(attribute.f))
             elif spec.attrType == OnnxAttributeType.ENUM:
                 name = attribute.s.decode("UTF-8")
-                parsedAttribute = spec.allowedValues[name]
+                parsedAttribute = InstantiatedAttribute(spec, spec.allowedValues[name])
             else:
                 print(spec.attrType)
                 assert False
@@ -909,10 +909,13 @@ def GenerateDebug(
         inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
         inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
 
-    pprint(cModel)
+    # pprint(cModel)
 
     # Generate the structures of the operators.
     # Easier to do this automatically in order to ensure that data matches
+    # NOTE: This generates the same code regardless of the test model. We could extract this part into a different flow
+    #       but it kinda does not matter since as long as we can guarantee that this gets generated before the test gets compiled
+    #       it makes no difference
     with open(
         os.path.join(sourceOutputLocation, f"versat_ai_operators_meta.h"), "w"
     ) as f:
@@ -1049,8 +1052,11 @@ def GenerateDebug(
 
         opInfo = StructBuilder()
 
+        # Operator size gets prepended at the end.
+
         opInfo.U32(spec.index)
         opInfo.U32(1)
+        opInfo.F32(spec.floatPrecision)
 
         if op.outputMemoryAddress.memType == MemoryType.TEMP:
             opInfo.DataSource(1, op.outputMemoryAddress.offset)
@@ -1067,7 +1073,7 @@ def GenerateDebug(
 
         for inp in op.inputs:
             if inp.sourceType == DataSourceType.INITIALIZER:
-                opInfo.DataSource(3, op.packedInitializers.offsets[inp.index])
+                opInfo.DataSource(3, packedInitializers.offsets[inp.index])
             elif inp.sourceType == DataSourceType.MODEL_INPUT:
                 opInfo.DataSource(2, inp.index)
             elif debugging:

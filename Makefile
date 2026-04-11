@@ -56,6 +56,9 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
 	cp ./scripts/console.py ../versat_ai_V$(VERSION)/tester/scripts
 	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/scripts
 	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/tester/scripts
+	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
+	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
+	cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
 
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
