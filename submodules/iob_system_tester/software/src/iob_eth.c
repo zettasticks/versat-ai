@@ -175,7 +175,7 @@ void eth_set_payload_size(unsigned int idx, unsigned int size) {
                       idx << 1);
 }
 
-char* eth_last_frame_ptr = NULL;
+char *eth_last_frame_ptr = NULL;
 
 void eth_send_frame(char *data, unsigned int size) {
   int i;

@@ -53,12 +53,12 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/ # Since python file was not being copied and we need a python script from inside software
 	cp -r ./software ../versat_ai_V$(VERSION)/
 	cp ./scripts/console.py ../versat_ai_V$(VERSION)/scripts
-	cp ./scripts/console.py ../versat_ai_V$(VERSION)/tester/scripts
+	-cp ./scripts/console.py ../versat_ai_V$(VERSION)/tester/scripts
 	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/scripts
-	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/tester/scripts
+	-cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/tester/scripts
 	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
-	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
-	cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
+	-cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
+	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
 
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 

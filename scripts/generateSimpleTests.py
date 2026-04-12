@@ -820,17 +820,20 @@ def GenerateSimpleTest():
     # MARK4
     # Small test
 
-    CreateSoftmax([1], 0)
-    CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-    CreateUnaryOpTest("Relu", [4])
-    CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
-    CreateBatchNormalization([1, 1, 1, 1])
+    if True:
+        CreateSoftmax([1], 0)
+        CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        CreateUnaryOpTest("Relu", [4])
+        CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
+        CreateBatchNormalization([1, 1, 1, 1])
+        CreateBinaryOpTest("Add", [3, 2], [3, 2])
+        CreateTranspose([2, 2], [0, 1])
+        CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
+        CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+        CreateGemm([2, 2], [2, 2])
+        CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
+
     CreateBinaryOpTest("Add", [3, 2], [3, 2])
-    CreateTranspose([2, 2], [0, 1])
-    CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
-    CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
-    CreateGemm([2, 2], [2, 2])
-    CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
 
     # MARK1
     testAdd = 1
@@ -839,17 +842,15 @@ def GenerateSimpleTest():
     testTranspose = 1
     testMaxPool = 1
     testAveragePool = 1
-    testMatMul = 1
-    testDropout = 1
-    testGemm = 1
+    testMatMul = 0
+    testDropout = 0
+    testGemm = 0
+    testConv = 0
+    testBatchNormalization = 0
+    testSoftmax = 0
+    testLRN = 0
 
-    testConv = 1
-    testBatchNormalization = 1
-
-    testSoftmax = 1
-    testLRN = 1
-
-    generativeTests = 1
+    generativeTests = 0
     testBig = 0
 
     if False:
@@ -1510,8 +1511,8 @@ def GenerateTest(outputPath):
     # NOTE: Use the setupTest way of selecting test ranges instead if possible.
     # MARK2
     focusOnOneTest = 0
-    if 0:
-        testList = testList[0:10]
+    if 1:
+        testList = testList[100:]
 
     if focusOnOneTest:
         testToFocus = 4

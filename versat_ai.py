@@ -104,112 +104,49 @@ def setup(py_params: dict):
         num_managers += 1
     xbar_subblock["num_managers"] = num_managers
 
-    attributes_dict = {
-        "title": "Versat-AI System",
-        "description": "Accelerate AI Applications with Versat-AI.",
-        "board_list": [
-            "iob_aes_ku040_db_g"
-            # "iob_cyclonev_gt_dk",
-            # "iob_zybo_z7",
-        ],
-        "confs": [
-            # {   TODO: is this needed?
-            #     "name": "INT_MEM_HEXFILE",
-            #     "descr": "Firmware file name",
-            #     "type": "D",
-            #     "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
-            #     "min": "NA",
-            #     "max": "NA",
-            # },
-            {
-                "name": "EXT_MEM_HEXFILE",
-                "descr": "Firmware file name",
-                "type": "D",
-                "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
-                "min": "NA",
-                "max": "NA",
+    subblocks = [
+        xbar_subblock,
+        {
+            # Instantiate a UART core from: https://github.com/IObundle/py2hwsw/tree/main/py2hwsw/lib/hardware/iob_uart
+            "core_name": "iob_uart",
+            "instance_name": "UART0",
+            "instance_description": "UART peripheral",
+            "is_peripheral": True,
+            "parameters": {},
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                # Cbus connected automatically
+                "rs232_m": "rs232_m",
             },
-        ],
-        "ports": [
-            {
-                # Add new rs232 port for uart
-                "name": "rs232_m",
-                "descr": "iob-system uart interface",
-                "signals": {
-                    "type": "rs232",
-                },
+        },
+        {
+            # Instantiate a TIMER core from: https://github.com/IObundle/py2hwsw/tree/main/py2hwsw/lib/hardware/iob_timer
+            "core_name": "iob_timer",
+            "instance_name": "TIMER0",
+            "instance_description": "Timer peripheral",
+            "is_peripheral": True,
+            "parameters": {},
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                # Cbus connected automatically
             },
-            {
-                "name": "csrs_cbus_s",
-                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
-                "signals": {
-                    "type": "iob",
-                    "ADDR_W": 3,
-                    "DATA_W": data_w,
-                },
+        },
+        {
+            "core_name": "iob_versat",
+            "instance_name": "VERSAT0",
+            "instance_description": "Versat accelerator",
+            "is_peripheral": True,
+            "parameters": {},
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_out_m": "versat_axi",
+                # Cbus connected automatically
             },
-            # NOTE: Add other ports here.
-        ],
-        "wires": [
-            {
-                "name": "versat_axi",
-                "descr": "Versat axi wires",
-                "signals": {
-                    "type": "axi",
-                    "prefix": "versat_",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": addr_w,
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": "1",
-                },
-            },
-            # CPU control wires
-            {"name": "rst", "signals": [{"name": "sw_reset", "width": 1}]},
-            # {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one) (or use address translator in tester).
-            #     "name": "fw_base_addr",
-            #     "signals": [{"name": "fw_base_addr", "width": addr_w}],
-            # },
-        ],
-        "subblocks": [
-            xbar_subblock,
-            {
-                # Instantiate a UART core from: https://github.com/IObundle/py2hwsw/tree/main/py2hwsw/lib/hardware/iob_uart
-                "core_name": "iob_uart",
-                "instance_name": "UART0",
-                "instance_description": "UART peripheral",
-                "is_peripheral": True,
-                "parameters": {},
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    # Cbus connected automatically
-                    "rs232_m": "rs232_m",
-                },
-            },
-            {
-                # Instantiate a TIMER core from: https://github.com/IObundle/py2hwsw/tree/main/py2hwsw/lib/hardware/iob_timer
-                "core_name": "iob_timer",
-                "instance_name": "TIMER0",
-                "instance_description": "Timer peripheral",
-                "is_peripheral": True,
-                "parameters": {},
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    # Cbus connected automatically
-                },
-            },
-            {
-                "core_name": "iob_versat",
-                "instance_name": "VERSAT0",
-                "instance_description": "Versat accelerator",
-                "is_peripheral": True,
-                "parameters": {},
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    "axi_out_m": "versat_axi",
-                    # Cbus connected automatically
-                },
-            },
+        },
+    ]
+
+    if py_params["include_tester"]:
+        subblocks += [
             {
                 "core_name": "iob_regfileif",
                 "instance_name": "REGFILEIF0",
@@ -321,9 +258,77 @@ def setup(py_params: dict):
                     "rst_o": "rst",
                     # "firm_addr_o": "fw_base_addr",
                 },
-            },
-            # NOTE: Add other components/peripherals here.
+            }
+        ]
+
+    attributes_dict = {
+        "title": "Versat-AI System",
+        "description": "Accelerate AI Applications with Versat-AI.",
+        "board_list": [
+            "iob_aes_ku040_db_g"
+            # "iob_cyclonev_gt_dk",
+            # "iob_zybo_z7",
         ],
+        "confs": [
+            # {   TODO: is this needed?
+            #     "name": "INT_MEM_HEXFILE",
+            #     "descr": "Firmware file name",
+            #     "type": "D",
+            #     "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
+            #     "min": "NA",
+            #     "max": "NA",
+            # },
+            {
+                "name": "EXT_MEM_HEXFILE",
+                "descr": "Firmware file name",
+                "type": "D",
+                "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
+                "min": "NA",
+                "max": "NA",
+            },
+        ],
+        "ports": [
+            {
+                # Add new rs232 port for uart
+                "name": "rs232_m",
+                "descr": "iob-system uart interface",
+                "signals": {
+                    "type": "rs232",
+                },
+            },
+            {
+                "name": "csrs_cbus_s",
+                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
+                "signals": {
+                    "type": "iob",
+                    "ADDR_W": 3,
+                    "DATA_W": data_w,
+                },
+            },
+            # NOTE: Add other ports here.
+        ],
+        "wires": [
+            {
+                "name": "versat_axi",
+                "descr": "Versat axi wires",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "versat_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            # CPU control wires
+            {"name": "rst", "signals": [{"name": "sw_reset", "width": 1}]},
+            # {  # FIXME: Connect this to CPU reset addr (or use preboot to jump to correct one) (or use address translator in tester).
+            #     "name": "fw_base_addr",
+            #     "signals": [{"name": "fw_base_addr", "width": addr_w}],
+            # },
+        ],
+        "subblocks": subblocks,
         "sw_modules": [
             {
                 "core_name": "iob_coverage_analyze",

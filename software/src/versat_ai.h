@@ -172,10 +172,10 @@ static uint32_t *CompiledModel_InputOffsets(CompiledModel *model) {
   return (uint32_t *)&model[1];
 }
 
-static uint32_t *CompiledModel_Operations(CompiledModel *model) {
+static Operation *CompiledModel_Operations(CompiledModel *model) {
   uint32_t *inputOffsets = CompiledModel_InputOffsets(model);
-  uint32_t *res =
-      VERSAT_OFFSET_PTR(inputOffsets, sizeof(uint32_t) * model->inputCount);
+  Operation *res = (Operation *)VERSAT_OFFSET_PTR(
+      inputOffsets, sizeof(uint32_t) * model->inputCount);
   return res;
 }
 

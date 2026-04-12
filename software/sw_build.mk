@@ -57,7 +57,7 @@ VERSAT_AI_FW_SRC+=src/versat_accel.c
 VERSAT_AI_FW_SRC+=src/iob-versat.c
  
 # PERIPHERAL SOURCES
-PERIPHERALS+=iob_regfileif_inverted #FIXME Hack
+#PERIPHERALS+=iob_regfileif_inverted #FIXME Hack
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 # Only add driver files if they exist
 VERSAT_AI_FW_SRC+=$(foreach file,$(DRIVERS),$(wildcard $(file)*))

@@ -348,7 +348,12 @@ File GetFile(const char *path) {
 
 File GetFileNoAlloc(const char *path, void *buffer) {
   uint32_t size = uart_filesize(path);
+
+#if USE_ETHERNET
+  ethernet_receive_file(path, buffer, size);
+#else
   uart_recvfile(path, buffer);
+#endif
 
   File res = {};
   res.data = buffer;
@@ -423,7 +428,7 @@ void clear_sut_messages() {
   iob_uart_csrs_init_baseaddr(UART0_BASE);
 }
 
-volatile char* eth_frame_ptr = NULL;
+volatile char *eth_frame_ptr = NULL;
 
 int main() {
   int i;
@@ -446,7 +451,7 @@ int main() {
   // uart_init(UART1_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
 
   // Allocate the last portion for the ethernet.
-  eth_frame_ptr = (volatile char*) 0x5fff0000;
+  eth_frame_ptr = (volatile char *)0x5fff0000;
 
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
   // Init ethernet
@@ -538,12 +543,12 @@ int main() {
 
   // Need to make sure that we do not overwrite code or stack.
   // The first 256 bytes are reserved for passing values around.
-  //char *sutMemoryBase = (char *)0x41000100;
+  // char *sutMemoryBase = (char *)0x41000100;
 
   int32_t sutMemoryOffset = 0x40000000;
-  int32_t transferOffset  = 0x02000000;
+  int32_t transferOffset = 0x02000000;
 
-  char *sutMemoryBase = (char *) (sutMemoryOffset + transferOffset + 0x00000100);
+  char *sutMemoryBase = (char *)(sutMemoryOffset + transferOffset + 0x00000100);
 
   File metadata = GetFile("VERSAT_TEST_METADATA.txt");
 
@@ -611,12 +616,12 @@ int main() {
 
     // Clear any messages from the SUT before setting start
     clear_sut_messages();
-    void **sendData0 = (void **) (sutMemoryOffset + transferOffset + 0x00000000);
-    void **sendData1 = (void **) (sutMemoryOffset + transferOffset + 0x00000004);
-    void **sendData2 = (void **) (sutMemoryOffset + transferOffset + 0x00000008);
-    void **sendData3 = (void **) (sutMemoryOffset + transferOffset + 0x0000000c);
-    void **sendData4 = (void **) (sutMemoryOffset + transferOffset + 0x00000010);
-    void **sendData5 = (void **) (sutMemoryOffset + transferOffset + 0x00000014);
+    void **sendData0 = (void **)(sutMemoryOffset + transferOffset + 0x00000000);
+    void **sendData1 = (void **)(sutMemoryOffset + transferOffset + 0x00000004);
+    void **sendData2 = (void **)(sutMemoryOffset + transferOffset + 0x00000008);
+    void **sendData3 = (void **)(sutMemoryOffset + transferOffset + 0x0000000c);
+    void **sendData4 = (void **)(sutMemoryOffset + transferOffset + 0x00000010);
+    void **sendData5 = (void **)(sutMemoryOffset + transferOffset + 0x00000014);
 
     *sendData0 = VERSAT_OFFSET_PTR(compiledModel, -sutMemoryOffset);
     *sendData1 = VERSAT_OFFSET_PTR(output, -sutMemoryOffset);
