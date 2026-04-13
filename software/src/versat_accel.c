@@ -311,6 +311,20 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info) {
+  int64_t *dims = VERSAT_ReshapeInfo_inputDims(info);
+
+  int64_t size = 1;
+  for (int64_t i = 0; i < info->numberInputDims; i++) {
+    size *= dims[i];
+  }
+
+  float *inView = (float *)data;
+  float *outView = (float *)output;
+
+  for (int i = 0; i < size; i++) {
+    outView[i] = inView[i];
+  }
+
   return data;
 }
 
@@ -352,7 +366,7 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
 
 // Currently hardcoded for 2D kernels.
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
   volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
   ActivateMergedAccelerator(MergeType_Top_Maxpool);
 
@@ -421,7 +435,7 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
 // Currently hardcoded for 2D kernels.
 void *Versat_AveragePool(void *inputX, void *output, int index,
                          AveragePoolInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
   volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
   ActivateMergedAccelerator(MergeType_Top_AveragePool);
 
@@ -511,7 +525,7 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           void *output, int index, ConvInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
@@ -1230,6 +1244,8 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
       config->myAccum.strideMinusOne = trueAW - 1;
 
       StartAccelerator();
+
+      silent_clear_cache();
     }
   }
 

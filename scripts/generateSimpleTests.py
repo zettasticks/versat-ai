@@ -842,15 +842,15 @@ def GenerateSimpleTest():
     testTranspose = 1
     testMaxPool = 1
     testAveragePool = 1
-    testMatMul = 0
-    testDropout = 0
-    testGemm = 0
-    testConv = 0
-    testBatchNormalization = 0
-    testSoftmax = 0
-    testLRN = 0
+    testMatMul = 1
+    testDropout = 1
+    testGemm = 1
+    testConv = 1
+    testBatchNormalization = 1
+    testSoftmax = 1
+    testLRN = 1
 
-    generativeTests = 0
+    generativeTests = 1
     testBig = 0
 
     if False:
@@ -1508,14 +1508,34 @@ def GenerateTest(outputPath):
     if 0:
         random.shuffle(testList)
 
+    if 0:
+        # firstPart = testList[0:10]
+        # firstPart = [testList[8]]
+
+        # lastPart  = testList[120:150]
+
+        testList = testList[:500]
+
+        # testList = firstPart + [testList[421]]
+        # testList = firstPart + lastPart
+        # testList = lastPart
+
     # NOTE: Use the setupTest way of selecting test ranges instead if possible.
     # MARK2
-    focusOnOneTest = 0
-    if 1:
-        testList = testList[100:]
+    if 0:
+        # firstPart = testList[0:10]
+        # firstPart = [testList[0],testList[2],testList[4],testList[6],testList[8]]
+        firstPart = [testList[8]]
 
+        lastPart = testList[120:150]
+
+        testList = firstPart + lastPart[1:2]
+        # testList = firstPart + lastPart
+        # testList = lastPart
+
+    focusOnOneTest = 0
     if focusOnOneTest:
-        testToFocus = 4
+        testToFocus = 12
 
         testList = [testList[testToFocus]]
         print(testList[0])

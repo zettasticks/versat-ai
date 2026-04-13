@@ -57,7 +57,8 @@ VERSAT_AI_FW_SRC+=src/versat_accel.c
 VERSAT_AI_FW_SRC+=src/iob-versat.c
  
 # PERIPHERAL SOURCES
-#PERIPHERALS+=iob_regfileif_inverted #FIXME Hack
+PERIPHERALS+=iob_regfileif_inverted #FIXME Hack
+
 DRIVERS=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 # Only add driver files if they exist
 VERSAT_AI_FW_SRC+=$(foreach file,$(DRIVERS),$(wildcard $(file)*))
@@ -124,12 +125,16 @@ EMUL_SRC+=libaccel.a
 # PERIPHERAL SOURCES
 EMUL_SRC+=$(addprefix src/,$(addsuffix .c,$(PERIPHERALS)))
 
-
 EMUL_SRC+=$(addprefix src/,$(addsuffix _csrs_pc_emul.c,$(PERIPHERALS)))
 
 EMUL_SRC:=$(filter-out src/iob_versat.c,$(EMUL_SRC))
 EMUL_SRC:=$(filter-out src/iob_eth_csrs_pc_emul.c,$(EMUL_SRC))
 EMUL_SRC:=$(filter-out src/iob_eth.c,$(EMUL_SRC))
+
+EMUL_SRC:=$(filter-out src/iob_regfileif.c,$(EMUL_SRC))
+EMUL_SRC:=$(filter-out src/iob_regfileif_csrs_pc_emul.c,$(EMUL_SRC))
+EMUL_SRC:=$(filter-out src/iob_regfileif_inverted.c,$(EMUL_SRC))
+EMUL_SRC:=$(filter-out src/iob_regfileif_inverted_csrs_pc_emul.c,$(EMUL_SRC))
 
 # include software build segment of child systems
 # child systems can add their own child_sw_build.mk without having to override this one.

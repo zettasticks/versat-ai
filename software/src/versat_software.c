@@ -131,9 +131,20 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
 
 void *Software_Reshape(void *data, void *shape, void *output, int index,
                        ReshapeInfo *info) {
-  // TODO: Need to copy the input, cannot assume that memory will remain valid.
-  // NOTE: If we want to avoid the copy need to put logic on onnx script that
-  // removes the operator call.
+  int64_t *dims = VERSAT_ReshapeInfo_inputDims(info);
+
+  int64_t size = 1;
+  for (int64_t i = 0; i < info->numberInputDims; i++) {
+    size *= dims[i];
+  }
+
+  float *inView = (float *)data;
+  float *outView = (float *)output;
+
+  for (int i = 0; i < size; i++) {
+    outView[i] = inView[i];
+  }
+
   return data;
 }
 

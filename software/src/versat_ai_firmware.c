@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "versat_ai.h"
+
 #if !USE_TESTER
 
 #include "iob_bsp.h"
@@ -14,12 +16,6 @@
 #include "versat_ai_conf.h"
 #include "versat_ai_mmap.h"
 #include <string.h>
-
-#if USE_ETHERNET
-#include "iob_eth.h"
-#endif
-
-#include "versat_ai.h"
 
 #if PC
 #include <stdio.h>
@@ -36,50 +32,11 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#if USE_ETHERNET
-uint32_t uart_request_ethernet_recvfile(const char *file_name) {
-  uart_puts(UART_PROGNAME);
-  uart_puts(": requesting to receive file by ethernet\n");
-
-  // send file receive by ethernet request
-  uart_putc(0x13);
-
-  // send file name (including end of string)
-  uart_puts(file_name);
-  uart_putc(0);
-
-  // receive file size
-  uint32_t file_size = uart_getc();
-  file_size |= ((uint32_t)uart_getc()) << 8;
-  file_size |= ((uint32_t)uart_getc()) << 16;
-  file_size |= ((uint32_t)uart_getc()) << 24;
-
-  // send ACK before receiving file
-  uart_putc(ACK);
-
-  return file_size;
-}
-
-void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
-  if (expectedSize == 0) {
-    return;
-  }
-  // printf("\n\n\n%d\n\n\n",eth_rcv_file(buffer, 10));
-
-  // printf("Gonna send uart request\n");
-  uint32_t size = uart_request_ethernet_recvfile(path);
-  printf("Sent uart request\n");
-  eth_rcv_file(buffer, size);
-}
-#endif
-
 void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
                      int expectedSize) {
   char fullPath[128];
-  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
-
-#if 0
 #if PC
+  snprintf(fullPath, 128, "../resources/%s_%s", pathPrefix, path);
   FILE *f = fopen(fullPath, "r");
   if (!f) {
     printf("Problem opening file for reading: %s\n", fullPath);
@@ -91,14 +48,10 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   fclose(f);
   return;
 #endif
-#endif
 
-#if USE_ETHERNET
-  ethernet_receive_file(fullPath, buffer, expectedSize);
-#else
+  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
   uart_recvfile(fullPath, buffer);
   printf("Received file by uart\n");
-#endif
 }
 
 void silent_clear_cache() {
@@ -222,12 +175,6 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#if USE_ETHERNET
-  uart_puts("\nGonna init ethernet\n");
-  eth_init(ETH0_BASE, &silent_clear_cache);
-  eth_wait_phy_rst();
-#endif
-
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
@@ -303,6 +250,7 @@ int main() {
     char *correct = model + compiledModel->modelSize + 16;
     char *inputs = correct + compiledModel->correctSize + 16;
 
+    printf("\n\n");
     printf("Output: %p\n", output);
     printf("Temp: %p\n", temp);
     printf("Model: %p\n", model);
@@ -315,9 +263,9 @@ int main() {
       inputsVector[i] = VERSAT_OFFSET_PTR(inputs, inputOffsets[i]);
     }
 
-    printf("Inputs: %p\n", inputs);
     printf("Inputs Vector: %p\n", inputsVector);
     printf("Inputs Vector val: %p %p\n", inputsVector[0], inputsVector[1]);
+    printf("\n\n");
 
     sprintf(pathBuffer, "%.*s", size, lineStart);
 
@@ -432,8 +380,6 @@ int main() {
 #include "iob_regfileif_inverted_csrs.h"
 #include "iob_timer.h"
 #include "iob_uart.h"
-
-#include "versat_ai.h"
 
 void silent_clear_cache() {
 #if !PC

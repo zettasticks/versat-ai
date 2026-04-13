@@ -10,6 +10,11 @@
 
 #define USE_TESTER 1
 
+#if PC
+#undef USE_TESTER
+#define USE_TESTER 0
+#endif
+
 #define EMBED_TABLES 1
 #define COMPUTE_TABLES 0
 

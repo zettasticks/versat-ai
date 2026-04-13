@@ -73,11 +73,15 @@ if {[file exists "vivado/postmap.tcl"]} {
     source "vivado/postmap.tcl"
 }
 
-opt_design
+opt_design -directive Explore
 
-place_design
+place_design -directive Explore
 
-route_design -timing
+phys_opt_design -directive AlternateFlowWithRetiming
+
+route_design -timing -directive Explore
+
+phys_opt_design -directive AlternateFlowWithRetiming
 
 report_clocks
 report_clock_interaction
@@ -92,8 +96,10 @@ report_utilization -file reports/$FPGA_TOP\_$PART\_utilization.rpt
 report_utilization -hierarchical -file reports/$FPGA_TOP\_$PART\_utilization_hierarchical.rpt
 report_timing -file reports/$FPGA_TOP\_$PART\_timing.rpt
 report_timing_summary -file reports/$FPGA_TOP\_$PART\_timing_summary.rpt
-report_timing -file reports/$FPGA_TOP\_$PART\_timing_paths.rpt -max_paths 30
+report_timing -file reports/$FPGA_TOP\_$PART\_timing_paths.rpt -max_paths 2000
 report_bus_skew -file reports/$FPGA_TOP\_$PART\_bus_skew.rpt
+
+report_design_analysis -file reports/$FPGA_TOP\_$PART\_analysis.rpt -max_paths 50 -timing -show_all -complexity -congestion
 
 if { $IS_FPGA == "1" } {
     write_bitstream -force $FPGA_TOP.bit

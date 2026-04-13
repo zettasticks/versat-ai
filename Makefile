@@ -59,7 +59,7 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
 	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
 	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
-
+	
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
 pc-emul-run: test-setup
@@ -103,11 +103,13 @@ fast-versat:
 	python3 ./scripts/versatGenerate.py
 
 fast-pc-no-generate:
+	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
 	make -C ../versat_ai_V$(VERSION)/ pc-emul-run
 
 fast-pc-soft: fast-versat
+	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
 	make -C ../versat_ai_V$(VERSION)/ pc-emul-run
@@ -123,7 +125,6 @@ fast-sim-run:
 	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r hardware ../versat_ai_V$(VERSION)/
-	cp -r submodules/iob_soc_tester/software ../versat_ai_V$(VERSION)/tester
 	cp -r submodules/iob_versat/hardware ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
 	make -C ../versat_ai_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
