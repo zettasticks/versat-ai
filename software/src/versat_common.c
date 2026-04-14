@@ -1127,8 +1127,6 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
   for (uint32_t i = 0; i < model->nOperations; i++) {
     bool useVersat = ptr->useVersat;
 
-    // versat_printf("Layer %d\n", i);
-
     void *info = Operation_GetOperationInfo(ptr);
     void *out = NULL;
     void *correctOutput = GetSourcePointer(state, ptr->correctOutput);
@@ -1640,7 +1638,7 @@ void Versat_Init() {
   // memory.
   arena->allocated = 1024 * 1024 * 24;
 
-#if USE_TESTER
+#if VERSAT_AI_USE_TESTER
   arena->mem = (char *)0x01000000; // malloc(arena->allocated);
 #else
   arena->mem = (char *)malloc(arena->allocated);

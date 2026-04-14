@@ -567,7 +567,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   outputWSpec.value = 1;
   outputCSpec.value = 1;
 #endif
-  //versat_printf("%d %d %d %d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
+  // versat_printf("%d %d %d
+  // %d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
 
   Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
   inputTensor.data = inputX;
@@ -592,7 +593,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
     Tensor_CheckCanary(tempInputTensor);
 
-    int kernelSmallSize =  kernelDims[1] * kernelDims[0];
+    int kernelSmallSize = kernelDims[1] * kernelDims[0];
 
     int64_t kernelDims[] = {outputChannels, inputChannels / group,
                             kernelDims[1], kernelDims[0]};
@@ -671,7 +672,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
-        //versat_printf("%d %d %d\n", w.outputY, w.outputX, w.outputC);
+        // versat_printf("%d %d %d\n", w.outputY, w.outputX, w.outputC);
 
         if (w.entireWindowInsidePadding) {
           float bias = 0.0f;
@@ -682,7 +683,10 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           w.outputX * extra.outputImageC + w.outputC] = bias;
         } else {
           ConvWithBias_ProcessWindow(
-              w, extracted.data, ((float *)inputW) + g * (kernelSmallSize * (outputChannels / group) * (inputChannels / group)),
+              w, extracted.data,
+              ((float *)inputW) +
+                  g * (kernelSmallSize * (outputChannels / group) *
+                       (inputChannels / group)),
               tempGroupOutput, trueBias, info, inputC, outputC);
         }
       }
@@ -1177,6 +1181,8 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   int broadCastH = (OH == CH && OH != 1) ? 1 : 0;
   int broadCastW = (OW == CW && OW != 1) ? 1 : 0;
 
+  // versat_printf("%d %d %d %d %d %d\n",OH,CH,OW,CW,broadCastH,broadCastW);
+
   int64_t dimsOut[2] = {OH, OW};
 
   Dimensions dimA = CreateDimensions(aDims, info->numberInputDims);
@@ -1241,7 +1247,7 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
 
       float *out = &viewOut[y * OW + x + valO];
 
-      int cIndex = y * (broadCastH ? CW : 0) + x;
+      int cIndex = y * (broadCastH ? CW : 0) + x * (broadCastW ? 1 : 0);
 
       float cVal = viewC[cIndex];
 

@@ -60,19 +60,16 @@ class ConvArgs:
         inputChannels = self.shape[1]
 
         if self.features % self.group != 0:
-            print("A")
             return False
         # NOTE: Seems weird but onnxruntime complains.
         # TODO: Check if for group == 1 if we can remove this check.
         #       Maybe it only matters for group > 1
-        #if (self.features * self.group) != inputChannels:
-        #    print(self.features,self.group,inputChannels)
-        #    print("B")
-        #    return False
-        #if ((self.features * self.group) % inputChannels) != 0:
-        #    print("C")
-        #    print(self.features,self.group,inputChannels)
-        #    return False
+        if (self.features * self.group) != inputChannels:
+            print(self.features, self.group, inputChannels)
+            return False
+        if ((self.features * self.group) % inputChannels) != 0:
+            print(self.features, self.group, inputChannels)
+            return False
         return True
 
     def Create(self, linear=False):
@@ -755,12 +752,12 @@ class GemmArgs:
         cShape = self.cShape
         if not self.cShape:
             cShape = [1, 1]
-        if(len(cShape) == 1):
-            cShape = [1,cShape[0]]
+        if len(cShape) == 1:
+            cShape = [1, cShape[0]]
 
         outShape = [aShape[0], bShape[1]]
 
-        #print("A",aShape,"B",bShape,"C",cShape,"O",outShape)
+        # print("A",aShape,"B",bShape,"C",cShape,"O",outShape)
 
         if aShape[1] != bShape[0]:
             return False
@@ -829,7 +826,7 @@ def GenerateSimpleTest():
     # MARK4
     # Small test
 
-    if False:
+    if True:
         CreateSoftmax([1], 0)
         CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
         CreateUnaryOpTest("Relu", [4])
@@ -842,24 +839,6 @@ def GenerateSimpleTest():
         CreateGemm([2, 2], [2, 2])
         CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
 
-    '''
-    shape,
-    features,
-    kernel,
-    strides,
-    dilations,
-    group=1,
-    bias: bool = False,
-    auto_pad="NOTSET",
-    pads=None,
-    '''
-
-    # [1, 96, 26, 26], [256, 48, 5, 5], [256]        
-
-    # kernelShape = [features, shape[1] // group, kernel[0], kernel[1]]
-    #CreateConvolution([1, 96, 26, 26], 256, [5, 5], [1, 1], [1, 1], 2,True,"NOTSET",[2,2,2,2])
-    CreateConvolution([1, 6, 3, 3], 2, [5, 5], [1, 1], [1, 1], 2,True,"NOTSET",[2,2,2,2])
-
     # MARK1
     testAdd = 0
     testRelu = 0
@@ -869,13 +848,13 @@ def GenerateSimpleTest():
     testAveragePool = 0
     testMatMul = 0
     testDropout = 0
-    testGemm = 0
+    testGemm = 1
     testConv = 0
     testBatchNormalization = 0
     testSoftmax = 0
     testLRN = 0
 
-    generativeTests = 0
+    generativeTests = 1
     testBig = 0
 
     if False:
@@ -941,25 +920,13 @@ def GenerateSimpleTest():
         # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
 
     if testGemm:
+        CreateGemm([1, 2], [2, 3], [1, 1], 2.0, 2.0)
+        CreateGemm([1, 4], [4, 1], [1, 1], 2.0, 2.0)
+        CreateGemm([4, 1], [1, 4], [1, 1], 2.0, 2.0)
+        CreateGemm([4, 1], [1, 4], [4, 1], 2.0, 2.0)
+        CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0)
+        CreateGemm([4, 1], [1, 4], [4, 4], 2.0, 2.0)
         CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0, 1, 0)
-
-        # CreateGemm([1, 9216], [4096, 9216], [1, 4096], 1.0, 1.0, 0, 1)
-        # [[1, 4096], [1000, 4096], [1000]]
-
-        if testBig:
-            pass
-            #CreateGemm([1, 4096], [1000, 4096], [1000], 1.0, 1.0, 0, 1)
-            #CreateGemm([1, 4000], [1000, 4000], [1000], 1.0, 1.0, 0, 1)
-            #CreateGemm([1, 2000], [1000, 2000], [1000], 1.0, 1.0, 0, 1)
-            #CreateGemm([1, 10], [1000, 10], [1000], 1.0, 1.0, 0, 1)
-
-        if False:
-            CreateGemm([1, 2], [2, 3], [1, 1], 2.0, 2.0)
-            CreateGemm([1, 4], [4, 1], [1, 1], 2.0, 2.0)
-            CreateGemm([4, 1], [1, 4], [1, 1], 2.0, 2.0)
-            CreateGemm([4, 1], [1, 4], [4, 1], 2.0, 2.0)
-            CreateGemm([4, 1], [1, 4], [1, 4], 2.0, 2.0)
-            CreateGemm([4, 1], [1, 4], [4, 4], 2.0, 2.0)
 
         if generativeTests:
             aShapes = [[4, 1], [4, 2], [4, 4], [2, 4], [1, 4]]

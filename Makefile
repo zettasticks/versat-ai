@@ -33,6 +33,9 @@ endif
 
 make-python-env: $(PYTHON_ENV)
 
+./tests/alexnet/model.onnx: 
+	./scripts/downloadAlexnet.sh
+
 $(PYTHON_ENV):
 	./scripts/makePythonEnv.sh
 
@@ -46,7 +49,7 @@ $(VERSAT_ACCEL): versatSpec.txt
 generate-test:
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py $(TEST)"
 
-test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) generate-test
+test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) ./tests/alexnet/model.onnx generate-test
 	mkdir -p hardware/simulation
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER)' $(EXTRA_ARGS);"
 	cp -r ./resources ../versat_ai_V$(VERSION)/
@@ -132,7 +135,7 @@ fast-sim-run:
 fast-tester:
 	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
-	cp -r submodules/iob_soc_tester/software ../versat_ai_V$(VERSION)/tester
+	cp -r submodules/iob_system_tester/software ../versat_ai_V$(VERSION)/tester
 	make -C ../versat_ai_V$(VERSION)/tester sim-run SIMULATOR=$(SIMULATOR) VCD=$(VCD)
 
 fast-only-sim-run:

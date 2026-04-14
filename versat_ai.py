@@ -257,15 +257,6 @@ def setup(py_params: dict):
                                 "log2n_items": 0,
                                 "output": True,  # Generate dedicated output port with value of this CSR
                             },
-                            # {
-                            #     "name": "firm_addr",
-                            #     "descr": "Memory address of Versat firmware were CPU boots from.",
-                            #     "mode": "W",
-                            #     "n_bits": 32,
-                            #     "rst_val": 0,
-                            #     "log2n_items": 0,
-                            #     "output": True,  # Generate dedicated output port with value of this CSR
-                            # },
                         ],
                     },
                 ],
@@ -274,7 +265,6 @@ def setup(py_params: dict):
                     # Cbus connected automatically
                     "csrs_external_cbus_s": "csrs_cbus_s",
                     "rst_o": "rst",
-                    # "firm_addr_o": "fw_base_addr",
                 },
             }
         ]
@@ -282,20 +272,16 @@ def setup(py_params: dict):
     attributes_dict = {
         "title": "Versat-AI System",
         "description": "Accelerate AI Applications with Versat-AI.",
-        "board_list": [
-            "iob_aes_ku040_db_g"
-            # "iob_cyclonev_gt_dk",
-            # "iob_zybo_z7",
-        ],
+        "board_list": ["iob_aes_ku040_db_g"],
         "confs": [
-            # {   TODO: is this needed?
-            #     "name": "INT_MEM_HEXFILE",
-            #     "descr": "Firmware file name",
-            #     "type": "D",
-            #     "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
-            #     "min": "NA",
-            #     "max": "NA",
-            # },
+            {
+                "name": "USE_TESTER",
+                "descr": "Wether we are compiling for Tester or not",
+                "type": "C",
+                "val": py_params["include_tester"],
+                "min": "NA",
+                "max": "NA",
+            },
             {
                 "name": "EXT_MEM_HEXFILE",
                 "descr": "Firmware file name",

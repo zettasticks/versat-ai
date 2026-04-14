@@ -4,15 +4,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "versat_ai_conf.h"
+
 // ===============================
 //  Global configurations
 //
 
-#define USE_TESTER 1
-
 #if PC
-#undef USE_TESTER
-#define USE_TESTER 0
+#undef VERSAT_AI_USE_TESTER
+#define VERSAT_AI_USE_TESTER 0
 #endif
 
 #define EMBED_TABLES 1
@@ -27,7 +27,6 @@
 
 #define VERSAT_OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
 #define VERSAT_CONVERT(IN, TYPE) (*((TYPE *)&IN))
-#define VERSAT_ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
 
 // ==================
 // Derived configs

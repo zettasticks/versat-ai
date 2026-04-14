@@ -48,8 +48,8 @@ def setup(py_params):
         "connect": {
             "clk_en_rst_s": "clk_en_rst_s",
             "rst_i": "rst",
-            "s0_axi_s": "cpu_ibus",
-            "s1_axi_s": "cpu_dbus",
+            "s0_axi_s": "delayed_cpu_i",
+            "s1_axi_s": "delayed_cpu_d",
             "s2_axi_s": "translated_sut_axi",
             # Manager interfaces connected below
         },
@@ -136,6 +136,32 @@ def setup(py_params):
                 ],
             },
             {
+                "name": "delayed_cpu_d",
+                "descr": "CPU_D delay",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "delay_d_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "delayed_cpu_i",
+                "descr": "CPU_I delay",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "delay_i_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
                 "name": "sut_axi",
                 "descr": "Connect SUT (manager) to address_translator (subordinate)",
                 "signals": {
@@ -197,6 +223,24 @@ def setup(py_params):
                     "clk_en_rst_s": "clk_en_rst_s",
                     # Cbus connected automatically
                     "rs232_m": "sut_rs232_inverted",
+                },
+            },
+            {
+                "core_name": "versat_axi_pipeline",
+                "instance_name": "dbus_delay",
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "axi_s": "cpu_dbus",
+                    "axi_m": "delayed_cpu_d",
+                },
+            },
+            {
+                "core_name": "versat_axi_pipeline",
+                "instance_name": "ibus_delay",
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "axi_s": "cpu_ibus",
+                    "axi_m": "delayed_cpu_i",
                 },
             },
             # {

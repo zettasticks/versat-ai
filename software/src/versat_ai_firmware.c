@@ -6,7 +6,7 @@
 
 #include "versat_ai.h"
 
-#if !USE_TESTER
+#if !VERSAT_AI_USE_TESTER
 
 #include "iob_bsp.h"
 #include "iob_printf.h"
@@ -279,77 +279,6 @@ int main() {
                          correct);
   }
 
-  // void* ptr2 = malloc(256 * 1024 * 1024);
-
-  // printf("%p\n",ptr2);
-
-  // We allocate a little bit more just in case.
-  // Also need to allocate a bit more to ensure that Align4 works fine.
-  int extra = 16;
-
-#if 0
-  for (int i = 0; i < VERSAT_ARRAY_SIZE(testModels); i++) {
-    TestModelInfo info = *testModels[i];
-
-    printf("\n==============================\n");
-    printf("Gonna run the full test named: %s", info.nameSpace);
-    printf("\n==============================\n\n\n");
-
-    void *output = Align4(malloc(info.outputSize + extra));
-    void *temp = Align4(malloc(info.tempSize + extra));
-    void *model = Align4(malloc(info.modelSize + extra));
-    void *correct = Align4(malloc(info.correctSize + extra));
-    void *inputMemory = Align4(malloc(info.totalInputSize + extra));
-
-    void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
-    for (int i = 0; i < info.inputCount; i++) {
-      inputs[i] = VERSAT_OFFSET_PTR(inputMemory, info.inputOffsets[i]);
-    }
-
-    void *total;
-    if (info.inputCount == 0) {
-      total = VERSAT_OFFSET_PTR(correct, info.correctSize);
-    } else {
-      total = inputs[info.inputCount - 1];
-    }
-
-#if DEBUG
-    printf("Output : %p\n", output);
-    printf("Temp   : %p\n", temp);
-    printf("Model  : %p\n", model);
-    printf("Correct: %p\n", correct);
-    printf("Input  : %p\n", inputMemory);
-    printf("Total  : %p\n", total);
-
-    if (((void *)total) > ((void *)&stackVar)) {
-      printf(
-          "Error, we run out of memory, increase the value of firm_w argument "
-          "and setup again\n");
-      uart_finish();
-      return 0;
-    }
-#endif
-
-    FastReceiveFile(info.nameSpace, "correctOutputs.bin", correct,
-                    info.correctSize);
-    FastReceiveFile(info.nameSpace, "model.bin", model, info.modelSize);
-    FastReceiveFile(info.nameSpace, "inputs.bin", inputMemory,
-                    info.totalInputSize);
-
-    uint64_t start = timer_get_count();
-    info.debugInferenceFunction(output, temp, inputs, model, correct);
-    uint64_t end = timer_get_count();
-
-    PrintTimeElapsed("\nTest individual time", start, end);
-
-    free(output);
-    free(temp);
-    free(model);
-    free(correct);
-    free(inputMemory);
-  }
-#endif
-
 #if PC
   sleep(1);
 #endif
@@ -367,12 +296,14 @@ int main() {
   return 0;
 }
 
-#else // USE_TESTER
+#else // VERSAT_AI_USE_TESTER
 
 #include "iob_bsp.h"
 #include "iob_printf.h"
 #include "versat_ai_conf.h"
 #include "versat_ai_mmap.h"
+
+#include "versat_accel.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -411,11 +342,16 @@ int main() {
 
   iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
 
+  printf("Sut initialized");
+
   while (1) {
     while (iob_regfileif_inverted_csrs_get_start() == 0)
       ;
     iob_regfileif_inverted_csrs_set_done(0);
     iob_regfileif_inverted_csrs_set_start(0);
+
+    // Make sure that we are reading any values set by Tester correctly
+    silent_clear_cache();
 
     printf("Inside SUT\n");
 
@@ -426,8 +362,6 @@ int main() {
     void **recvData4 = (void **)0x02000010;
     void **recvData5 = (void **)0x02000014;
 
-    printf("Address of stack: %p\n", &recvData0);
-
     CompiledModel *compiledModel = (CompiledModel *)*recvData0;
     char *output = (char *)*recvData1;
     char *temp = (char *)*recvData2;
@@ -435,30 +369,18 @@ int main() {
     void **inputs = (void **)*recvData4;
     char *correct = (char *)*recvData5;
 
-    printf("Output: %x\n", output);
+    printf("Output:%p\n", output);
     printf("Temp:%p\n", temp);
     printf("Model:%p\n", model);
     printf("Inputs:%p\n", inputs);
     printf("Correct:%p\n", correct);
-    printf("Inputs Vector val: %p %p\n", inputs[0], inputs[1]);
-
-    uint32_t val = iob_regfileif_inverted_csrs_get_output_addr();
-
-    uint32_t tempVal = iob_regfileif_inverted_csrs_get_temp_addr();
-
-    printf("Before we seen val\n");
-
-    printf("ModelVal: %x\n", val);
-    printf("TempVal: %x\n", tempVal);
-
-    printf("After we seen val\n");
 
     RunCompiledInference(compiledModel, output, temp, inputs, model, correct);
 
     iob_regfileif_inverted_csrs_set_done(1);
   }
 
-  uart16550_finish();
+  uart_finish();
 
   return 0;
 }

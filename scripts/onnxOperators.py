@@ -394,9 +394,14 @@ def EmitGemm(emitter, op: Operation):
     emitter.I32(transA)
     emitter.I32(transB)
 
+    cShape = op.inputDimensions[2]
+
+    if len(cShape) == 1:
+        cShape = [1, cShape[0]]
+
     emitter.I64Array(op.inputDimensions[0])
     emitter.I64Array(op.inputDimensions[1])
-    emitter.I64Array(op.inputDimensions[2])
+    emitter.I64Array(cShape)
 
 
 def IsOperatorRegistered(opName: str):
