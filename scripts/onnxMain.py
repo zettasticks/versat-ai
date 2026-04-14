@@ -588,11 +588,6 @@ def GenerateDebug(
     packedInitializers = PackMultipleArrays(cModel.initializers)
 
     layersToRemove = []
-    # HACK: See [1]
-    for index, c in enumerate(cModel.operations):
-        if c.opName == "Dropout" or c.opName == "Reshape":
-            layersToRemove.append(index)
-
     layersToKeep = []
 
     if len(layersToRemove):

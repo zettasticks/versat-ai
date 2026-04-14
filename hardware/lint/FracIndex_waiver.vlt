@@ -1,0 +1,6 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+lint_off -rule UNUSEDSIGNAL -file "**/FracIndex.v" -match "Bits of signal are not used: 'in0'[31]"
+lint_off -rule UNUSEDSIGNAL -file "**/FracIndex.v" -match "Bits of signal are not used: 'shifted'[31:12]"

@@ -1,8 +1,6 @@
 [0] We added the 'entireWindowInsidePadding' field to the AdvancedWindow struct but still need to add the logic to
 every place that needs it. We can also try to figure out if we can find a simpler way of doing this but I doubt it.
 
-[1] We fixed a bug on the output memory calculation but created a new one where we ran out of memory because the Dropout correct data started using more memory. We end up "removing" these operators from consideration but this only works in debug. A full inference function requires all the operators since we do not have access to correct inputs.
-
 [2] Why is the memory allocator using memoryRequired = 4 to start the calculation if the TensorSize function already multiples by 4? We might be using 4 times more output memory than required.
 
 [3] The memory interface is not big enough. In simulation and for small problems it is enough but eventually we will reach a point where it is not enough. The easy way of increasing it using py2 is also the slowest since we end up waiting minutes for the hex script to run. And when using fpga we are gonna wait minutes for gigabyte files to transfer between computers.
@@ -10,3 +8,5 @@ every place that needs it. We can also try to figure out if we can find a simple
 [5] Is there a need for InstantiatedAttribute? It only contains 2 members and it appears we do not use the first one ever.
 
 [6] Need to take a look at the Group variable for Convolutions. Generated test was probably not properly testing this value since we 
+
+[7] Softmax memory size seems bugged for some reason. It does not cause problems for itself but causes other tests to fail after running a big example. 

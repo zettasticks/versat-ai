@@ -295,7 +295,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   float *inputView = (float *)inputA;
   float *outputView = (float *)output;
 
-  for (int i = 0; i < totalSize; i += maxAtATime) {
+  for (int64_t i = 0; i < totalSize; i += maxAtATime) {
     int size = MIN(maxAtATime, totalSize - i);
 
     Top_Relu_Simple(&inputView[i], &outputView[i], size);
@@ -672,7 +672,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
-        // versat_printf("%d %d %d\n", w.outputY, w.outputX, w.outputC);
 
         if (w.entireWindowInsidePadding) {
           float bias = 0.0f;
@@ -880,12 +879,11 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
   Top_Exp_LoadExp(expTable, EXP_TABLE_SIZE);
   Top_Exp_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
 
-  int size = CalculateSizeOfDim(inputDims, info->numberInputDims);
+  int64_t size = CalculateSizeOfDim(inputDims, info->numberInputDims);
 
   VersatVarSpec width = {};
   width.min = 1;
-  width.max = size;
-  width.order = 0;
+  width.max = MIN(size, 256); // [7]
   Top_Exp_Simple_Size(&width);
   int increment = width.value;
 
@@ -904,7 +902,7 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
     int transferSize = MIN(size - i, increment);
 
     Top_Exp_Simple(&view[i], &out[i], transferSize);
-    StartAccelerator();
+    RunAccelerator(1);
   }
 
   VERSAT_DisableReadsAndWrites();
@@ -912,6 +910,7 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
 
   silent_clear_cache();
 
+  int maxIndex = 0;
   for (; Address_IsValid(test); Address_AdvanceAxis(test, axis - 1)) {
     int kernelDims[MAX_DIMS] = {};
     for (int i = 0; i < kernelSize; i++) {
@@ -925,6 +924,8 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
 
+      maxIndex = MAX(index, maxIndex);
+
       sum += out[index];
     }
 
@@ -933,6 +934,8 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
     genInst = StartKernel(test, kernelDims, kernelSize);
     for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
       int index = Kernel_GetValue(gen);
+
+      maxIndex = MAX(index, maxIndex);
 
       out[index] = out[index] * invSum;
     }
@@ -1086,7 +1089,7 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
                      VERSAT_CONVERT(b, uint32_t), VERSAT_CONVERT(k, uint32_t),
                      log2Val);
 
-  int size = CalculateSizeOfDim(inputDims, 4);
+  int64_t size = CalculateSizeOfDim(inputDims, 4);
   float *buffer = PushArray(arena, size, float);
 
   AddressGen addrInst = StartAddress(NHWCDims, NHWCDims, info->numberInputDims);
@@ -1263,13 +1266,6 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
       silent_clear_cache();
     }
   }
-
-#if 0
-    Address_Advance(&addrA);
-    Address_Advance(&addrB);
-    Address_Advance(&addrO);
-  }
-#endif
 
   VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);

@@ -11,9 +11,6 @@ wire         sign     = in0[31];
 wire [  7:0] exponent = in0[30:23];
 wire [ 22:0] mantissa = in0[22:0];
 
-wire [31:0] noSign = {1'b0,exponent,mantissa};
-wire [15:0] half = noSign[31:16];
-
 reg [6:0] realPart;
 reg [5:0] mantissaPart;
 

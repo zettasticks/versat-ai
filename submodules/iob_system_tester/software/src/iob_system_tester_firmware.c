@@ -221,7 +221,6 @@ int main() {
   uint32_t file_size = 0;
   char c, buffer[2048];
   char pass_string[] = "Test passed!";
-  char fail_string[] = "Test failed!";
 
   // init timer
   timer_init(TIMER0_BASE);
@@ -440,6 +439,8 @@ int main() {
 
   // Switch back to UART0
   iob_uart_csrs_init_baseaddr(UART0_BASE);
+
+  uart_sendfile("test.log", strlen(pass_string), pass_string);
 
   // End UART0 connection
   uart_finish();

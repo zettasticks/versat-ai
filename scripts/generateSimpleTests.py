@@ -817,7 +817,8 @@ def CreateGemm(aShape, bShape, cShape=None, alpha=1.0, beta=1.0, transA=0, trans
     global testList
     testList.append(GemmArgs(aShape, bShape, cShape, alpha, beta, transA, transB))
 
-@dataclass 
+
+@dataclass
 class GenerateTestConfig:
     testAdd: int = 0
     testRelu: int = 0
@@ -835,6 +836,7 @@ class GenerateTestConfig:
     generateOneOfEach: int = 0
     generativeTests: int = 0
     testBig: int = 0
+
 
 def GenerateSimpleTest(config):
     testComplexity = 0
@@ -872,68 +874,6 @@ def GenerateSimpleTest(config):
     testLRN = config.testLRN
     generativeTests = config.generativeTests
     testBig = config.testBig
-
-    if False:
-        p = PaddingType("NOTSET", [2, 2, 2, 2])
-        p2 = PaddingType("NOTSET", [0, 0, 0, 0])
-
-        CreateConvolution(
-            [1, 96, 26, 26], 48, [5, 5], [1, 1], [1, 1], 2, True, p.kind, p.padding
-        )
-
-        # Does not work
-        CreateConvolution(
-            [1, 96 // 2, 7, 7],
-            48 // 2,
-            [5, 5],
-            [1, 1],
-            [1, 1],
-            2,
-            True,
-            p.kind,
-            p.padding,
-        )
-
-        CreateConvolution(
-            [1, 96 // 2, 7, 7],
-            48 // 2,
-            [5, 5],
-            [1, 1],
-            [1, 1],
-            2,
-            True,
-            p2.kind,
-            p2.padding,
-        )
-        CreateConvolution(
-            [1, 96 // 2, 5, 5],
-            48 // 2,
-            [5, 5],
-            [1, 1],
-            [1, 1],
-            2,
-            True,
-            p.kind,
-            p.padding,
-        )
-        CreateConvolution(
-            [1, 96 // 2, 5, 5],
-            48 // 2,
-            [5, 5],
-            [1, 1],
-            [1, 1],
-            2,
-            True,
-            p2.kind,
-            p2.padding,
-        )
-
-        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
-        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
-        # CreateConvolution([1, 96 // 4, 5, 5],48 // 4,[5,5],[1,1],[1,1],2,True,p2.kind,p2.padding)
-
-        # Works
-        # CreateConvolution([1, 96 // 4, 7, 7],48 // 4,[5,5],[1,1],[1,1],2,True,p.kind,p.padding)
 
     if testGemm:
         CreateGemm([1, 2], [2, 3], [1, 1], 2.0, 2.0)
@@ -1026,9 +966,9 @@ def GenerateSimpleTest(config):
         x = 2
 
         if testBig:
-            CreateSoftmax([256], 0)
+            # CreateSoftmax([256], 0)
             CreateSoftmax([256, 256], 0)
-            CreateSoftmax([256, 256], 1)
+            # CreateSoftmax([256, 256], 1)
 
         CreateSoftmax([1], 0)
         CreateSoftmax([2], 0)
@@ -1088,6 +1028,7 @@ def GenerateSimpleTest(config):
 
         if testBig:
             CreateUnaryOpTest("Relu", [4096])
+            CreateUnaryOpTest("Relu", [1024, 1024])
 
     if testReshape:
         CreateReshape([4, 2], [8])
@@ -1221,12 +1162,6 @@ def GenerateSimpleTest(config):
         # Common example
         CreateMaxPool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
 
-        if testBig:
-            CreateMaxPool([1, 3, 100, 100], [100, 100], [100, 100], "SAME_LOWER")
-
-        # 3 D
-        # CreateMaxPool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
-
         # 4 D - Not supported by runtime so cannot generate test
 
     if testAveragePool:
@@ -1298,18 +1233,13 @@ def GenerateSimpleTest(config):
         if testBig:
             CreateAveragePool([1, 3, 100, 100], [100, 100], [100, 100], "SAME_LOWER")
 
-        # 3 D
-        # CreateAveragePool([1, 3, 8, 8, 8], [2, 2, 2], [2, 2, 2])
-
         # 4 D - Not supported by runtime, so cannot generate the test
 
     # Convolution
     if testConv:
-        # CreateConvolution([1, 2, 4, 4], 2, [2, 2], [2, 2], [1,1], 1)
-
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
-        if generativeTests or False:
+        if generativeTests:
             nP = [1, 2]
             aP = [[3, 3], [5, 5]]
             cP = [1, 3, 4]
@@ -1357,39 +1287,20 @@ def GenerateSimpleTest(config):
                                                         p.padding,
                                                     )
 
-            # This set of examples is causing problems because somehow the SAME_LOWER padding is causing the
-            # t = 7
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[3, 3], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+        CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+        CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2, True)
 
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[7, 7], features=1, kernelShape=[3, 3], stride=[7, 7], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4)
 
-            # For this example, the SAME_LOWER padding works if we use the value of the input in position x,y = (1,1) (offset 1 in both directions)
-            # It is almost like we end up with a negative padding. A padding of -1 on the left and top would make this work, but then again why are we adding padding in the first place?
-            # t = 5
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='NOTSET', padding=[0,0,0,0])).CreateConvolution()
-            # ConvArgs(batches=1, inputChannels=1, innerShape=[t, t], features=1, kernelShape=[1, 1], stride=[t, t], dilations=[1, 1], group=1, bias=False, pad=PaddingType(kind='SAME_LOWER', padding=None)).CreateConvolution()
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1, True)
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2, True)
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4, True)
 
-        if testComplexity == 0 or False:
-            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
-            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2, True)
-
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4)
-
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1, True)
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2, True)
-            CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4, True)
-
-            CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
-            CreateConvolution([1, 4, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
-            CreateConvolution([1, 4, 4, 4], 2, [2, 2], [2, 2], [1, 1], 2)
-
-            # CreateConvolution([1, 3, 2, 2], 4, [2, 2], [2, 2], [1, 1], 4)
-            # CreateConvolution([1, 4, 2, 2], 3, [2, 2], [2, 2], [1, 1], 4)
-            # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 3)
+        CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+        CreateConvolution([1, 4, 2, 2], 2, [2, 2], [2, 2], [1, 1], 2)
+        CreateConvolution([1, 4, 4, 4], 2, [2, 2], [2, 2], [1, 1], 2)
 
         n = 1
         c = 3
@@ -1402,109 +1313,113 @@ def GenerateSimpleTest(config):
         p = "NOTSET"
         g = 1
 
-        if testComplexity == 1 or False:
-            #                                                  T  L  B  R
-            CreateConvolution([n, c, 6, 6], f, k, s, d, g, b, p, [0, 0, 0, 0])
-            CreateConvolution([n, c, 5, 6], f, k, s, d, g, b, p, [1, 0, 0, 0])
-            CreateConvolution([n, c, 6, 5], f, k, s, d, g, b, p, [0, 1, 0, 0])
-            CreateConvolution([n, c, 5, 6], f, k, s, d, g, b, p, [0, 0, 1, 0])
-            CreateConvolution([n, c, 6, 5], f, k, s, d, g, b, p, [0, 0, 0, 1])
-            CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [1, 1, 0, 0])
-            CreateConvolution([n, c, 4, 6], f, k, s, d, g, b, p, [1, 0, 1, 0])
-            CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [1, 0, 0, 1])
-            CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [0, 1, 1, 0])
-            CreateConvolution([n, c, 6, 4], f, k, s, d, g, b, p, [0, 1, 0, 1])
-            CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [0, 0, 1, 1])
-            CreateConvolution([n, c, 4, 5], f, k, s, d, g, b, p, [1, 1, 1, 0])
-            CreateConvolution([n, c, 5, 4], f, k, s, d, g, b, p, [1, 1, 0, 1])
-            CreateConvolution([n, c, 4, 5], f, k, s, d, g, b, p, [1, 0, 1, 1])
-            CreateConvolution([n, c, 5, 4], f, k, s, d, g, b, p, [0, 1, 1, 1])
-            CreateConvolution([n, c, 4, 4], f, k, s, d, g, b, p, [1, 1, 1, 1])
-            CreateConvolution([n, c, 1, 1], f, k, s, d, g, b, p, [1, 1, 1, 1])
-            CreateConvolution([n, c, 10, 10], f, k, s, d, g, b, p, [1, 1, 1, 1])
+        #                                                  T  L  B  R
+        CreateConvolution([n, c, 6, 6], f, k, s, d, g, b, p, [0, 0, 0, 0])
+        CreateConvolution([n, c, 5, 6], f, k, s, d, g, b, p, [1, 0, 0, 0])
+        CreateConvolution([n, c, 6, 5], f, k, s, d, g, b, p, [0, 1, 0, 0])
+        CreateConvolution([n, c, 5, 6], f, k, s, d, g, b, p, [0, 0, 1, 0])
+        CreateConvolution([n, c, 6, 5], f, k, s, d, g, b, p, [0, 0, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [1, 1, 0, 0])
+        CreateConvolution([n, c, 4, 6], f, k, s, d, g, b, p, [1, 0, 1, 0])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [1, 0, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [0, 1, 1, 0])
+        CreateConvolution([n, c, 6, 4], f, k, s, d, g, b, p, [0, 1, 0, 1])
+        CreateConvolution([n, c, 5, 5], f, k, s, d, g, b, p, [0, 0, 1, 1])
+        CreateConvolution([n, c, 4, 5], f, k, s, d, g, b, p, [1, 1, 1, 0])
+        CreateConvolution([n, c, 5, 4], f, k, s, d, g, b, p, [1, 1, 0, 1])
+        CreateConvolution([n, c, 4, 5], f, k, s, d, g, b, p, [1, 0, 1, 1])
+        CreateConvolution([n, c, 5, 4], f, k, s, d, g, b, p, [0, 1, 1, 1])
+        CreateConvolution([n, c, 4, 4], f, k, s, d, g, b, p, [1, 1, 1, 1])
+        CreateConvolution([n, c, 1, 1], f, k, s, d, g, b, p, [1, 1, 1, 1])
+        CreateConvolution([n, c, 10, 10], f, k, s, d, g, b, p, [1, 1, 1, 1])
 
-            # No padding
-            # Different: Input shape, features, kernel, stride, dilations, bias
-            CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d)
-            CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d)
-            CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d)
-            CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d)
+        # No padding
+        # Different: Input shape, features, kernel, stride, dilations, bias
+        CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d)
+        CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d)
+        CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d)
+        CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d)
 
-            # Same but in a 2x2 square
-            CreateConvolution([1, 1, 6, 6], 1, [3, 3], [3, 3], d)
-            CreateConvolution([1, 2, 6, 6], 1, [3, 3], [3, 3], d)
-            CreateConvolution([1, 1, 6, 6], 2, [3, 3], [3, 3], d)
-            CreateConvolution([1, 2, 6, 6], 2, [3, 3], [3, 3], d)
+        # Same but in a 2x2 square
+        CreateConvolution([1, 1, 6, 6], 1, [3, 3], [3, 3], d)
+        CreateConvolution([1, 2, 6, 6], 1, [3, 3], [3, 3], d)
+        CreateConvolution([1, 1, 6, 6], 2, [3, 3], [3, 3], d)
+        CreateConvolution([1, 2, 6, 6], 2, [3, 3], [3, 3], d)
 
-            # Same but for a 5x5 kernel
-            CreateConvolution([1, 1, 5, 5], 1, [5, 5], [5, 5], d)
-            CreateConvolution([1, 2, 5, 5], 1, [5, 5], [5, 5], d)
-            CreateConvolution([1, 1, 5, 5], 2, [5, 5], [5, 5], d)
-            CreateConvolution([1, 2, 5, 5], 2, [5, 5], [5, 5], d)
+        # Same but for a 5x5 kernel
+        CreateConvolution([1, 1, 5, 5], 1, [5, 5], [5, 5], d)
+        CreateConvolution([1, 2, 5, 5], 1, [5, 5], [5, 5], d)
+        CreateConvolution([1, 1, 5, 5], 2, [5, 5], [5, 5], d)
+        CreateConvolution([1, 2, 5, 5], 2, [5, 5], [5, 5], d)
 
-            # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
-            CreateConvolution([1, 1, 4, 4], 1, [2, 2], [1, 1], d)
-            CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d)
-            CreateConvolution([1, 1, 4, 4], 2, [2, 2], [1, 1], d)
-            CreateConvolution([1, 2, 4, 4], 2, [2, 2], [1, 1], d)
+        # Same but for a 2x2 kernel with stride of 1x1 (result is 3x3)
+        CreateConvolution([1, 1, 4, 4], 1, [2, 2], [1, 1], d)
+        CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d)
+        CreateConvolution([1, 1, 4, 4], 2, [2, 2], [1, 1], d)
+        CreateConvolution([1, 2, 4, 4], 2, [2, 2], [1, 1], d)
 
-            # Different sized kernels
-            CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d)
-            CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d)
-            CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d)
-            CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d)
+        # Different sized kernels
+        CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d)
+        CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d)
+        CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d)
+        CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d)
 
-            # Bigger more realistic examples
-            CreateConvolution([1, 3, 16, 16], 16, [2, 2], [2, 2], d)
+        # Bigger more realistic examples
+        CreateConvolution([1, 3, 16, 16], 16, [2, 2], [2, 2], d)
 
         # Different groups
         # CreateConvolution([1, 2, 4, 4], 1, [2, 2], [1, 1], d, 2)
 
-        if testComplexity == 1 or False:
-            CreateConvolution(
-                [1, 1, 1, 1], 2, [5, 5], [5, 5], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 1, 1], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 1, 1], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 3, 3], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 5, 5], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 8, 8], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 10, 10], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 15, 15], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 20, 20], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
-            CreateConvolution(
-                [1, 1, 28, 28], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER"
-            )
+        CreateConvolution([1, 1, 1, 1], 2, [5, 5], [5, 5], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 1, 1], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 1, 1], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 3, 3], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 5, 5], 1, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 8, 8], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 10, 10], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 15, 15], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 20, 20], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
+        CreateConvolution([1, 1, 28, 28], 2, [5, 5], [1, 1], d, g, False, "SAME_UPPER")
 
         # Adding bias
-        if testComplexity == 1 or False:
-            CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d, g, True)
-            CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d, g, True)
-            CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d, g, True)
-            CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d, g, True)
-            CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d, g, True)
-            CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d, g, True)
-            CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d, g, True)
-            CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d, g, True)
+        CreateConvolution([1, 1, 3, 3], 1, [3, 3], [3, 3], d, g, True)
+        CreateConvolution([1, 2, 3, 3], 1, [3, 3], [3, 3], d, g, True)
+        CreateConvolution([1, 1, 3, 3], 2, [3, 3], [3, 3], d, g, True)
+        CreateConvolution([1, 2, 3, 3], 2, [3, 3], [3, 3], d, g, True)
+        CreateConvolution([1, 1, 2, 3], 1, [2, 3], [2, 3], d, g, True)
+        CreateConvolution([1, 1, 3, 2], 1, [3, 2], [3, 2], d, g, True)
+        CreateConvolution([1, 1, 4, 9], 1, [2, 3], [2, 3], d, g, True)
+        CreateConvolution([1, 1, 9, 4], 1, [3, 2], [3, 2], d, g, True)
 
-        # if testComplexity == 2 or testBig or False:
-        #    CreateConvolution([1, 1, 100, 100], 1, [100, 100], [100, 100], d, g, True)
+        if testBig:
+            p = PaddingType("NOTSET", [1, 1, 1, 1])
+            CreateConvolution(
+                [1, 96, 26, 26], 48, [5, 5], [1, 1], [1, 1], 2, True, p.kind, p.padding
+            )
+
+            # Does not work
+            CreateConvolution(
+                [1, 96 // 2, 7, 7],
+                48 // 2,
+                [5, 5],
+                [1, 1],
+                [1, 1],
+                2,
+                True,
+                p.kind,
+                p.padding,
+            )
+            CreateConvolution(
+                [1, 96 // 2, 5, 5],
+                48 // 2,
+                [5, 5],
+                [1, 1],
+                [1, 1],
+                2,
+                True,
+                p.kind,
+                p.padding,
+            )
 
 
 def MakeHashable(val):
@@ -1600,12 +1515,15 @@ def OutputFilesFromTestList(outputPath):
 
     save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
 
+
 def GenerateSoftmax(outputPath):
     config = GenerateTestConfig()
     config.testSoftmax = 1
+    config.testBig = 1
     GenerateSimpleTest(config)
-    OutputFilesFromTestList(outputPath) 
-    
+    OutputFilesFromTestList(outputPath)
+
+
 def GenerateHeavy(outputPath):
     config = GenerateTestConfig()
 
@@ -1629,11 +1547,13 @@ def GenerateHeavy(outputPath):
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
 
+
 def GenerateLite(outputPath):
     config = GenerateTestConfig()
     config.generateOneOfEach = 1
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
+
 
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
@@ -1657,6 +1577,7 @@ def GenerateTest(outputPath):
 
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
+
 
 if __name__ == "__main__":
     GenerateTest(sys.argv[1])

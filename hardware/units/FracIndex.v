@@ -8,9 +8,6 @@ module FracIndex #(
   output [31:0] out0
 );
 
-// u32 fracIndex = (unpacked.mantissa >> (8 + (16 - fractionalPrecision) - unpacked.exponent)) & ((1 << fractionalPrecision) - 1);
-
-wire         sign     = in0[31];
 wire [  7:0] exponent = in0[30:23];
 wire [ 22:0] mantissa = in0[22:0];
 

@@ -1,6 +1,7 @@
 {
   "Generated": {
     "type": "GENERATED",
+    "path": "./tests/generated",
     "genType": "NORMAL"
   },
   "GeneratedHeavy": {
