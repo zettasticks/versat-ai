@@ -107,15 +107,24 @@ module Top_Conv(){
    VRead #(.ADDR_W(17)) features;
    VRead #(.ADDR_W(17)) weights;
    VRead bias;
+
+   PipelineRegister featuresReg;
+   PipelineRegister weightsReg;
+   PipelineRegister biasReg;
+
    F_Mul muller;
    F_Add addBias;
    MyFloatAccum myAccum;
    VWrite output;
 #   
-   {weights,features} -> muller:0..1;
+   features -> featuresReg;
+   weights -> weightsReg;
+   bias -> biasReg;
+
+   {weightsReg,featuresReg} -> muller:0..1;
    muller -> myAccum;
 
-   {myAccum,bias} -> addBias:0..1;
+   {myAccum,biasReg} -> addBias:0..1;
    addBias -> output;
 ##
    config FeaturesWeightsOutputs(inputX : Address,inputW : Address,outAddr : Address,
@@ -342,8 +351,10 @@ module Pow(base,power){
 }
 
 module Top_Gemm(){
-   VRead #(.ADDR_W(17)) gemmLeftRow;
+   VRead #(.ADDR_W(17)) gemmLeftRow; // 15 bits of 32. Maximum size of 32768 elements (16384 if using pingpong.)
    VRead #(.ADDR_W(17)) gemmRightRow;
+   PipelineRegister leftPipe;
+   PipelineRegister rightPipe;
    F_Mul mat_muller;
    MyFloatAccum myAccum;
    VWrite #(.ADDR_W(17)) output;
@@ -354,7 +365,10 @@ module Top_Gemm(){
    Const cValue;
    F_Add adder;
 #
-   {gemmLeftRow,gemmRightRow} -> mat_muller:0..1;
+   gemmLeftRow -> leftPipe;
+   gemmRightRow -> rightPipe;
+
+   {leftPipe,rightPipe} -> mat_muller:0..1;
    mat_muller -> myAccum;
 
    {myAccum,alpha} -> alphaMul:0..1;

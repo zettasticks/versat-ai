@@ -50,7 +50,7 @@ if { $IS_FPGA == "1" } {
     if {[file exists "vivado/$NAME\_tool.sdc"]} {
         read_xdc vivado/$NAME\_tool.sdc
     }
-    eval synth_design -include_dirs ../src -include_dirs ../common_src -include_dirs ./src -include_dirs ./vivado/$BOARD $SYNTH_FLAGS -part $PART -top $FPGA_TOP -verbose
+    eval synth_design -include_dirs ../src -include_dirs ../common_src -include_dirs ./src -include_dirs ./vivado/$BOARD -retiming $SYNTH_FLAGS -part $PART -top $FPGA_TOP
 } else {
     #read design constraints
     puts "Out of context synthesis"
@@ -73,15 +73,18 @@ if {[file exists "vivado/postmap.tcl"]} {
     source "vivado/postmap.tcl"
 }
 
-opt_design -directive Explore
+opt_design 
+# -directive Explore
 
-place_design -directive Explore
+place_design 
+# -directive Explore
 
-phys_opt_design -directive AlternateFlowWithRetiming
+#phys_opt_design -directive AlternateFlowWithRetiming
 
-route_design -timing -directive Explore
+route_design -timing 
+# -directive Explore
 
-phys_opt_design -directive AlternateFlowWithRetiming
+#phys_opt_design -directive AlternateFlowWithRetiming
 
 report_clocks
 report_clock_interaction
@@ -96,7 +99,7 @@ report_utilization -file reports/$FPGA_TOP\_$PART\_utilization.rpt
 report_utilization -hierarchical -file reports/$FPGA_TOP\_$PART\_utilization_hierarchical.rpt
 report_timing -file reports/$FPGA_TOP\_$PART\_timing.rpt
 report_timing_summary -file reports/$FPGA_TOP\_$PART\_timing_summary.rpt
-report_timing -file reports/$FPGA_TOP\_$PART\_timing_paths.rpt -max_paths 2000
+report_timing -file reports/$FPGA_TOP\_$PART\_timing_paths.rpt -max_paths 500
 report_bus_skew -file reports/$FPGA_TOP\_$PART\_bus_skew.rpt
 
 report_design_analysis -file reports/$FPGA_TOP\_$PART\_analysis.rpt -max_paths 50 -timing -show_all -complexity -congestion

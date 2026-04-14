@@ -240,7 +240,7 @@ int main() {
     printf("Correct: %d\n", compiledModel->correctSize);
     printf("Input: %d\n", compiledModel->totalInputSize);
 
-    char *workBuffer = (char *)malloc(256 * 1024 * 1024);
+    char *workBuffer = (char *)malloc(400 * 1024 * 1024);
 
     // Allocate space for each memory buffer, +16 to give us some wiggle room.
     // Proper code should work without this but we will handle this later.

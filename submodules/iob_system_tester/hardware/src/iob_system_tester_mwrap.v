@@ -195,16 +195,16 @@ module iob_system_tester_mwrap #(
             // Default description
         iob_ram_t2p_be #(
         .DATA_W(32),
-        .ADDR_W(16),
+        .ADDR_W(14),
         .HEXFILE(INT_MEM_HEXFILE)
     ) int_mem_mem (
             // ram_t2p_be_s port: RAM interface
         .clk_i(int_mem_clk),
         .r_en_i(int_mem_r_en),
-        .r_addr_i(int_mem_r_addr[15:0]),
+        .r_addr_i(int_mem_r_addr[13:0]),
         .r_data_o(int_mem_r_data),
         .w_strb_i(int_mem_w_strb),
-        .w_addr_i(int_mem_w_addr[15:0]),
+        .w_addr_i(int_mem_w_addr[13:0]),
         .w_data_i(int_mem_w_data)
         );
 
