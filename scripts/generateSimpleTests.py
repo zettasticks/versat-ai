@@ -65,10 +65,8 @@ class ConvArgs:
         # TODO: Check if for group == 1 if we can remove this check.
         #       Maybe it only matters for group > 1
         if (self.features * self.group) != inputChannels:
-            print(self.features, self.group, inputChannels)
             return False
         if ((self.features * self.group) % inputChannels) != 0:
-            print(self.features, self.group, inputChannels)
             return False
         return True
 
@@ -1515,7 +1513,12 @@ def MakeHashable(val):
     return val
 
 
-def OutputFilesFromTestList(testList,outputPath):
+def OutputFilesFromTestList(outputPath):
+    global testList
+    global tests
+
+    testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
+
     for i, test in enumerate(testList):
         hashable = {}
         for field in fields(test):
@@ -1597,10 +1600,42 @@ def OutputFilesFromTestList(testList,outputPath):
 
     save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
 
-def GenerateTest(outputPath):
-    global testList
-    global tests
+def GenerateSoftmax(outputPath):
+    config = GenerateTestConfig()
+    config.testSoftmax = 1
+    GenerateSimpleTest(config)
+    OutputFilesFromTestList(outputPath) 
+    
+def GenerateHeavy(outputPath):
+    config = GenerateTestConfig()
 
+    config.testAdd = 1
+    config.testRelu = 1
+    config.testReshape = 1
+    config.testTranspose = 1
+    config.testMaxPool = 1
+    config.testAveragePool = 1
+    config.testMatMul = 1
+    config.testDropout = 1
+    config.testGemm = 1
+    config.testConv = 1
+    config.testBatchNormalization = 1
+    config.testSoftmax = 1
+    config.testLRN = 1
+    config.generateOneOfEach = 0
+    config.generativeTests = 1
+    config.testBig = 1
+
+    GenerateSimpleTest(config)
+    OutputFilesFromTestList(outputPath)
+
+def GenerateLite(outputPath):
+    config = GenerateTestConfig()
+    config.generateOneOfEach = 1
+    GenerateSimpleTest(config)
+    OutputFilesFromTestList(outputPath)
+
+def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
     config.testAdd = 0
@@ -1621,33 +1656,7 @@ def GenerateTest(outputPath):
     config.testBig = 0
 
     GenerateSimpleTest(config)
-    testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
-
-    # MARK3
-    if 0:
-        random.shuffle(testList)
-
-    # NOTE: Use the setupTest way of selecting test ranges instead if possible.
-    # MARK2
-    if 0:
-        # firstPart = testList[0:10]
-        # firstPart = [testList[0],testList[2],testList[4],testList[6],testList[8]]
-        firstPart = [testList[8]]
-
-        lastPart = testList[120:150]
-
-        testList = firstPart + lastPart[1:2]
-        # testList = firstPart + lastPart
-        # testList = lastPart
-
-    focusOnOneTest = 0
-    if focusOnOneTest:
-        testToFocus = 12
-
-        testList = [testList[testToFocus]]
-        print(testList[0])
-
-    OutputFilesFromTestList(testList,outputPath)
+    OutputFilesFromTestList(outputPath)
 
 if __name__ == "__main__":
     GenerateTest(sys.argv[1])

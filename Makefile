@@ -33,8 +33,21 @@ endif
 
 make-python-env: $(PYTHON_ENV)
 
+ALL_GENERATED_TESTS:=./tests/alexnet/model.onnx ./tests/generated_heavy ./tests/generated_lite ./tests/softmax
+
 ./tests/alexnet/model.onnx: 
 	./scripts/downloadAlexnet.sh
+
+./tests/generated_heavy: $(PYTHON_ENV)
+	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py GeneratedHeavy"
+
+./tests/generated_lite: $(PYTHON_ENV)
+	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py GeneratedLite"
+
+./tests/softmax: $(PYTHON_ENV)
+	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py Softmax"
+
+
 
 $(PYTHON_ENV):
 	./scripts/makePythonEnv.sh
@@ -49,7 +62,7 @@ $(VERSAT_ACCEL): versatSpec.txt
 generate-test:
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py $(TEST)"
 
-test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) ./tests/alexnet/model.onnx generate-test
+test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
 	mkdir -p hardware/simulation
 	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM)' $(EXTRA_ARGS);"
 	cp -r ./resources ../versat_ai_V$(VERSION)/

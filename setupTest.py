@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 sys.path.append("./scripts")
 
-from generateSimpleTests import GenerateTest
+from generateSimpleTests import GenerateTest,GenerateLite,GenerateHeavy,GenerateSoftmax
 from onnxMain import GenerateDebug
 
 # TODO: FIXED_LIST instead of encoding the models, it could encode the name of the tests themselves.
@@ -31,6 +31,11 @@ class TestMode(Enum):
     SOFTWARE = auto()
     VERSAT = auto()
 
+class GenType(Enum):
+    NORMAL = auto()
+    HEAVY = auto()
+    LITE = auto()
+    SOFTMAX = auto()
 
 def OverrideTestMode(stronger, weaker):
     if stronger == TestMode.DEFAULT:
@@ -50,13 +55,12 @@ class SubTest:
     name: str
     config: TestConfiguraton
 
-
 @dataclass
 class Test:
     type: TestType
     path: str
     subTest: list[SubTest] = None
-
+    genType: GenType = None
 
 def ParseTestName(testName):
     splitted = testName.split("_")
@@ -96,6 +100,12 @@ def ParseTest(testName, testInfo, allTests):
     path = testInfo.get("path", None)
     subTests = testInfo.get("subTests", None)
 
+    genType = None
+    try:
+        genType = GenType[testInfo.get("genType",None)]
+    except:
+        pass
+
     parsedSubTests = [SubTest(testName, TestConfiguraton())]
     if subTests:
         parsedSubTests = []
@@ -104,7 +114,7 @@ def ParseTest(testName, testInfo, allTests):
             sub = SubTest(subTestName, subTestConfigs)
             parsedSubTests.append(sub)
 
-    test = Test(testType, path, parsedSubTests)
+    test = Test(testType, path, parsedSubTests, genType)
 
     return test
 
@@ -117,6 +127,32 @@ def ParseTests(testInfoJson):
 
     return tests
 
+def SetupTest(test,subTest):
+    if test.type == TestType.GENERATED:
+        if(test.genType == GenType.NORMAL):
+            path = "tests/generated/"
+            GenerateTest(path)
+        elif(test.genType == GenType.LITE):
+            path = "./tests/generated_lite"
+            GenerateLite(path)
+        elif(test.genType == GenType.HEAVY):
+            path = "./tests/generated_heavy"
+            GenerateHeavy(path)
+        elif(test.genType == GenType.SOFTMAX):
+            path = "./tests/softmax"
+            GenerateSoftmax(path)
+    else:
+        assert (test.type != TestType.FIXED_LIST)
+
+    GenerateDebug(
+        test.path,
+        "model.onnx",
+        "resources/",
+        "software/src",
+        subTest.name,
+        subTest.config.focusLayerRange,
+        subTest.config.mode == TestMode.SOFTWARE,
+    )        
 
 if __name__ == "__main__":
     testInfoJson = None
@@ -176,26 +212,10 @@ if __name__ == "__main__":
             for subTest in test.subTest:
                 f.write(subTest.name + "\n")
 
-    if test.type == TestType.GENERATED:
-        GenerateTest("./tests/generated/")
-        GenerateDebug(
-            "tests/generated/",
-            "model.onnx",
-            "resources/",
-            "software/src",
-            properName,
-            test.subTest[0].config.focusLayerRange,
-            test.subTest[0].config.mode == TestMode.SOFTWARE,
-        )
-    elif test.type == TestType.FIXED or test.type == TestType.FIXED_LIST:
+    if test.type == TestType.FIXED_LIST:
         for subTest in test.subTest:
             properTest = allTests[subTest.name]
-            GenerateDebug(
-                properTest.path,
-                "model.onnx",
-                "resources/",
-                "software/src",
-                subTest.name,
-                subTest.config.focusLayerRange,
-                subTest.config.mode == TestMode.SOFTWARE,
-            )
+            SetupTest(properTest,subTest)
+    else:
+        SetupTest(test,test.subTest[0])
+

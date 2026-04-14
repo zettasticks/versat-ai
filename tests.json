@@ -1,18 +1,22 @@
 {
   "Generated": {
-    "type": "GENERATED"
+    "type": "GENERATED",
+    "genType": "NORMAL"
   },
   "GeneratedHeavy": {
-    "type": "FIXED",
-    "path": "./tests/generated_heavy"
+    "type": "GENERATED",
+    "path": "./tests/generated_heavy",
+    "genType": "HEAVY"
   },
   "GeneratedLite": {
-    "type": "FIXED",
-    "path": "./tests/generated_lite"
+    "type": "GENERATED",
+    "path": "./tests/generated_lite",
+    "genType": "LITE"
   },
   "Softmax": {
-    "type": "FIXED",
-    "path": "./tests/softmax"
+    "type": "GENERATED",
+    "path": "./tests/softmax",
+    "genType": "SOFTMAX"
   },
   "ToyCar":{
     "type": "FIXED",
