@@ -16,10 +16,12 @@ def setup(py_params):
 
     # NOTE: With current configuration, Tester runs from intmem; SUT runs from extmem.
 
+    init_mem = sut_py_params.get("tester_sim", False)
+
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
     iob_system_default_overrides = {
-        "init_mem": False,
+        "init_mem": init_mem,
         "use_intmem": True,
         "use_extmem": True,
         "use_ethernet": False,

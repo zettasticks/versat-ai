@@ -323,13 +323,19 @@ void silent_clear_cache() {
 
 void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
 
+void delayed_putc(char c) {
+  for (unsigned int i = 0; i < 1000; i++)
+    asm volatile("nop");
+  uart_putc(c);
+}
+
 int main() {
   // init timer
   timer_init(TIMER0_BASE);
 
   // init uart
   uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
-  printf_init(&uart_putc);
+  printf_init(&delayed_putc);
 
   printf("Gonna init versat\n");
 
@@ -342,7 +348,7 @@ int main() {
 
   iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
 
-  printf("Sut initialized");
+  printf("Sut initialized\n");
 
   while (1) {
     while (iob_regfileif_inverted_csrs_get_start() == 0)

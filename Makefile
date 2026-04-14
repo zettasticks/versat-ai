@@ -25,7 +25,7 @@ USE_EXTMEM ?= 1
 USE_INTMEM ?= 0
 USE_ETHERNET ?= 0
 TESTER ?= 0
-
+TESTER_SIM ?= 0
 
 ifneq ($(DEBUG),)
 EXTRA_ARGS +=--debug_level $(DEBUG)
@@ -51,7 +51,7 @@ generate-test:
 
 test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) ./tests/alexnet/model.onnx generate-test
 	mkdir -p hardware/simulation
-	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER)' $(EXTRA_ARGS);"
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM)' $(EXTRA_ARGS);"
 	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/ # Since python file was not being copied and we need a python script from inside software
 	cp -r ./software ../versat_ai_V$(VERSION)/
@@ -72,7 +72,7 @@ sim-run: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
 tester-sim-run:
-	make test-setup TESTER=1
+	make test-setup TESTER=1 TESTER_SIM=1
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/tester sim-run SIMULATOR=$(SIMULATOR)"
 
 # For some reason the vivado build.tcl is being overwritten by py2. Need to copy it before 

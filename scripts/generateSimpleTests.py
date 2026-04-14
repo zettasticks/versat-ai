@@ -828,6 +828,7 @@ def GenerateSimpleTest():
 
     if True:
         CreateSoftmax([1], 0)
+        CreateReshape([4, 2], [8])
         CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
         CreateUnaryOpTest("Relu", [4])
         CreateLRN([1, 3, 2, 2], int(3), 0.5, 0.35, 0.5)
@@ -848,13 +849,13 @@ def GenerateSimpleTest():
     testAveragePool = 0
     testMatMul = 0
     testDropout = 0
-    testGemm = 1
+    testGemm = 0
     testConv = 0
     testBatchNormalization = 0
     testSoftmax = 0
     testLRN = 0
 
-    generativeTests = 1
+    generativeTests = 0
     testBig = 0
 
     if False:
