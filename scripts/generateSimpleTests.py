@@ -819,14 +819,32 @@ def CreateGemm(aShape, bShape, cShape=None, alpha=1.0, beta=1.0, transA=0, trans
     global testList
     testList.append(GemmArgs(aShape, bShape, cShape, alpha, beta, transA, transB))
 
+@dataclass 
+class GenerateTestConfig:
+    testAdd: int = 0
+    testRelu: int = 0
+    testReshape: int = 0
+    testTranspose: int = 0
+    testMaxPool: int = 0
+    testAveragePool: int = 0
+    testMatMul: int = 0
+    testDropout: int = 0
+    testGemm: int = 0
+    testConv: int = 0
+    testBatchNormalization: int = 0
+    testSoftmax: int = 0
+    testLRN: int = 0
+    generateOneOfEach: int = 0
+    generativeTests: int = 0
+    testBig: int = 0
 
-def GenerateSimpleTest():
+def GenerateSimpleTest(config):
     testComplexity = 0
 
     # MARK4
     # Small test
 
-    if True:
+    if config.generateOneOfEach:
         CreateSoftmax([1], 0)
         CreateReshape([4, 2], [8])
         CreateMaxPool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
@@ -841,22 +859,21 @@ def GenerateSimpleTest():
         CreateConvolution([1, 2, 2, 2], 2, [2, 2], [2, 2], [1, 1], 1)
 
     # MARK1
-    testAdd = 0
-    testRelu = 0
-    testReshape = 0
-    testTranspose = 0
-    testMaxPool = 0
-    testAveragePool = 0
-    testMatMul = 0
-    testDropout = 0
-    testGemm = 0
-    testConv = 0
-    testBatchNormalization = 0
-    testSoftmax = 0
-    testLRN = 0
-
-    generativeTests = 0
-    testBig = 0
+    testAdd = config.testAdd
+    testRelu = config.testRelu
+    testReshape = config.testReshape
+    testTranspose = config.testTranspose
+    testMaxPool = config.testMaxPool
+    testAveragePool = config.testAveragePool
+    testMatMul = config.testMatMul
+    testDropout = config.testDropout
+    testGemm = config.testGemm
+    testConv = config.testConv
+    testBatchNormalization = config.testBatchNormalization
+    testSoftmax = config.testSoftmax
+    testLRN = config.testLRN
+    generativeTests = config.generativeTests
+    testBig = config.testBig
 
     if False:
         p = PaddingType("NOTSET", [2, 2, 2, 2])
@@ -1498,37 +1515,7 @@ def MakeHashable(val):
     return val
 
 
-def GenerateTest(outputPath):
-    global testList
-    global tests
-
-    GenerateSimpleTest()
-    testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
-
-    # MARK3
-    if 0:
-        random.shuffle(testList)
-
-    # NOTE: Use the setupTest way of selecting test ranges instead if possible.
-    # MARK2
-    if 0:
-        # firstPart = testList[0:10]
-        # firstPart = [testList[0],testList[2],testList[4],testList[6],testList[8]]
-        firstPart = [testList[8]]
-
-        lastPart = testList[120:150]
-
-        testList = firstPart + lastPart[1:2]
-        # testList = firstPart + lastPart
-        # testList = lastPart
-
-    focusOnOneTest = 0
-    if focusOnOneTest:
-        testToFocus = 12
-
-        testList = [testList[testToFocus]]
-        print(testList[0])
-
+def OutputFilesFromTestList(testList,outputPath):
     for i, test in enumerate(testList):
         hashable = {}
         for field in fields(test):
@@ -1543,7 +1530,7 @@ def GenerateTest(outputPath):
             16,
         )
         np.random.seed(persistantHash % (2**31))
-        test.Create(focusOnOneTest)
+        test.Create(False)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:
@@ -1610,6 +1597,57 @@ def GenerateTest(outputPath):
 
     save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
 
+def GenerateTest(outputPath):
+    global testList
+    global tests
+
+    config = GenerateTestConfig()
+
+    config.testAdd = 0
+    config.testRelu = 0
+    config.testReshape = 0
+    config.testTranspose = 0
+    config.testMaxPool = 0
+    config.testAveragePool = 0
+    config.testMatMul = 0
+    config.testDropout = 0
+    config.testGemm = 0
+    config.testConv = 0
+    config.testBatchNormalization = 0
+    config.testSoftmax = 0
+    config.testLRN = 0
+    config.generateOneOfEach = 1
+    config.generativeTests = 0
+    config.testBig = 0
+
+    GenerateSimpleTest(config)
+    testList = [x for x in testList if not hasattr(x, "IsValid") or x.IsValid()]
+
+    # MARK3
+    if 0:
+        random.shuffle(testList)
+
+    # NOTE: Use the setupTest way of selecting test ranges instead if possible.
+    # MARK2
+    if 0:
+        # firstPart = testList[0:10]
+        # firstPart = [testList[0],testList[2],testList[4],testList[6],testList[8]]
+        firstPart = [testList[8]]
+
+        lastPart = testList[120:150]
+
+        testList = firstPart + lastPart[1:2]
+        # testList = firstPart + lastPart
+        # testList = lastPart
+
+    focusOnOneTest = 0
+    if focusOnOneTest:
+        testToFocus = 12
+
+        testList = [testList[testToFocus]]
+        print(testList[0])
+
+    OutputFilesFromTestList(testList,outputPath)
 
 if __name__ == "__main__":
     GenerateTest(sys.argv[1])
