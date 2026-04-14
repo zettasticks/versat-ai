@@ -9,11 +9,11 @@ module ExtractMantissa #(
   output reg [31:0] out0
   );
 
-wire [BITS_TO_PRESERVE-1:0] mantissa = in0[BITS_TO_PRESERVE-1:0];
+wire [ 22:0] mantissa = in0[22:0];
 
 always @* begin
   out0 = 0;
-  out0[0+:BITS_TO_PRESERVE] = mantissa;
+  out0[0+:BITS_TO_PRESERVE] = mantissa[22-:BITS_TO_PRESERVE];
 end
 
 endmodule

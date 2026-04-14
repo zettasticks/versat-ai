@@ -1,1 +1,3 @@
-Generated
+GeneratedHeavy
+MNIST
+Alexnet
