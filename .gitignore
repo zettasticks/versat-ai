@@ -4,6 +4,9 @@ output
 python
 __pycache__
 tests/generated
+tests/generated_heavy
+tests/generated_lite
+tests/softmax
 submodules/iob_versat
 software/*.bin
 software/src/code.c

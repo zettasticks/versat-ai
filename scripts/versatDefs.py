@@ -12,7 +12,7 @@ class PackedArrays:
 
 
 class Endianess(Enum):
-    NATIVE = auto()
+    NATIVE = auto()  # NATIVE
     LITTLE_ENDIAN = auto()
     BIG_ENDIAN = auto()
 
@@ -67,6 +67,14 @@ class OnnxAttributeType(Enum):
     AXIS_LIST = auto()
     AXIS_PAIR_LIST = auto()
     BOUNDED_STRING = auto()
+    ENUM = auto()
+
+
+class PaddingType(Enum):
+    NOTSET = 0
+    SAME_UPPER = 1
+    SAME_LOWER = 2
+    VALID = 3
 
 
 @dataclass
@@ -113,10 +121,13 @@ class BroadcastType(Enum):
 @dataclass
 class OnnxOperatorSpec:
     name: str
+    index: int  # Must be different for each operator.
     emitFunction: Callable
+    emitStructure: list = field(default_factory=list)
     attributesDict: dict[str, OnnxAttribute] = field(default_factory=dict)
     supportedByVersat: bool = False
     broadcastType: BroadcastType = BroadcastType.NO_BROADCAST
+    floatPrecision: float = 0.001
 
 
 @dataclass
@@ -138,6 +149,7 @@ class Model:
     modelInputs: list[Port] = field(default_factory=list)
     initializers: list[np.array] = field(default_factory=list)
     operations: list[Operation] = field(default_factory=list)
+    # Calculated after parameter instantiation and other model operations that change operations are performed
     tempMemoryNeeded: int = -1
     outputMemoryNeeded: int = -1
 

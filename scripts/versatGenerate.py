@@ -13,7 +13,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         os.path.realpath(versat_spec),
         f"-b{axi_data_w}",
         "-p",
-        "iob_csrs_",
+        "csrs_",
         "-t",
         versat_top,
         "-u",
@@ -121,8 +121,8 @@ if __name__ == "__main__":
                     "signals": [
                         {"name": "interface_w_en_i", "width": 1},
                         {"name": "interface_w_strb_i", "width": 1},
-                        {"name": "interface_w_addr_i", "width": 1},
-                        {"name": "interface_w_data_i", "width": 1},
+                        {"name": "interface_w_addr_i", "width": 20},
+                        {"name": "interface_w_data_i", "width": 32},
                         {"name": "interface_w_ready_o", "width": 1},
                     ],
                 }
@@ -130,7 +130,7 @@ if __name__ == "__main__":
             "subblocks": [
                 {
                     "core_name": "iob_csrs",
-                    "instance_name": "iob_csrs",
+                    "instance_name": "csrs",
                     "instance_description": "Control/Status Registers",
                     "csr_if": "iob",
                     "csrs": [
@@ -139,7 +139,7 @@ if __name__ == "__main__":
                             "mode": "R",
                             "n_bits": 32,
                             "rst_val": 0,
-                            "log2n_items": 10,
+                            "log2n_items": 20,
                             "descr": "Versat interface",
                         }
                     ],

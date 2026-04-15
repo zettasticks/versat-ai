@@ -9,8 +9,6 @@
 #define MIN(A, B) (((A < B) ? (A) : (B)))
 #define MAX(A, B) (((A > B) ? (A) : (B)))
 
-void silent_clear_cache();
-
 typedef union {
   iptr i;
   float f;
@@ -28,16 +26,10 @@ iptr NoConvert(float f) {
 
 unsigned int Align8(unsigned int in) { return ((in + 7) & ~7); }
 
-#define ALIGN(IN,ALIGNMENT) (((IN) + ((ALIGNMENT) - 1)) & ~((ALIGNMENT) - 1))
-
-typedef struct Arena_t {
-  void *mem;
-  int used;
-  int allocated;
-} Arena;
+#define ALIGN(IN, ALIGNMENT) (((IN) + ((ALIGNMENT)-1)) & ~((ALIGNMENT)-1))
 
 void *PushBytes(Arena *arena, int size, int alignment) {
-  arena->used = ALIGN(arena->used,alignment);
+  arena->used = ALIGN(arena->used, alignment);
 
   int totalSize = Align8(size); // All allocates are 8 byte aligned. Do not
                                 // worry about alignment further
@@ -54,27 +46,31 @@ void *PushBytes(Arena *arena, int size, int alignment) {
   return res;
 }
 
-#define PushType(ARENA, TYPE) (TYPE *) PushBytes(ARENA, sizeof(TYPE),__alignof__(TYPE))
-#define PushArray(ARENA, COUNT, TYPE) \
-  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE),__alignof__(TYPE))
+#define PushType(ARENA, TYPE)                                                  \
+  (TYPE *)PushBytes(ARENA, sizeof(TYPE), __alignof__(TYPE))
+#define PushArray(ARENA, COUNT, TYPE)                                          \
+  (TYPE *)PushBytes(ARENA, (COUNT) * sizeof(TYPE), __alignof__(TYPE))
 
 typedef struct {
   unsigned int firstMarker;
   unsigned int *secondMarkerPtr;
 } CanaryHeader;
 
-bool CheckCanary(void *memory,int line) {
+bool CheckCanary(void *memory, int line) {
   CanaryHeader *asHeader = ((CanaryHeader *)memory) - 1;
 
   if (asHeader->firstMarker != 0x12345678) {
-    versat_printf("Canary check failed before at line: %d value: %08x \n",line,asHeader->firstMarker);
-    versat_printf("HeaderPtr: %p FirstMarkerPtr: %p\n",asHeader,&asHeader->firstMarker);
+    versat_printf("Canary check failed before at line: %d value: %08x \n", line,
+                  asHeader->firstMarker);
+    versat_printf("HeaderPtr: %p FirstMarkerPtr: %p\n", asHeader,
+                  &asHeader->firstMarker);
     return false;
   }
 
   if (*asHeader->secondMarkerPtr != 0x87654321) {
-    versat_printf("Canary check failed after at line: %d value: %08x\n",line,*asHeader->secondMarkerPtr);
-    versat_printf("SecondMarkerPtr: %p\n",asHeader->secondMarkerPtr);
+    versat_printf("Canary check failed after at line: %d value: %08x\n", line,
+                  *asHeader->secondMarkerPtr);
+    versat_printf("SecondMarkerPtr: %p\n", asHeader->secondMarkerPtr);
     return false;
   }
 
@@ -90,10 +86,10 @@ void *PushBytesWithCanary(Arena *arena, int size) {
   header->secondMarkerPtr = last;
 
   *last = 0x87654321;
-  
+
   // This should never fail, right?
-  if(!CheckCanary(memory,-1)){
-    versat_printf("%p %p %p\n",header,memory,last);
+  if (!CheckCanary(memory, -1)) {
+    versat_printf("%p %p %p\n", header, memory, last);
   }
 
   return memory;
@@ -133,8 +129,10 @@ Tensor PushTensor(Arena *arena, int64_t *dims, int numberDims) {
   return tensor;
 }
 
-static void Tensor_CheckCanary_(Tensor in,int line) { CheckCanary(in.data,line); }
-#define Tensor_CheckCanary(IN) Tensor_CheckCanary_(IN,__LINE__) 
+static void Tensor_CheckCanary_(Tensor in, int line) {
+  CheckCanary(in.data, line);
+}
+#define Tensor_CheckCanary(IN) Tensor_CheckCanary_(IN, __LINE__)
 
 Tensor Tensor_Transpose(Tensor input, int *transposeIndex, Arena *arenaOut) {
   int size = input.dims.size;
@@ -221,9 +219,10 @@ static inline int64_t GetSize(int64_t *dimArray, int dimSize, int index) {
 
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,
                  AddInfo *info) {
-  int64_t *l = info->firstInputDim;
-  int64_t *r = info->secondInputDim;
-  int64_t *o = info->broadCastedShape;
+  int64_t *l = VERSAT_AddInfo_firstInputDims(info);
+  int64_t *r = VERSAT_AddInfo_secondInputDims(info);
+  int64_t *o = VERSAT_AddInfo_broadCastedShape(info);
+
   int d = info->maxDims;
 
   Dimensions left = CreateDimensions(l, d);
@@ -276,9 +275,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
     }
   }
 
-  config->inputs_0.enabled = 0;
-  config->inputs_1.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -289,17 +286,16 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
   ActivateMergedAccelerator(MergeType_Top_Relu);
 
-  int dims = info->dims;
-  int64_t *dim = info->inputDims;
+  int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
+  int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
-  int64_t totalSize = CalculateSizeOfDim(dim, dims);
-
+  // TODO: Replace with versat calculated limit
   int64_t maxAtATime = 256;
 
   float *inputView = (float *)inputA;
   float *outputView = (float *)output;
 
-  for (int i = 0; i < totalSize; i += maxAtATime) {
+  for (int64_t i = 0; i < totalSize; i += maxAtATime) {
     int size = MIN(maxAtATime, totalSize - i);
 
     Top_Relu_Simple(&inputView[i], &outputView[i], size);
@@ -307,8 +303,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
     RunAccelerator(1);
   }
 
-  config->input.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -316,6 +311,20 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
 void *Versat_Reshape(void *data, void *shape, void *output, int index,
                      ReshapeInfo *info) {
+  int64_t *dims = VERSAT_ReshapeInfo_inputDims(info);
+
+  int64_t size = 1;
+  for (int64_t i = 0; i < info->numberInputDims; i++) {
+    size *= dims[i];
+  }
+
+  float *inView = (float *)data;
+  float *outView = (float *)output;
+
+  for (int i = 0; i < size; i++) {
+    outView[i] = inView[i];
+  }
+
   return data;
 }
 
@@ -324,19 +333,25 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
                                          MaxPoolInfo *info) {
   volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
 
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
+  int64_t *inputDims = VERSAT_MaxPoolInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_MaxPoolInfo_outputDims(info);
+  int *kernelDims = VERSAT_MaxPoolInfo_kernelDims(info);
+  int *strideDims = VERSAT_MaxPoolInfo_strideDims(info);
+  int *padsDims = VERSAT_MaxPoolInfo_padsDims(info);
 
-  int outputImageW = info->outputDims[3];
-  int outputImageH = info->outputDims[2];
+  int inputImageW = inputDims[3];
+  int inputImageH = inputDims[2];
+
+  int outputImageW = outputDims[3];
+  int outputImageH = outputDims[2];
 
   int cInStart = channel * inputImageH * inputImageW;
   int cOutStart = channel * outputImageH * outputImageW;
 
   int stride = w.actualKernelW * w.actualKernelH;
 
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
+  int strideW = strideDims[1];
+  int strideH = strideDims[0];
 
   Top_Maxpool_Features(input, w.inputX, w.inputY, cInStart, w.actualKernelW,
                        w.actualKernelH, inputImageW, w.outputW, w.outputH,
@@ -351,11 +366,12 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
 
 // Currently hardcoded for 2D kernels.
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
   volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
   ActivateMergedAccelerator(MergeType_Top_Maxpool);
 
-  int channels = info->inputDims[1];
+  int64_t *inputDims = VERSAT_MaxPoolInfo_inputDims(info);
+  int channels = inputDims[1];
 
   ExtraInfo extra = CalculateExtraInfo_MaxPool(info);
 
@@ -374,9 +390,7 @@ void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
     }
   }
 
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -387,19 +401,25 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
                                              AveragePoolInfo *info) {
   volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
 
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
+  int64_t *inputDims = VERSAT_AveragePoolInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_AveragePoolInfo_outputDims(info);
+  int *kernelDims = VERSAT_AveragePoolInfo_kernelDims(info);
+  int *strideDims = VERSAT_AveragePoolInfo_strideDims(info);
+  int *padsDims = VERSAT_AveragePoolInfo_padsDims(info);
 
-  int outputImageW = info->outputDims[3];
-  int outputImageH = info->outputDims[2];
+  int inputImageW = inputDims[3];
+  int inputImageH = inputDims[2];
+
+  int outputImageW = outputDims[3];
+  int outputImageH = outputDims[2];
 
   int cInStart = channel * inputImageH * inputImageW;
   int cOutStart = channel * outputImageH * outputImageW;
 
   int stride = w.actualKernelW * w.actualKernelH;
 
-  int strideW = info->strideDims[1];
-  int strideH = info->strideDims[0];
+  int strideW = strideDims[1];
+  int strideH = strideDims[0];
 
   Top_AveragePool_Features(input, w.inputX, w.inputY, cInStart, w.actualKernelW,
                            w.actualKernelH, inputImageW, w.outputW, w.outputH,
@@ -415,11 +435,17 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
 // Currently hardcoded for 2D kernels.
 void *Versat_AveragePool(void *inputX, void *output, int index,
                          AveragePoolInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
   volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
   ActivateMergedAccelerator(MergeType_Top_AveragePool);
 
-  int channels = info->inputDims[1];
+  int64_t *inputDims = VERSAT_AveragePoolInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_AveragePoolInfo_outputDims(info);
+  int *kernelDims = VERSAT_AveragePoolInfo_kernelDims(info);
+  int *strideDims = VERSAT_AveragePoolInfo_strideDims(info);
+  int *padsDims = VERSAT_AveragePoolInfo_padsDims(info);
+
+  int channels = inputDims[1];
 
   ExtraInfo extra = CalculateExtraInfo_AveragePool(info);
 
@@ -434,9 +460,7 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
     }
   }
 
-  // Flush the remaining data from the accelerator
-  config->features.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   return output;
@@ -447,14 +471,20 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
                                 int inputC, int outputC) {
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
-  int inputImageW = info->inputDims[3];
+  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
+  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
+  int *strideDims = VERSAT_ConvInfo_strideDims(info);
+  int *padsDims = VERSAT_ConvInfo_padsDims(info);
+
+  int inputImageW = inputDims[3];
   int inputImageC = inputC;
 
-  int outputImageW = info->outputDims[3];
+  int outputImageW = outputDims[3];
   int outputImageC = outputC;
 
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
+  int kernelW = kernelDims[1];
+  int kernelH = kernelDims[0];
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
@@ -462,12 +492,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int group = info->group;
 
   int convStartC = 0; // We must always process the entire input channels.
-
-#if 0
-  static unsigned int delayBuffer[] = {0x0, 0x0, 0x10, 0x0, 0x0, 0x6};
-  ;
-  VersatLoadDelay(delayBuffer);
-#endif
 
   Top_Conv_FeaturesWeightsOutputs(
       inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
@@ -501,37 +525,35 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           void *output, int index, ConvInfo *info) {
-  forceDoubleLoop = true;
+  // forceDoubleLoop = true;
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
-  static Arena arenaInst = {};
-  static Arena *arena = &arenaInst;
-
-  if(!arena->mem){
-    arena->allocated = 1024 * 1024 * 16;
-    arena->mem = malloc(arena->allocated); // 16 Megabytes
-  }
+  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
+  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
+  int *strideDims = VERSAT_ConvInfo_strideDims(info);
+  int *padsDims = VERSAT_ConvInfo_padsDims(info);
 
   ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_Conv);
 
-  int batches = info->inputDims[0];
-  int inputChannels = info->inputDims[1];
-  int inputImageW = info->inputDims[3];
-  int inputImageH = info->inputDims[2];
+  int batches = inputDims[0];
+  int inputChannels = inputDims[1];
+  int inputImageW = inputDims[3];
+  int inputImageH = inputDims[2];
 
-  int outputChannels = info->outputDims[1];
-  int outputImageH = info->outputDims[2];
-  int outputImageW = info->outputDims[3];
+  int outputChannels = outputDims[1];
+  int outputImageH = outputDims[2];
+  int outputImageW = outputDims[3];
 
   int inputSize = inputImageW * inputImageH * inputChannels;
   int outputSize = outputImageW * outputImageH * outputChannels;
   int group = info->group;
 
-  int kernelW = info->kernelDims[1];
-  int kernelH = info->kernelDims[0];
+  int kernelW = kernelDims[1];
+  int kernelH = kernelDims[0];
 
   VersatVarSpec outputHSpec = {1, outputImageH, 0};
   VersatVarSpec outputWSpec = {1, outputImageW, 1};
@@ -540,7 +562,15 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
       &outputCSpec);
 
-  Tensor inputTensor = CreateTensor_NoAllocate(info->inputDims, 4);
+#if 0
+  outputHSpec.value = 1;
+  outputWSpec.value = 1;
+  outputCSpec.value = 1;
+#endif
+  // versat_printf("%d %d %d
+  // %d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
+
+  Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
   inputTensor.data = inputX;
 
   for (int batch = 0; batch < batches; batch++) {
@@ -552,19 +582,21 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     ExtraInfo extra = CalculateExtraInfo_Conv(info);
     // ExtraInfo_Print(extra);
 
-    int64_t NHWCDims[] = {info->inputDims[0], info->inputDims[2],
-                          info->inputDims[3], info->inputDims[1]};
+    int64_t NHWCDims[] = {inputDims[0], inputDims[2], inputDims[3],
+                          inputDims[1]};
 
     Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
 
     Tensor_CheckCanary(tempInputTensor);
 
-    Tensor tempOutputTensor = PushTensor(arena, info->outputDims, 4);
+    Tensor tempOutputTensor = PushTensor(arena, outputDims, 4);
 
     Tensor_CheckCanary(tempInputTensor);
 
+    int kernelSmallSize = kernelDims[1] * kernelDims[0];
+
     int64_t kernelDims[] = {outputChannels, inputChannels / group,
-                            info->kernelDims[1], info->kernelDims[0]};
+                            kernelDims[1], kernelDims[0]};
     // Tensor kernel = CreateTensor_NoAllocate(kernelDims, 4);
     // kernel.data = inputW;
 
@@ -599,12 +631,12 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     Tensor_CheckCanary(tempInputTensor);
 
     // Extract the channel
-    Dimensions dims = CreateDimensions(info->inputDims, 4);
+    Dimensions dims = CreateDimensions(inputDims, 4);
     dims.data[1] /= group;
 
     int size = Dimensions_TotalSize(dims);
 
-    Dimensions outDims = CreateDimensions(info->outputDims, 4);
+    Dimensions outDims = CreateDimensions(outputDims, 4);
     outDims.data[1] /= group;
 
     int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2], outDims.data[3],
@@ -650,17 +682,17 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           w.outputX * extra.outputImageC + w.outputC] = bias;
         } else {
           ConvWithBias_ProcessWindow(
-              w, extracted.data, ((float *)inputW) + g * (kernelSize / group),
+              w, extracted.data,
+              ((float *)inputW) +
+                  g * (kernelSmallSize * (outputChannels / group) *
+                       (inputChannels / group)),
               tempGroupOutput, trueBias, info, inputC, outputC);
         }
       }
 
       // Flush the remaining data from the accelerator
       // TODO: Not efficient but not worrying about it for now.
-      config->features.enabled = 0;
-      config->weights.enabled = 0;
-      config->output.enabled = 0;
-      config->bias.enabled = 0;
+      VERSAT_DisableReadsAndWrites();
       RunAccelerator(2);
 
       silent_clear_cache();
@@ -703,9 +735,14 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_MatMul);
   volatile Top_MatMulConfig *config = &accelConfig->Top_MatMul;
+
+  int64_t *inputADims = VERSAT_MatMulInfo_inputADims(info);
+  int64_t *inputBDims = VERSAT_MatMulInfo_inputBDims(info);
+  int64_t *outputDims = VERSAT_MatMulInfo_outputDims(info);
 
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;
@@ -718,10 +755,10 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int AW;
   if (AS == 1) {
     AH = 1;
-    AW = info->inputADims[0];
+    AW = inputADims[0];
   } else {
-    AH = info->inputADims[AS - 2];
-    AW = info->inputADims[AS - 1];
+    AH = inputADims[AS - 2];
+    AW = inputADims[AS - 1];
   }
 
   int BS = info->numberInputBDims;
@@ -729,33 +766,33 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   int BW;
   if (BS == 1) {
     BH = 1;
-    BW = info->inputBDims[0];
+    BW = inputBDims[0];
   } else {
-    BH = info->inputBDims[BS - 2];
-    BW = info->inputBDims[BS - 1];
+    BH = inputBDims[BS - 2];
+    BW = inputBDims[BS - 1];
   }
 
   int totalBSize = BH * BW;
-  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
+  float *tempB = PushArray(arena, totalBSize, float);
 
   int OS = info->numberOutputDims;
   int OH;
   int OW;
   if (OS == 1) {
     OH = 1;
-    OW = info->outputDims[0];
+    OW = outputDims[0];
   } else {
-    OH = info->outputDims[OS - 2];
-    OW = info->outputDims[OS - 1];
+    OH = outputDims[OS - 2];
+    OW = outputDims[OS - 1];
   }
 
   if (AW != BH) {
     versat_printf("Something very wrong is happening in MatMul\n");
   }
 
-  Dimensions dimA = CreateDimensions(info->inputADims, info->numberInputADims);
-  Dimensions dimB = CreateDimensions(info->inputBDims, info->numberInputBDims);
-  Dimensions dimO = CreateDimensions(info->outputDims, info->numberOutputDims);
+  Dimensions dimA = CreateDimensions(inputADims, info->numberInputADims);
+  Dimensions dimB = CreateDimensions(inputBDims, info->numberInputBDims);
+  Dimensions dimO = CreateDimensions(outputDims, info->numberOutputDims);
 
   if (dimA.size == 1) {
     Dimensions_PrependInPlace(&dimA, 1);
@@ -823,24 +860,98 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
     Address_Advance(&addrO);
   }
 
-  config->leftRow.enabled = 0;
-  config->rightRow.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(tempB);
+  MarkPop(outerMark);
 
   return output;
 }
 
-void *Versat_Softmax(void *inputA, void *output, int index, SoftmaxInfo *info) {
-  return Software_Softmax(inputA, output, index, info);
+void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
+  float *view = (float *)input;
+  float *out = (float *)output;
+
+  ActivateMergedAccelerator(MergeType_Top_Exp);
+
+  int64_t *inputDims = VERSAT_SoftmaxInfo_inputDims(info);
+
+  Top_Exp_LoadExp(expTable, EXP_TABLE_SIZE);
+  Top_Exp_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
+
+  int64_t size = CalculateSizeOfDim(inputDims, info->numberInputDims);
+
+  VersatVarSpec width = {};
+  width.min = 1;
+  width.max = MIN(size, 256); // [7]
+  Top_Exp_Simple_Size(&width);
+  int increment = width.value;
+
+  int axis = info->axis;
+  if (axis < 0) {
+    axis += info->numberInputDims;
+  }
+
+  AddressGen testInst =
+      StartAddress(inputDims, inputDims, info->numberInputDims);
+  AddressGen *test = &testInst;
+
+  int kernelSize = info->numberInputDims - axis;
+
+  for (int i = 0; i < size; i += increment) {
+    int transferSize = MIN(size - i, increment);
+
+    Top_Exp_Simple(&view[i], &out[i], transferSize);
+    RunAccelerator(1);
+  }
+
+  VERSAT_DisableReadsAndWrites();
+  RunAccelerator(2);
+
+  silent_clear_cache();
+
+  int maxIndex = 0;
+  for (; Address_IsValid(test); Address_AdvanceAxis(test, axis - 1)) {
+    int kernelDims[MAX_DIMS] = {};
+    for (int i = 0; i < kernelSize; i++) {
+      kernelDims[i] = inputDims[i + axis];
+    }
+
+    float sum = 0.0f;
+
+    KernelGen genInst = StartKernel(test, kernelDims, kernelSize);
+    KernelGen *gen = &genInst;
+    for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
+      int index = Kernel_GetValue(gen);
+
+      maxIndex = MAX(index, maxIndex);
+
+      sum += out[index];
+    }
+
+    float invSum = 1.0 / sum;
+
+    genInst = StartKernel(test, kernelDims, kernelSize);
+    for (; Kernel_IsValid(gen); Kernel_Advance(gen)) {
+      int index = Kernel_GetValue(gen);
+
+      maxIndex = MAX(index, maxIndex);
+
+      out[index] = out[index] * invSum;
+    }
+  }
+
+  return output;
 }
 
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
+
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
+
+  int64_t *inputDims = VERSAT_BatchNormalizationInfo_inputDims(info);
 
   float *x = (float *)inputX;
   float *s = (float *)scale;
@@ -849,7 +960,7 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
   float *v = (float *)var;
   float *o = (float *)output;
 
-  Dimensions dim = CreateDimensions(info->inputDims, info->numberInputDims);
+  Dimensions dim = CreateDimensions(inputDims, info->numberInputDims);
 
   if (dim.size <= 1) {
     Dimensions_AppendInPlace(&dim, 1);
@@ -857,8 +968,8 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 
   int totalC = dim.data[1];
 
-  float *A = (float *)malloc(sizeof(float) * totalC);
-  float *B = (float *)malloc(sizeof(float) * totalC);
+  float *A = PushArray(arena, totalC, float);
+  float *B = PushArray(arena, totalC, float);
   for (int c = 0; c < totalC; c++) {
     float inv = my_invsqrt(v[c] + info->epsilon);
     A[c] = s[c] * inv;
@@ -906,21 +1017,17 @@ void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
 
   EndAccelerator();
 
-  volatile Top_BatchNormalizationConfig *config =
-      &accelConfig->Top_BatchNormalization;
-  config->x.enabled = 0;
-  config->o.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(A);
-  free(B);
+  MarkPop(outerMark);
 
   return o;
 }
 
 void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
-  Tensor asTensor =
-      CreateTensor_NoAllocate(info->inputDims, info->numberInputDims);
+  int64_t *inputDims = VERSAT_DropoutInfo_inputDims(info);
+  Tensor asTensor = CreateTensor_NoAllocate(inputDims, info->numberInputDims);
   int size = Tensor_Size(asTensor);
 
   float *asFloatIn = (float *)input;
@@ -934,33 +1041,124 @@ void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
 }
 
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
-  return Software_LRN(input, out, index, info);
+  ArenaMark outerMark = MarkArena(arena);
+
+  int64_t *inputDims = VERSAT_LRNInfo_inputDims(info);
+
+  int N = inputDims[0];
+  int C = inputDims[1];
+  int H = inputDims[2];
+  int W = inputDims[3];
+
+  int n = info->size;
+  float k = info->bias;
+  float a = info->alpha;
+  float b = info->beta;
+
+  float aDivSize = a / ((float)n);
+
+  float *in = (float *)input;
+  float *output = (float *)out;
+
+  int64_t NHWCDims[] = {inputDims[0], inputDims[2], inputDims[3], inputDims[1]};
+
+  Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
+  float *tempInput = tempInputTensor.data;
+
+  Tensor tempOutputTensor = PushTensor(arena, NHWCDims, 4);
+  float *tempOutput = tempOutputTensor.data;
+
+  // Convert NCHW to NHWC
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      for (int c = 0; c < C; c++) {
+        int NCHW_Index = c * (H * W) + y * W + x;
+        int NHWC_Index = y * (W * C) + x * C + c;
+
+        tempInput[NHWC_Index] = in[NCHW_Index];
+      }
+    }
+  }
+
+  ActivateMergedAccelerator(MergeType_Top_LRN);
+
+  Top_LRN_LoadMantissa(logMantissaTable, LOG_MANTISSA_TABLE_SIZE);
+  Top_LRN_LoadExp(expTable, EXP_TABLE_SIZE);
+  Top_LRN_LoadFrac(expMantissaTable, EXP_MANTISSA_TABLE_SIZE);
+  Top_LRN_InitConsts(VERSAT_CONVERT(aDivSize, uint32_t),
+                     VERSAT_CONVERT(b, uint32_t), VERSAT_CONVERT(k, uint32_t),
+                     log2Val);
+
+  int64_t size = CalculateSizeOfDim(inputDims, 4);
+  float *buffer = PushArray(arena, size, float);
+
+  AddressGen addrInst = StartAddress(NHWCDims, NHWCDims, info->numberInputDims);
+  AddressGen *addr = &addrInst;
+  for (; Address_IsValid(addr); Address_Advance(addr)) {
+    int y = Address_GetDim(addr, 1);
+    int x = Address_GetDim(addr, 2);
+    int c = Address_GetDim(addr, 3);
+
+    int lowerBound = MAX(0, c - n / 2);
+    int upperBound = MIN(C - 1, c + n / 2);
+
+    int index = Address_GetValue(addr);
+
+    int yx = y * W * C + x * C;
+
+    Top_LRN_Simple(&tempInput[yx], &buffer[index], lowerBound,
+                   upperBound + 1 - lowerBound);
+    StartAccelerator();
+  }
+
+  VERSAT_DisableReadsAndWrites();
+  RunAccelerator(2);
+
+  for (int i = 0; i < size; i++) {
+    tempOutput[i] = tempInput[i] / buffer[i];
+  }
+
+  // Convert NHWC to NCHW
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      for (int c = 0; c < C; c++) {
+        int NCHW_Index = c * (H * W) + y * W + x;
+        int NHWC_Index = y * (W * C) + x * C + c;
+
+        output[NCHW_Index] = tempOutput[NHWC_Index];
+      }
+    }
+  }
+
+  MarkPop(outerMark);
+
+  return output;
 }
 
 void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
                   GemmInfo *info) {
+  ArenaMark outerMark = MarkArena(arena);
+
   ActivateMergedAccelerator(MergeType_Top_Gemm);
   volatile Top_GemmConfig *config = &accelConfig->Top_Gemm;
+
+  int64_t *aDims = VERSAT_GemmInfo_aDims(info);
+  int64_t *bDims = VERSAT_GemmInfo_bDims(info);
+  int64_t *cDims = VERSAT_GemmInfo_cDims(info);
 
   float *viewA = (float *)inA;
   float *viewB = (float *)inB;
   float *viewC = (float *)inC;
   float *viewOut = (float *)out;
 
-  int AH = info->aDims[0]; // 1
-  int AW = info->aDims[1]; // 4
+  int AH = aDims[0]; // 1
+  int AW = aDims[1]; // 4
 
-  int totalASize = AH * AW;
-  float *tempA = (float *)malloc(sizeof(float) * totalASize);
+  int BH = bDims[0];
+  int BW = bDims[1];
 
-  int BH = info->bDims[0];
-  int BW = info->bDims[1];
-
-  int totalBSize = BH * BW;
-  float *tempB = (float *)malloc(sizeof(float) * totalBSize);
-
-  int CH = info->cDims[0];
-  int CW = info->cDims[1];
+  int CH = cDims[0];
+  int CW = cDims[1];
 
   int trueAW = AW;
   int trueAH = AH;
@@ -968,6 +1166,10 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
     trueAW = AH;
     trueAH = AW;
   }
+
+  // Since we only allocate one line no point in trying to simplify the
+  // allocation
+  float *tempA = PushArray(arena, AH, float);
 
   int trueBW = BW;
   int trueBH = BH;
@@ -982,13 +1184,15 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   int broadCastH = (OH == CH && OH != 1) ? 1 : 0;
   int broadCastW = (OW == CW && OW != 1) ? 1 : 0;
 
+  // versat_printf("%d %d %d %d %d %d\n",OH,CH,OW,CW,broadCastH,broadCastW);
+
   int64_t dimsOut[2] = {OH, OW};
 
-  Dimensions dimA = CreateDimensions(info->aDims, info->numberDims);
-  Dimensions dimB = CreateDimensions(info->bDims, info->numberDims);
-  Dimensions dimC = CreateDimensions(info->cDims, info->numberDims);
+  Dimensions dimA = CreateDimensions(aDims, info->numberInputDims);
+  Dimensions dimB = CreateDimensions(bDims, info->numberInputDims);
+  Dimensions dimC = CreateDimensions(cDims, info->numberInputDims);
 
-  Dimensions dimO = CreateDimensions(dimsOut, info->numberDims);
+  Dimensions dimO = CreateDimensions(dimsOut, info->numberInputDims);
 
   AddressGen addrA = StartAddressFromDims(dimA, 0);
   AddressGen addrB = StartAddressFromDims(dimB, 0);
@@ -1010,8 +1214,12 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   // By default we transpose B in order to implement the multiplication phase
   // directly. Which means that we do the opposite when we want to "transpose"
   // B.
+
   float *properBInput = viewB;
   if (!info->transB) {
+    int totalBSize = BH * BW;
+    float *tempB = PushArray(arena, totalBSize, float);
+
     for (int y = 0; y < BH; y++) {
       for (int x = 0; x < BW; x++) {
         // Transposing B
@@ -1022,13 +1230,9 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
     properBInput = tempB;
   }
 
-  // versat_printf("AW: %d,AH: %d,BW: %d,BH: %d,OW: %d,OH:
-  // %d\n",AW,AH,BW,BH,OW,OH);
-
   Top_Gemm_Alpha(NoConvert(info->alpha));
 
   for (int y = 0; y < OH; y++) {
-
     float *properAInput = &viewA[y * AW];
     if (info->transA) {
       for (int x = 0; x < AH; x++) {
@@ -1058,23 +1262,15 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
       config->myAccum.strideMinusOne = trueAW - 1;
 
       StartAccelerator();
+
+      silent_clear_cache();
     }
   }
 
-#if 0
-    Address_Advance(&addrA);
-    Address_Advance(&addrB);
-    Address_Advance(&addrO);
-  }
-#endif
-
-  config->gemmLeftRow.enabled = 0;
-  config->gemmRightRow.enabled = 0;
-  config->output.enabled = 0;
+  VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  free(tempA);
-  free(tempB);
+  MarkPop(outerMark);
 
   return viewOut;
 }

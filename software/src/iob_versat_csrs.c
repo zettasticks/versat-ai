@@ -10,7 +10,7 @@ uint32_t iob_versat_csrs_get_interface(int addr) {
                   IOB_VERSAT_CSRS_CSR_INTERFACE_W);
 }
 
-uint16_t iob_versat_csrs_get_version() {
+uint32_t iob_versat_csrs_get_version() {
   return iob_read(base + IOB_VERSAT_CSRS_VERSION_ADDR,
                   IOB_VERSAT_CSRS_VERSION_W);
 }

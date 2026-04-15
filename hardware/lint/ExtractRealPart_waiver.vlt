@@ -1,0 +1,5 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+lint_off -rule UNUSEDSIGNAL -file "**/ExtractRealPart.v" -match "Bits of signal are not used: 'mantissa'[16:0]"

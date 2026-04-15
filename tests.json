@@ -1,6 +1,23 @@
 {
   "Generated": {
-    "type": "GENERATED"
+    "type": "GENERATED",
+    "path": "./tests/generated",
+    "genType": "NORMAL"
+  },
+  "GeneratedHeavy": {
+    "type": "GENERATED",
+    "path": "./tests/generated_heavy",
+    "genType": "HEAVY"
+  },
+  "GeneratedLite": {
+    "type": "GENERATED",
+    "path": "./tests/generated_lite",
+    "genType": "LITE"
+  },
+  "Softmax": {
+    "type": "GENERATED",
+    "path": "./tests/softmax",
+    "genType": "SOFTMAX"
   },
   "ToyCar":{
     "type": "FIXED",
@@ -26,9 +43,13 @@
     "type": "FIXED",
     "path": "./tests/alexnet"
   },
+  "Simple": {
+    "type": "FIXED_LIST",
+    "subTests": ["MNIST","GeneratedLite"]
+  },
   "All": {
     "type": "FIXED_LIST",
-    "subTests": ["ToyCar","Image","Keyword","VisualWake"]
+    "subTests": ["GeneratedHeavy","MNIST","Alexnet"]
   }
 }
 

@@ -6,14 +6,33 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-
 // ======================================
 // Global stuff (versat side)
 
 extern VersatPrintf versat_printf;
 extern MeasureTimeFunction versat_time;
 extern ClearCache versat_clearCache;
+
+#define EXP_MANTISSA_PRECISION 12
+#define LOG_MANTISSA_PRECISION 12
+
+#define EXP_MANTISSA_TABLE_SIZE (1 << (EXP_MANTISSA_PRECISION + 1))
+#define EXP_TABLE_SIZE (256)
+#define LOG_MANTISSA_TABLE_SIZE (1 << LOG_MANTISSA_PRECISION)
+
+extern uint32_t *expMantissaTable;
+extern uint32_t *expTable;
+extern uint32_t *logMantissaTable;
+
+static int32_t log2Val = 0x3f317218;
+
+typedef struct Arena_t {
+  void *mem;
+  int used;
+  int allocated;
+} Arena;
+
+extern Arena *arena;
 
 // ======================================
 // Dimensions
@@ -154,132 +173,10 @@ AddressGen StartAddress(int64_t *iterationDims, int64_t *properDims,
 
 typedef struct {
   const char *typeName;
-  size_t outputSize;
+  uint32_t outputSize;
 } LayerInfo;
 
-typedef struct {
-  // Extra info to help
-  int maxDims;
-  int64_t *firstInputDim;
-  int64_t *secondInputDim;
-  int64_t *broadCastedShape;
-} AddInfo;
-
-typedef struct {
-  int dims;
-  int64_t *inputDims;
-} ReluInfo;
-
-typedef enum {
-  PaddingType_NOTSET,
-  PaddingType_SAME_UPPER,
-  PaddingType_SAME_LOWER,
-  PaddingType_VALID
-} PaddingType;
-
-typedef struct {
-  int dims;
-  int64_t *inputDims;
-  int64_t *outputDims;
-  int kernelSize;
-  int *kernelDims;
-  int strideSize;
-  int *strideDims;
-  PaddingType padding;
-  int padsSize;
-  int *padsDims;
-} MaxPoolInfo;
-
-typedef struct {
-  int dims;
-  int64_t *inputDims;
-  int64_t *outputDims;
-  int kernelSize;
-  int *kernelDims;
-  int strideSize;
-  int *strideDims;
-  PaddingType padding;
-  int padsSize;
-  int *padsDims;
-} AveragePoolInfo;
-
-typedef struct {
-  int dims;
-  int64_t *inputDims;
-  int64_t *outputDims;
-  int featureMaps;
-  int kernelSize;
-  int *kernelDims;
-  int strideSize;
-  int *strideDims;
-  int dilationsSize;
-  int *dilationsDims;
-  PaddingType padding;
-  int padsSize;
-  int *padsDims;
-  int group;
-} ConvInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  int numberShapeDims;
-} ReshapeInfo;
-
-typedef struct {
-  int64_t *inputADims;
-  int numberInputADims;
-  int64_t *inputBDims;
-  int numberInputBDims;
-  int64_t *outputDims;
-  int numberOutputDims;
-} MatMulInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  int axis;
-} SoftmaxInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  int64_t *perm;
-  int permSize;
-} TransposeInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  float epsilon;
-  float momentum;
-} BatchNormalizationInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  float ratio;
-} DropoutInfo;
-
-typedef struct {
-  int64_t *inputDims;
-  int numberInputDims;
-  float alpha;
-  float beta;
-  float bias;
-  int size;
-} LRNInfo;
-
-typedef struct {
-  int64_t *aDims;
-  int64_t *bDims;
-  int64_t *cDims;
-  int numberDims;
-  float alpha;
-  float beta;
-  int transA;
-  int transB;
-} GemmInfo;
+#include "versat_ai_operators_meta.h"
 
 // Software implementations
 void *Software_Conv(void *inputX, void *inputW, void *output, int index,
@@ -341,9 +238,11 @@ void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
 int64_t CalculateSizeOfDim(int64_t *dim, int dims);
 
 void AssertAlmostEqual(void *toTest, void *correctValues, int index,
-                       LayerInfo *info);
+                       float precision, LayerInfo *info);
 
 float my_invsqrt(float number);
+
+void silent_clear_cache();
 
 // ======================================
 // Extra Info
@@ -447,5 +346,38 @@ void AdvancedWindow_Print(AdvancedWindow window);
 Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims);
 int Tensor_Size(Tensor tensor);
 void Tensor_Print(Tensor tensor);
+
+// ======================================
+// Math
+
+double Cordic_log(double in);
+double Cordic_exp(double exponent);
+double Cordic_pow(double base, double power);
+
+double Table_log(double in);
+double Table_exp(double exponent);
+double Table_pow(double base, double power);
+
+double Taylor_log(double in);
+double Taylor_exp(double exponent);
+double Taylor_pow(double base, double power);
+
+#if USE_CORDIC
+#define SOFT_LOG(X) Cordic_log(X)
+#define SOFT_EXP(X) Cordic_exp(X)
+#define SOFT_POW(B, E) Cordic_pow(B, E)
+#endif
+
+#if USE_TABLE
+#define SOFT_LOG(X) Table_log(X)
+#define SOFT_EXP(X) Table_exp(X)
+#define SOFT_POW(B, E) Table_pow(B, E)
+#endif
+
+#if USE_TAYLOR
+#define SOFT_LOG(X) Taylor_log(X)
+#define SOFT_EXP(X) Taylor_exp(X)
+#define SOFT_POW(B, E) Taylor_pow(B, E)
+#endif
 
 #endif // VERSAT_PRIVATE_INCLUDED

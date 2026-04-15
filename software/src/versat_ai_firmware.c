@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "versat_ai.h"
+
+#if !VERSAT_AI_USE_TESTER
+
 #include "iob_bsp.h"
 #include "iob_printf.h"
 #include "iob_timer.h"
@@ -13,33 +17,7 @@
 #include "versat_ai_mmap.h"
 #include <string.h>
 
-// ETHERNET enabled for now to test Alexnet
-//#define USE_ETHERNET
-
-//#define DEBUG
-
-#ifdef PC
-#undef USE_ETHERNET
-#endif
-
-#ifdef USE_ETHERNET
-#include "iob_eth.h"
-#endif
-
-#include "versat_ai.h"
-
-// Contains info for each test.
-#include "testInfo.h"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(ARR) ((sizeof(ARR) / sizeof(ARR[0])))
-#endif
-
-#ifndef OFFSET_PTR
-#define OFFSET_PTR(PTR, OFFSET) ((void *)(((char *)PTR) + OFFSET))
-#endif
-
-#ifdef PC
+#if PC
 #include <stdio.h>
 #include <unistd.h> // for sleep()
 long int GetFileSize(FILE *file) {
@@ -54,50 +32,11 @@ long int GetFileSize(FILE *file) {
 }
 #endif
 
-#ifdef USE_ETHERNET
-uint32_t uart_request_ethernet_recvfile(const char *file_name) {
-  uart_puts(UART_PROGNAME);
-  uart_puts(": requesting to receive file by ethernet\n");
-
-  // send file receive by ethernet request
-  uart_putc(0x13);
-
-  // send file name (including end of string)
-  uart_puts(file_name);
-  uart_putc(0);
-
-  // receive file size
-  uint32_t file_size = uart_getc();
-  file_size |= ((uint32_t)uart_getc()) << 8;
-  file_size |= ((uint32_t)uart_getc()) << 16;
-  file_size |= ((uint32_t)uart_getc()) << 24;
-
-  // send ACK before receiving file
-  uart_putc(ACK);
-
-  return file_size;
-}
-
-void ethernet_receive_file(const char *path, void *buffer, int expectedSize) {
-  if (expectedSize == 0) {
-    return;
-  }
-  uint32_t size = uart_request_ethernet_recvfile(path);
-#if 0
-  printf(
-      "Gonna call eth to receive file of size: %u and expected size of: %u\n",
-      size, expectedSize);
-#endif
-  eth_rcv_file(buffer, size);
-}
-#endif
-
 void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
                      int expectedSize) {
   char fullPath[128];
-  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
-
-#ifdef PC
+#if PC
+  snprintf(fullPath, 128, "../resources/%s_%s", pathPrefix, path);
   FILE *f = fopen(fullPath, "r");
   if (!f) {
     printf("Problem opening file for reading: %s\n", fullPath);
@@ -110,13 +49,13 @@ void FastReceiveFile(const char *pathPrefix, const char *path, void *buffer,
   return;
 #endif
 
-#ifdef USE_ETHERNET
-  ethernet_receive_file(fullPath, buffer, expectedSize);
-#endif
+  snprintf(fullPath, 128, "%s_%s", pathPrefix, path);
+  uart_recvfile(fullPath, buffer);
+  printf("Received file by uart\n");
 }
 
 void silent_clear_cache() {
-#ifndef PC
+#if !PC
   for (unsigned int i = 0; i < 10; i++)
     asm volatile("nop");
   // Flush VexRiscv CPU internal cache
@@ -127,7 +66,7 @@ void silent_clear_cache() {
 void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
 
 void clear_cache() {
-#ifndef PC
+#if !PC
   // Delay to ensure all data is written to memory
   printf("Gonna clear the cache\n");
   for (unsigned int i = 0; i < 10; i++)
@@ -167,6 +106,57 @@ void PrintU64InHex(uint64_t n) {
   printf("%08x%08x\n", conv.u32[1], conv.u32[0]);
 }
 
+typedef struct {
+  void *data;
+  uint32_t size;
+} File;
+
+void uart_sendstr(char *name);
+
+uint32_t uart_filesize(char *file_name) {
+  uart_puts(UART_PROGNAME);
+  uart_puts(": requesting to get file size\n");
+
+  // send file receive request
+  uart_putc(0x09);
+
+  // send file name
+  uart_sendstr(file_name);
+
+  // receive file size
+  uint32_t file_size = uart_getc();
+  file_size |= ((uint32_t)uart_getc()) << 8;
+  file_size |= ((uint32_t)uart_getc()) << 16;
+  file_size |= ((uint32_t)uart_getc()) << 24;
+
+  uart_putc(ACK);
+
+  return file_size;
+}
+
+File GetFile(const char *path) {
+  uint32_t size = uart_filesize(path);
+  void *data = malloc(size + 16);
+  uart_recvfile(path, data);
+
+  File res = {};
+  res.data = data;
+  res.size = size;
+
+  return res;
+}
+
+static bool IsAlpha(char ch) {
+  bool res = false;
+
+  res |= (ch >= 'a' && ch <= 'z');
+  res |= (ch >= 'A' && ch <= 'Z');
+  res |= (ch >= '0' && ch <= '9');
+  res |= (ch == '_');
+
+  return res;
+}
+
 int main() {
   char pass_string[] = "Test passed!";
   char fail_string[] = "Test failed!";
@@ -185,17 +175,11 @@ int main() {
   printf("\n\nRunning test %s\n\n", TEST_NAME);
 #endif
 
-#ifdef USE_ETHERNET
-  uart_puts("\nGonna init ethernet\n");
-  eth_init(ETH0_BASE, &silent_clear_cache);
-  eth_wait_phy_rst();
-#endif
-
   uart_puts("\nGonna init versat!\n");
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   PrintU64InHex(1ull << 0);
   PrintU64InHex(1ull << 8);
   PrintU64InHex(1ull << 16);
@@ -211,80 +195,91 @@ int main() {
 
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
 
   printf("Versat base: %x\n", VERSAT0_BASE);
 
-#ifdef DEBUG
+#if DEBUG
   int stackVar;
   printf("Stack  : %p\n", &stackVar);
 #endif
 
-  // We allocate a little bit more just in case.
-  // Also need to allocate a bit more to ensure that Align4 works fine.
-  int extra = 16;
-
-  for (int i = 0; i < ARRAY_SIZE(testModels); i++) {
-    TestModelInfo info = *testModels[i];
-
-    printf("\n==============================\n");
-    printf("Gonna run the full test named: %s", info.nameSpace);
-    printf("\n==============================\n\n\n");
-
-    void *output = Align4(malloc(info.outputSize + extra));
-    void *temp = Align4(malloc(info.tempSize + extra));
-    void *model = Align4(malloc(info.modelSize + extra));
-    void *correct = Align4(malloc(info.correctSize + extra));
-    void *inputMemory = Align4(malloc(info.totalInputSize + extra));
-
-    void **inputs = Align4(malloc(sizeof(void *) * info.inputCount));
-    for (int i = 0; i < info.inputCount; i++) {
-      inputs[i] = OFFSET_PTR(inputMemory, info.inputOffsets[i]);
-    }
-
-    void *total;
-    if (info.inputCount == 0) {
-      total = OFFSET_PTR(correct, info.correctSize);
-    } else {
-      total = inputs[info.inputCount - 1];
-    }
-
-#ifdef DEBUG
-    printf("Output : %p\n", output);
-    printf("Temp   : %p\n", temp);
-    printf("Model  : %p\n", model);
-    printf("Correct: %p\n", correct);
-    printf("Input  : %p\n", inputMemory);
-    printf("Total  : %p\n", total);
-
-    if (((void *)total) > ((void *)&stackVar)) {
-      printf(
-          "Error, we run out of memory, increase the value of firm_w argument "
-          "and setup again\n");
-      uart_finish();
-      return 0;
-    }
+#if EMPTY_TABLES
+  printf("\n\n[WARNING] Running without computing or embedding tables. Any "
+         "operator that uses any transcendental functions should fail.\n\n");
 #endif
 
-    FastReceiveFile(info.nameSpace, "correctOutputs.bin", correct,
-                    info.correctSize);
-    FastReceiveFile(info.nameSpace, "model.bin", model, info.modelSize);
-    FastReceiveFile(info.nameSpace, "inputs.bin", inputMemory,
-                    info.totalInputSize);
+  File metadata = GetFile("VERSAT_TEST_METADATA.txt");
 
-    uint64_t start = timer_get_count();
-    info.debugInferenceFunction(output, temp, inputs, model, correct);
-    uint64_t end = timer_get_count();
+  char *ptr = (char *)metadata.data;
+  char *end = ptr + metadata.size;
 
-    PrintTimeElapsed("\nTest individual time", start, end);
+  for (; ptr < end;) {
+    if (!IsAlpha(*ptr)) {
+      break;
+    }
 
-    free(output);
-    free(temp);
-    free(model);
-    free(correct);
-    free(inputMemory);
+    char *lineStart = ptr;
+    while (IsAlpha(*ptr)) {
+      ptr += 1;
+    }
+    char *lineEnd = ptr;
+    int size = lineEnd - lineStart;
+
+    ptr = lineEnd + 1;
+
+    char pathBuffer[256];
+    sprintf(pathBuffer, "%.*s_metamodel.bin", size, lineStart);
+
+    File metamodel = GetFile(pathBuffer);
+    CompiledModel *compiledModel = (CompiledModel *)metamodel.data;
+
+    printf("Output: %d\n", compiledModel->outputSize);
+    printf("Temp: %d\n", compiledModel->tempSize);
+    printf("Model: %d\n", compiledModel->modelSize);
+    printf("Correct: %d\n", compiledModel->correctSize);
+    printf("Input: %d\n", compiledModel->totalInputSize);
+
+    char *workBuffer = (char *)malloc(400 * 1024 * 1024);
+
+    // Allocate space for each memory buffer, +16 to give us some wiggle room.
+    // Proper code should work without this but we will handle this later.
+    char *output = workBuffer + metamodel.size + 16;
+    char *temp = output + compiledModel->outputSize + 16;
+    char *model = temp + compiledModel->tempSize + 16;
+    char *correct = model + compiledModel->modelSize + 16;
+    char *inputs = correct + compiledModel->correctSize + 16;
+
+    printf("\n\n");
+    printf("Output: %p\n", output);
+    printf("Temp: %p\n", temp);
+    printf("Model: %p\n", model);
+    printf("Correct: %p\n", correct);
+    printf("Input: %p\n", inputs);
+
+    void **inputsVector = (void **)(inputs + compiledModel->totalInputSize);
+    uint32_t *inputOffsets = CompiledModel_InputOffsets(compiledModel);
+    for (int i = 0; i < compiledModel->inputCount; i++) {
+      inputsVector[i] = VERSAT_OFFSET_PTR(inputs, inputOffsets[i]);
+    }
+
+    printf("Inputs Vector: %p\n", inputsVector);
+    printf("Inputs Vector val: %p %p\n", inputsVector[0], inputsVector[1]);
+    printf("\n\n");
+
+    sprintf(pathBuffer, "%.*s", size, lineStart);
+
+    FastReceiveFile(pathBuffer, "correctOutputs.bin", correct,
+                    compiledModel->correctSize);
+    FastReceiveFile(pathBuffer, "model.bin", model, compiledModel->modelSize);
+    FastReceiveFile(pathBuffer, "inputs.bin", inputs,
+                    compiledModel->totalInputSize);
+
+    RunCompiledInference(compiledModel, output, temp, inputsVector, model,
+                         correct);
   }
 
-#ifdef PC
+#if PC
   sleep(1);
 #endif
 
@@ -300,3 +295,100 @@ int main() {
 
   return 0;
 }
+
+#else // VERSAT_AI_USE_TESTER
+
+#include "iob_bsp.h"
+#include "iob_printf.h"
+#include "versat_ai_conf.h"
+#include "versat_ai_mmap.h"
+
+#include "versat_accel.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "iob_regfileif_inverted_csrs.h"
+#include "iob_timer.h"
+#include "iob_uart.h"
+
+void silent_clear_cache() {
+#if !PC
+  for (unsigned int i = 0; i < 10; i++)
+    asm volatile("nop");
+  // Flush VexRiscv CPU internal cache
+  asm volatile(".word 0x500F" ::: "memory");
+#endif
+}
+
+void silent_clear_cache_args(void *ptr, size_t size) { silent_clear_cache(); }
+
+void delayed_putc(char c) {
+  for (unsigned int i = 0; i < 1000; i++)
+    asm volatile("nop");
+  uart_putc(c);
+}
+
+int main() {
+  // init timer
+  timer_init(TIMER0_BASE);
+
+  // init uart
+  uart_init(UART0_BASE, IOB_BSP_FREQ / IOB_BSP_BAUD);
+  printf_init(&delayed_putc);
+
+  printf("Gonna init versat\n");
+
+  SetVersatDebugPrintfFunction(printf);
+  versat_init(VERSAT0_BASE);
+  ConfigCreateVCD(false);
+  Versat_SetTimeMeasurementFunction(timer_get_count);
+  Versat_SetClearCache(silent_clear_cache_args);
+  Versat_Init();
+
+  iob_regfileif_inverted_csrs_init_baseaddr(REGFILEIF0_BASE);
+
+  printf("Sut initialized\n");
+
+  while (1) {
+    while (iob_regfileif_inverted_csrs_get_start() == 0)
+      ;
+    iob_regfileif_inverted_csrs_set_done(0);
+    iob_regfileif_inverted_csrs_set_start(0);
+
+    // Make sure that we are reading any values set by Tester correctly
+    silent_clear_cache();
+
+    printf("Inside SUT\n");
+
+    void **recvData0 = (void **)0x02000000;
+    void **recvData1 = (void **)0x02000004;
+    void **recvData2 = (void **)0x02000008;
+    void **recvData3 = (void **)0x0200000c;
+    void **recvData4 = (void **)0x02000010;
+    void **recvData5 = (void **)0x02000014;
+
+    CompiledModel *compiledModel = (CompiledModel *)*recvData0;
+    char *output = (char *)*recvData1;
+    char *temp = (char *)*recvData2;
+    char *model = (char *)*recvData3;
+    void **inputs = (void **)*recvData4;
+    char *correct = (char *)*recvData5;
+
+    printf("Output:%p\n", output);
+    printf("Temp:%p\n", temp);
+    printf("Model:%p\n", model);
+    printf("Inputs:%p\n", inputs);
+    printf("Correct:%p\n", correct);
+
+    RunCompiledInference(compiledModel, output, temp, inputs, model, correct);
+
+    iob_regfileif_inverted_csrs_set_done(1);
+  }
+
+  uart_finish();
+
+  return 0;
+}
+
+#endif // TESTER

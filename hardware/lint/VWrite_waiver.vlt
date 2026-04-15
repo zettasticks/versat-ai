@@ -1,0 +1,8 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+lint_off -rule PINCONNECTEMPTY -file "**/MemoryReader.v" -match "Instance pin connected by name with empty reference: 'r_empty_o'"
+
+lint_off -rule UNUSEDSIGNAL -file "**/MemoryReader.v" -match "Signal is not used: 'm_last_i'"
+lint_off -rule UNUSEDSIGNAL -file "**/MemoryReader.v" -match "Signal is not used: 'fifoFull'"

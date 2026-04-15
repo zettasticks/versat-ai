@@ -6,7 +6,19 @@
 
 import os
 import sys
-import threading
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def chdir(directory):
+    owd = os.getcwd()
+    try:
+        os.chdir(directory)
+        yield directory
+    finally:
+        os.chdir(owd)
+
 
 if __name__ == "__main__":
     # Save argv and override it with new values because ethBase requires them
@@ -59,28 +71,20 @@ EFTX = b"\x12"  # Receive file by ethernet request
 EFRX = b"\x13"  # Send file by ethernet request
 
 
-def cnsl_sendfile_ethernet_work(name):
-    socket = CreateSocket()
-    # Send Data File
-    SyncAckFirst(socket)
-    SendFile(socket, name)
-
-    print(PROGNAME, end="")
-    print(": file sent")
-
-    # Close Socket
-    socket.close()
-
-
 # Send file to target by ethernet
-def cnsl_sendfile_ethernet():
+def cnsl_sendfile_ethernet(resourceDir):
     file_size = 0
-    name = b""
+    name = ""
+    socket = CreateSocket()
 
     # receive file name
-    name = cnsl_recvstr()
+    name = cnsl_recvstr().decode("utf-8")
 
-    file_size = os.path.getsize(name)
+    print(name)
+    resourceName = os.path.join(resourceDir, name)
+    print(resourceName)
+
+    file_size = os.path.getsize(resourceName)
 
     print(PROGNAME, end="")
     print(": file of size {0} bytes".format(file_size))
@@ -93,11 +97,9 @@ def cnsl_sendfile_ethernet():
         while tb_read.read(1) != ACK:
             pass
 
-    # thread = Thread(target=cnsl_sendfile_ethernet_work, args=(name,), daemon=True)
-    socket = CreateSocket()
     # Send Data File
     SyncAckFirst(socket)
-    SendFile(socket, name)
+    SendFile(socket, resourceName)
 
     print(PROGNAME, end="")
     print(": file sent")
@@ -151,6 +153,17 @@ def main():
         usage("PROGNAME: requires console path")
 
     init_console()
+
+    # Change dir to root of setup folder
+    rootDir = os.getcwd()
+    while not "versat_ai" in os.path.basename(rootDir):
+        rootDir = os.path.split(rootDir)[0]
+
+    resourceDir = os.path.join(rootDir, "resources")
+
+    print(f"Console running on: {os.getcwd()}")
+    print(f"Resource folder is: {resourceDir}")
+
     gotENQ = False
     input_thread = Thread(target=getUserInput, args=[], daemon=True)
     # Launch eth2file python script (for simulation)
@@ -188,13 +201,16 @@ def main():
             cnsl_recvfile()
         elif byte == FRX:
             print(f"{PROGNAME}: got file send request")
-            cnsl_sendfile()
+            cnsl_sendfile(resourceDir)
+        elif byte == FSX:
+            print(f"{PROGNAME}: got file size request")
+            cnsl_sendfilesize(resourceDir)
         elif byte == EFTX:
             print(f"{PROGNAME}: got file receive by ethernet request")
             cnsl_recvfile_ethernet()
         elif byte == EFRX:
             print(f"{PROGNAME}: got file send by ethernet request")
-            cnsl_sendfile_ethernet()
+            cnsl_sendfile_ethernet(resourceDir)
         elif byte == DC1:
             print(f"{PROGNAME}: disabling IOB-SOC exclusive identifiers")
             endFileTransfer()
