@@ -966,9 +966,7 @@ def GenerateSimpleTest(config):
         x = 2
 
         if testBig:
-            # CreateSoftmax([256], 0)
             CreateSoftmax([256, 256], 0)
-            # CreateSoftmax([256, 256], 1)
 
         CreateSoftmax([1], 0)
         CreateSoftmax([2], 0)
@@ -1519,7 +1517,6 @@ def OutputFilesFromTestList(outputPath):
 def GenerateSoftmax(outputPath):
     config = GenerateTestConfig()
     config.testSoftmax = 1
-    config.testBig = 1
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
 

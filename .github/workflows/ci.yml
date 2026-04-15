@@ -62,7 +62,7 @@ jobs:
         run: |
           make clean;\
           make pc-emul-run TEST=Softmax
-      - name: run Generated sim
+      - name: run Softmax sim
         run: |
           make clean;\
           make sim-run TEST=Softmax
