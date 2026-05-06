@@ -1,6 +1,3 @@
 [submodule "submodules/VERSAT"]
 	path = submodules/VERSAT
 	url = https://github.com/iobundle/iob-versat.git
-[submodule "submodules/iob_uart16550"]
-	path = submodules/iob_uart16550
-	url = https://github.com/IObundle/iob-uart16550.git
