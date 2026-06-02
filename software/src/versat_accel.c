@@ -469,6 +469,8 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
                                 void *outAddr, float *bias, ConvInfo *info,
                                 int inputC, int outputC) {
+  ProfileScope(1, "Window gen begin");
+
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
   int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
@@ -481,7 +483,6 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int inputImageC = inputC;
 
   int outputImageW = outputDims[3];
-  int outputImageC = outputC;
 
   int kernelW = kernelDims[1];
   int kernelH = kernelDims[0];
@@ -489,22 +490,24 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
 
   int convChannelSize = inputImageC;
-  int group = info->group;
 
   int convStartC = 0; // We must always process the entire input channels.
 
+  ProfileScope(1, "Before main init function");
   Top_Conv_FeaturesWeightsOutputs(
       inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
       convChannelSize,
 
       w.outputH, w.outputW, w.outputSizeC,
 
-      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, w.startC, w.outputX,
-      w.outputY,
+      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, 
+      w.startC, 
+      w.outputX,w.outputY,
 
       inputImageW, inputImageC, convStartC, kernelW, kernelH,
 
       outputImageW, stride, outputC);
+  ProfileScope(1, "After main init function");
 
   if (bias == NULL) {
     static float bias = 0.0f;
@@ -515,7 +518,9 @@ void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
 
   config->myAccum.strideMinusOne = stride - 1;
 
+  // ProfileScope(1,"Gonna start accel");
   StartAccelerator();
+  ProfileScope(1, "Window gen end");
 }
 
 void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
@@ -525,7 +530,7 @@ void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
 
 void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
                           void *output, int index, ConvInfo *info) {
-  // forceDoubleLoop = true;
+  ProfileScope(0, "Start Of Conv");
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
@@ -555,24 +560,20 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int kernelW = kernelDims[1];
   int kernelH = kernelDims[0];
 
-  VersatVarSpec outputHSpec = {1, outputImageH, 0};
-  VersatVarSpec outputWSpec = {1, outputImageW, 1};
-  VersatVarSpec outputCSpec = {1, outputChannels, 2};
+  VersatVarSpec outputHSpec = {1, outputImageH, 1};
+  VersatVarSpec outputWSpec = {1, outputImageW, 2};
+  VersatVarSpec outputCSpec = {1, outputChannels, 0};
+
+  // We calculate size based the size of the kernel, the amount of input
+  // channels and the value of the outputs.
   int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
       kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
       &outputCSpec);
 
-#if 0
-  outputHSpec.value = 1;
-  outputWSpec.value = 1;
-  outputCSpec.value = 1;
-#endif
-  // versat_printf("%d %d %d
-  // %d\n",outputHSpec.value,outputWSpec.value,outputCSpec.value,bytesUsed);
-
   Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
   inputTensor.data = inputX;
 
+  // Currently we divide on batches but for small convolutions we might need to be able to support this.
   for (int batch = 0; batch < batches; batch++) {
     ArenaMark mark = MarkArena(arena);
 
@@ -580,27 +581,17 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     // operations that change these values.
     // If we remove them we can then push this outside the loop
     ExtraInfo extra = CalculateExtraInfo_Conv(info);
-    // ExtraInfo_Print(extra);
 
     int64_t NHWCDims[] = {inputDims[0], inputDims[2], inputDims[3],
                           inputDims[1]};
 
     Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
-
-    Tensor_CheckCanary(tempInputTensor);
-
     Tensor tempOutputTensor = PushTensor(arena, outputDims, 4);
-
-    Tensor_CheckCanary(tempInputTensor);
 
     int kernelSmallSize = kernelDims[1] * kernelDims[0];
 
     int64_t kernelDims[] = {outputChannels, inputChannels / group,
                             kernelDims[1], kernelDims[0]};
-    // Tensor kernel = CreateTensor_NoAllocate(kernelDims, 4);
-    // kernel.data = inputW;
-
-    Tensor_CheckCanary(tempInputTensor);
 
     int kernelSize = Dimensions_TotalSize(CreateDimensions(kernelDims, 4));
 
@@ -612,23 +603,19 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
     inputView += batch * inputSize;
 
-    Tensor_CheckCanary(tempInputTensor);
-
-    // Convert NCHW to NHWC
+    // Convert NCHW to NHWC while also adding padding if needed.
+    ProfileScope(0, "Before NCHW conversion");
     for (int y = 0; y < inputImageH; y++) {
       for (int x = 0; x < inputImageW; x++) {
         for (int c = 0; c < inputChannels; c++) {
-          int NCHW_Index =
-              c * (inputImageH * inputImageW) + y * inputImageW + x;
-          int NHWC_Index =
-              y * (inputImageW * inputChannels) + x * inputChannels + c;
+          int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
+          int NHWC_Index = y * (inputImageW * inputChannels) + x * inputChannels + c;
 
           tempInput[NHWC_Index] = inputView[NCHW_Index];
         }
       }
     }
-
-    Tensor_CheckCanary(tempInputTensor);
+    ProfileScope(0, "After NCHW conversion");
 
     // Extract the channel
     Dimensions dims = CreateDimensions(inputDims, 4);
@@ -661,7 +648,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
           Tensor_ExtractView(tempInputTensor, 3, g * inputC, inputC, arena);
 
       // We iterate over the "reduced" extra values.
-      WindowGen genInst = StartWindowGen(&extra, true, false);
+      WindowGen genInst = StartAdvancedWindowGen(
+          &extra, true, false, outputCSpec.value); // outputCSpec.value
       WindowGen *gen = &genInst;
 
       // We extract the bias input.
@@ -670,16 +658,30 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         trueBias += (g * extra.outputImageC);
       }
 
+      // MARK
+      ProfileScope(0, "Before window gen");
+      int amountOfWindows = 0;
       for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
         AdvancedWindow w = WindowGen_Get(gen);
+        amountOfWindows += 1;
+
+#if 0
+        AdvancedWindow_Print(w);
+        versat_printf("\n\n");
+#endif
 
         if (w.entireWindowInsidePadding) {
+          // Assuming window is size 1x1.
           float bias = 0.0f;
-          if (trueBias) {
-            bias = trueBias[w.outputC];
+          for (int c = 0; c < w.outputSizeC; c++) {
+            if (trueBias) {
+              bias = trueBias[w.outputC + c];
+            }
+
+            tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
+                            w.outputX * extra.outputImageC + w.outputC + c] =
+                bias;
           }
-          tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
-                          w.outputX * extra.outputImageC + w.outputC] = bias;
         } else {
           ConvWithBias_ProcessWindow(
               w, extracted.data,
@@ -689,6 +691,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
               tempGroupOutput, trueBias, info, inputC, outputC);
         }
       }
+      ProfileScope(0, "After window gen");
 
       // Flush the remaining data from the accelerator
       // TODO: Not efficient but not worrying about it for now.
@@ -711,7 +714,7 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
           Tensor_Transpose(tempGroupTensor, transposeDims, arena);
 
       float *outputView = (float *)output;
-      outputView += batch * outputSize; // + g * (outputSize / group);
+      outputView += batch * outputSize;
       for (int i = 0; i < outputSize / group; i++) {
         outputView[index++] = transposed.data[i];
       }
@@ -721,7 +724,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
     }
 
     Tensor_CheckCanary(tempGroupTensor);
-
     Tensor_CheckCanary(tempInputTensor);
     Tensor_CheckCanary(tempOutputTensor);
 
@@ -729,6 +731,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   }
 
   MarkPop(outerMark);
+
+  ProfileScope(0, "End Of Conv");
 
   return output;
 }

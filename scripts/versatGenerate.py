@@ -12,6 +12,8 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
         "versat",
         os.path.realpath(versat_spec),
         f"-b{axi_data_w}",
+        "--profile",
+        "--debug",
         "-p",
         "csrs_",
         "-t",

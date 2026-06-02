@@ -135,6 +135,26 @@ uint32_t uart_filesize(char *file_name) {
 }
 
 File GetFile(const char *path) {
+#if PC
+  char fullPath[128];
+  snprintf(fullPath, 128, "../resources/%s", path);
+  FILE *f = fopen(fullPath, "r");
+  if (!f) {
+    printf("Problem opening file for reading: %s\n", fullPath);
+    return (File){};
+  }
+
+  long int size = GetFileSize(f);
+  void *data = malloc(size + 16);
+  fread(data, sizeof(char), size, f);
+  fclose(f);
+
+  File res = {};
+  res.data = data;
+  res.size = size;
+
+  return res;
+#else
   uint32_t size = uart_filesize(path);
   void *data = malloc(size + 16);
   uart_recvfile(path, data);
@@ -144,6 +164,7 @@ File GetFile(const char *path) {
   res.size = size;
 
   return res;
+#endif
 }
 
 static bool IsAlpha(char ch) {
@@ -359,6 +380,14 @@ int main() {
     // Make sure that we are reading any values set by Tester correctly
     silent_clear_cache();
 
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
+    printf("Inside SUT\n");
     printf("Inside SUT\n");
 
     void **recvData0 = (void **)0x02000000;

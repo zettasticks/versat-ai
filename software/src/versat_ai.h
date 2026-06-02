@@ -96,6 +96,26 @@ ClearCache Versat_SetClearCache(ClearCache func);
 
 typedef int (*VersatPrintf)(const char *format, ...);
 
+// Profiling
+typedef struct {
+  const char *name;
+  union {
+    uint64_t time;
+    uint8_t asByte[8];
+  };
+} ProfileSample;
+
+typedef struct {
+  ProfileSample *samples;
+  int amount;
+} ProfileResult;
+
+#define ProfileScope(INDEX, NAME) //_ProfileScope(INDEX,NAME)
+void _ProfileScope(int index, const char *name);
+
+ProfileResult Profile_Get();
+void Profile_Reset();
+
 // TODO: Still need to figure out how to make this work, we could just allocate
 // some output memory and store the array inside it.
 typedef struct {

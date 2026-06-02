@@ -35,7 +35,7 @@ make-python-env: $(PYTHON_ENV)
 
 ALL_GENERATED_TESTS:=./tests/alexnet/model.onnx ./tests/generated_heavy ./tests/generated_lite ./tests/softmax
 
-./tests/alexnet/model.onnx: 
+./tests/alexnet/model.onnx:
 	./scripts/downloadAlexnet.sh
 
 ./tests/generated_heavy: $(PYTHON_ENV)
