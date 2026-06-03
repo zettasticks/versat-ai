@@ -215,35 +215,26 @@ def GenerateModelFromOnnxModel(onnxModel):
         parsedAttributes = {}
         for attribute in node.attribute:
             attributeName = attribute.name
-
             spec = attributesSpec[attributeName]
 
             parsedAttribute = None
             if spec.attrType == OnnxAttributeType.INTEGER:
-                parsedAttribute = InstantiatedAttribute(spec, int(attribute.i))
+                parsedAttribute = int(attribute.i)
             elif spec.attrType == OnnxAttributeType.BOUNDED_INTEGER:
-                parsedAttribute = InstantiatedAttribute(spec, int(attribute.i))
+                parsedAttribute = int(attribute.i)
             elif spec.attrType == OnnxAttributeType.AXIS_LIST:
-                parsedAttribute = InstantiatedAttribute(
-                    spec, [int(x) for x in attribute.ints]
-                )
+                parsedAttribute = [int(x) for x in attribute.ints]
             elif spec.attrType == OnnxAttributeType.AXIS_PAIR_LIST:
-                parsedAttribute = InstantiatedAttribute(
-                    spec, [int(x) for x in attribute.ints]
-                )
+                parsedAttribute = [int(x) for x in attribute.ints]
             elif spec.attrType == OnnxAttributeType.INTEGER_LIST:
-                parsedAttribute = InstantiatedAttribute(
-                    spec, [int(x) for x in attribute.ints]
-                )
+                parsedAttribute = [int(x) for x in attribute.ints]
             elif spec.attrType == OnnxAttributeType.BOUNDED_STRING:
-                parsedAttribute = InstantiatedAttribute(
-                    spec, attribute.s.decode("UTF-8")
-                )
+                parsedAttribute = attribute.s.decode("UTF-8")
             elif spec.attrType == OnnxAttributeType.FLOAT:
-                parsedAttribute = InstantiatedAttribute(spec, float(attribute.f))
+                parsedAttribute = float(attribute.f)
             elif spec.attrType == OnnxAttributeType.ENUM:
                 name = attribute.s.decode("UTF-8")
-                parsedAttribute = InstantiatedAttribute(spec, spec.allowedValues[name])
+                parsedAttribute = spec.allowedValues[name]
             else:
                 print(spec.attrType)
                 assert False

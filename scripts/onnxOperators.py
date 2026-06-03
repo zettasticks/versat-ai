@@ -4,7 +4,6 @@ from copy import copy
 
 from versatDefs import (
     Operation,
-    InstantiatedAttribute,
     OnnxAttribute,
     OnnxAttributeType,
     OnnxOperatorSpec,
@@ -76,7 +75,7 @@ def MakeAttrFloat(defaultValue):
 
 # Some attributes have defaults that depend on the operator (like the size of the spatial axis and such)
 # This function essentially instantiates default values such that outer code does not have to check if an attributes exists or not.
-def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
+def GetAttributesForOperator(op: Operation) -> dict[str, any]:
     opName = op.opName
 
     if not opName in operatorNameToSpec:
@@ -103,9 +102,9 @@ def GetAttributesForOperator(op: Operation) -> dict[str, InstantiatedAttribute]:
                 spatialAxes = 2 * (len(op.outputDimensions[0]) - 2)
                 trueDefaultValue = [attrType.defaultValue] * spatialAxes
 
-                res[name] = InstantiatedAttribute(attrType, trueDefaultValue)
+                res[name] = trueDefaultValue
             else:
-                res[name] = InstantiatedAttribute(attrType, attrType.defaultValue)
+                res[name] = attrType.defaultValue
 
     return res
 
@@ -159,10 +158,10 @@ def EmitMaxPool(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 
     dims = len(op.inputDimensions[0])
-    stride = attr["strides"].value
-    kernel = attr["kernel_shape"].value
-    pads = attr["pads"].value
-    padType = attr["auto_pad"].value
+    stride = attr["strides"]
+    kernel = attr["kernel_shape"]
+    pads = attr["pads"]
+    padType = attr["auto_pad"]
 
     emitter.I32(dims)
     emitter.I32(len(kernel))
@@ -199,12 +198,12 @@ def EmitConv(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 
     dims = len(op.inputDimensions[0])
-    kernel = attr["kernel_shape"].value
-    stride = attr["strides"].value
-    dilations = attr["dilations"].value
-    pads = attr["pads"].value
-    group = attr["group"].value
-    padType = attr["auto_pad"].value
+    kernel = attr["kernel_shape"]
+    stride = attr["strides"]
+    dilations = attr["dilations"]
+    pads = attr["pads"]
+    group = attr["group"]
+    padType = attr["auto_pad"]
 
     featureMaps = op.inputDimensions[1][0]
 
@@ -277,7 +276,7 @@ def EmitSoftmax(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 
     dims = len(op.inputDimensions[0])
-    axis = attr["axis"].value
+    axis = attr["axis"]
 
     emitter.I32(dims)
     emitter.I32(axis)
@@ -295,7 +294,7 @@ transposeStructure = [
 def EmitTranspose(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
-    perm = attr["perm"].value
+    perm = attr["perm"]
 
     emitter.I32(dims)
     emitter.I32(len(perm))
@@ -315,8 +314,8 @@ def EmitBatchNormalization(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
 
     attr = GetAttributesForOperator(op)
-    epsilon = attr["epsilon"].value
-    momentum = attr["momentum"].value
+    epsilon = attr["epsilon"]
+    momentum = attr["momentum"]
 
     emitter.I32(dims)
     emitter.F32(epsilon)
@@ -353,10 +352,10 @@ def EmitLRN(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
 
-    alpha = attr["alpha"].value
-    beta = attr["beta"].value
-    bias = attr["bias"].value
-    size = attr["size"].value
+    alpha = attr["alpha"]
+    beta = attr["beta"]
+    bias = attr["bias"]
+    size = attr["size"]
 
     emitter.I32(dims)
     emitter.F32(alpha)
@@ -383,10 +382,10 @@ def EmitGemm(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
 
-    alpha = attr["alpha"].value
-    beta = attr["beta"].value
-    transA = attr["transA"].value
-    transB = attr["transB"].value
+    alpha = attr["alpha"]
+    beta = attr["beta"]
+    transA = attr["transA"]
+    transB = attr["transB"]
 
     emitter.I32(dims)
     emitter.F32(alpha)
@@ -394,8 +393,11 @@ def EmitGemm(emitter, op: Operation):
     emitter.I32(transA)
     emitter.I32(transB)
 
-    cShape = op.inputDimensions[2]
+    cShape = None
+    if(len(op.inputDimensions) > 2):
+        cShape = op.inputDimensions[2]
 
+    assert cShape # TODO: Need to handle this being optional
     if len(cShape) == 1:
         cShape = [1, cShape[0]]
 

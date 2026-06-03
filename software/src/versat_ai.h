@@ -110,7 +110,7 @@ typedef struct {
   int amount;
 } ProfileResult;
 
-#define ProfileScope(INDEX, NAME) //_ProfileScope(INDEX,NAME)
+#define ProfileScope(INDEX, NAME) _ProfileScope(INDEX,NAME)
 void _ProfileScope(int index, const char *name);
 
 ProfileResult Profile_Get();

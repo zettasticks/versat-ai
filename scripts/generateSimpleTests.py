@@ -1571,10 +1571,12 @@ def GenerateTest(outputPath):
     config.testConv = 1
 
     config.generateOneOfEach = 0
-    config.generativeTests = 1
+    config.generativeTests = 0
     config.testBig = 0
 
-    CreateConvolution([1, 4, 4, 4], 4, [4, 4], [4, 4], [1, 1], 1)
+    CreateConvolution(
+        [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
+    )
 
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)

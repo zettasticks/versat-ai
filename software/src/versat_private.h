@@ -156,6 +156,7 @@ typedef struct {
 // code. We want to offer a very simple "allocate x amount of space before
 // starting our code" model of usage since this is intented to run on embedded
 // targets.
+
 Tensor PushTensor(Arena *out, int64_t *dims, int numberDims);
 Tensor CreateTensor_NoAllocate(int64_t *dims, int numberDims);
 Tensor Tensor_Transpose(Tensor in, int *index, Arena *out);
@@ -286,6 +287,8 @@ typedef struct {
   int currentOutputX;
   int currentOutputY;
 
+  int advanceX;
+  int advanceY;
   int advanceC;
 
   bool iterateC;
@@ -332,10 +335,14 @@ typedef struct {
 
 WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW);
 WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,
+                                 int xMaxAdvance, int yMaxAdvance,
                                  int cMaxAdvance);
 
 AdvancedWindow WindowGen_Get(WindowGen *gen);
+void WindowGen_GetTruePadding(WindowGen *gen,AdvancedWindow* out);
 void WindowGen_Advance(WindowGen *gen);
+void WindowGen_AdvanceTruePadding(WindowGen *gen,AdvancedWindow w);
+
 bool WindowGen_Valid(WindowGen *gen);
 
 void AdvancedWindow_Print(AdvancedWindow window);

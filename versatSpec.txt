@@ -7,13 +7,13 @@ module Top_Add(){
    {inputs_0,inputs_1} -> adder:0..1;
    adder -> output;
 ##
-   config Linear(addr: Address,size){
+   config Linear(addr: Address,size: Dyn){
       for x 0..size {
          inputs_0 = addr[x];
       }
    }
 
-   config Broadcast(addr: Address,size,enable){
+   config Broadcast(addr: Address,size: Dyn,enable){
       for x 0..size { 
          inputs_1 = addr[x * enable];
       }
@@ -34,7 +34,7 @@ module Top_Relu(){
    input -> relu;
    relu -> output;
 ##
-   config Simple(inAddr: Address,outAddr: Address,size){
+   config Simple(inAddr: Address,outAddr: Address,size: Dyn){
       for x 0..size {
          input = inAddr[x];
          output = outAddr[x];
@@ -163,18 +163,23 @@ module Top_Conv(){
       inputImageW,inputImageC,
       startC,
       kernelW,kernelH,
-      outputWidth,stride,outputChannels){
+      outputWidth,stride,outputChannels, strideW, strideH){
 
-      for outC 0..featuresAmount { // OutC
-         for inC 0..sizeC { // InC
-            for ky 0..actualKernelH { // KernelH
-               for kx 0..actualKernelW { // KernelW
-                  features = inputX[(startY + ky) * inputImageW * inputImageC + (startX + kx) * inputImageC + (inC + startC)];
-                  weights = inputW[(outC + outCStart) * inputImageC * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
+      for outerY 0..outputH {
+         for outerX 0..outputW {
+            for outC 0..featuresAmount {
+               for inC 0..sizeC {
+                  for ky 0..actualKernelH {
+                     for kx 0..actualKernelW {
+                        features = inputX[(startY + ky + outerY * strideH) * inputImageW * inputImageC + (startX + kx + outerX * strideW) * inputImageC + (inC + startC)];
+                        weights = inputW[(outC + outCStart) * inputImageC * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
+                     }
+                  }
                }
             }
          }
       }
+
       for y 0..outputH {
          for x 0..outputW {
             for inC 0..featuresAmount {
@@ -188,9 +193,13 @@ module Top_Conv(){
       }
    }
 
-   config Bias(addr : Address,size,stride){
-      for x 0..size {
-         bias = addr[x / stride];
+   config Bias(addr : Address,size,stride,outerXSize,outerYSize){
+      for outerY 0..outerYSize {
+         for outerX 0..outerXSize {
+            for x 0..size {
+               bias = addr[x / stride];
+            }
+         }
       }
    }
 }

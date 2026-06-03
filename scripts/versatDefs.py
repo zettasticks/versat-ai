@@ -85,15 +85,6 @@ class OnnxAttribute:
 
 
 @dataclass
-class InstantiatedAttribute:
-    attributeSpec: OnnxAttribute
-    value: any
-
-    def __repr__(self):
-        return str(self.value)
-
-
-@dataclass
 class Operation:
     # Data extracted from the model
     nodeName: str
@@ -102,7 +93,7 @@ class Operation:
     output: str  # For now we are assuming that nodes only contain one output. Most graphs appear to follow this principle, even if the output is used by multiple nodes, the node itself only appaears to contain one. Maybe more exotic operations shatter this notion but will deal with them when they appear.
     inputDimensions: list[list[int | str]]
     outputDimensions: list[int | str]
-    parsedAttributes: dict[str, InstantiatedAttribute] = None
+    parsedAttributes: dict[str, any] = None
 
     outputIndex: int = -1
 

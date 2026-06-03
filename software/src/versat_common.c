@@ -795,11 +795,14 @@ WindowGen StartWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW) {
 }
 
 WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,
+                                 int xMaxAdvance, int yMaxAdvance,
                                  int cMaxAdvance) {
   WindowGen res = {};
   res.info = info;
   res.iterateC = iterateC;
   res.isNCHW = isNCHW;
+  res.advanceX = xMaxAdvance;
+  res.advanceY = yMaxAdvance;
   res.advanceC = cMaxAdvance;
   return res;
 }
@@ -934,16 +937,14 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
   return res;
 }
 
-AdvancedWindow WindowGen_GetTruePadding(WindowGen *gen) {
-  AdvancedWindow res = {};
+void WindowGen_GetTruePadding(WindowGen *gen,AdvancedWindow* out) {
+  out->outputX = gen->currentOutputX;
+  out->outputY = gen->currentOutputY;
+  out->outputC = gen->currentOutputC;
 
-  res.outputX = gen->currentOutputX;
-  res.outputY = gen->currentOutputY;
-  res.outputC = gen->currentOutputC;
-
-  res.startC = gen->currentOutputC;
-  res.inputX = gen->currentOutputX * gen->info->strideW;
-  res.inputY = gen->currentOutputY * gen->info->strideH;
+  out->startC = gen->currentOutputC;
+  out->inputX = gen->currentOutputX * gen->info->strideW;
+  out->inputY = gen->currentOutputY * gen->info->strideH;
 
   // Currently we assume a window size of 1, although need to add the better
   // logic to suport more windows and improve performance.
@@ -952,20 +953,87 @@ AdvancedWindow WindowGen_GetTruePadding(WindowGen *gen) {
   // padding regions the fact that the accelerator must contain enough memory to
   // support a window and that we must make sure that the height of the window
   // is stable. ( So that we iterate over all the pixels correctly).
-  res.outputW = 1;
-  res.outputH = 1;
-  res.outputSizeC = gen->advanceC;
+  out->outputW = gen->advanceX;
+  out->outputH = gen->advanceY;
+  out->outputSizeC = gen->advanceC;
+
+  // NOTE: There is some bug related to group which this piece of code hides.
+  if (out->outputSizeC + out->outputC >= gen->info->outputImageC) {
+    out->outputSizeC = gen->info->outputImageC - out->outputC;
+    if (out->outputSizeC <= 0) {
+      versat_printf("ERROR, CANNOT HAVE OUTPUT SIZE LOWER OR EQUAL TO 0: %d",
+                    out->outputSizeC);
+    }
+  }
+
+  // Puts window back into boundaries if it gets outside
+  if (out->outputW + out->outputX >= gen->info->outputImageW) {
+    out->outputW = gen->info->outputImageW - out->outputX;
+  }
+  if (out->outputH + out->outputY >= gen->info->outputImageH) {
+    out->outputH = gen->info->outputImageH - out->outputY;
+  }
 
   // By default, input equals kernel size
-  res.actualKernelW = gen->info->kernelW;
-  res.actualKernelH = gen->info->kernelH;
-
-  return res;
+  out->actualKernelW = gen->info->kernelW;
+  out->actualKernelH = gen->info->kernelH;
 }
 
 void WindowGen_Advance(WindowGen *gen) {
   AdvancedWindow window = WindowGen_Get(gen);
 
+  if (gen->iterateC) {
+    if (gen->isNCHW) {
+      gen->currentOutputX += window.outputW;
+      if (gen->currentOutputX >= gen->info->outputImageW) {
+        gen->currentOutputX = 0;
+        gen->currentOutputY += window.outputH;
+      }
+
+      if (gen->currentOutputY >= gen->info->outputImageH) {
+        gen->currentOutputY = 0;
+        gen->currentOutputC += window.outputSizeC;
+      }
+
+      if (gen->currentOutputC >= gen->info->outputImageC) {
+        gen->currentOutputC = -1;
+        gen->currentOutputX = -1;
+        gen->currentOutputY = -1;
+      }
+    } else {
+      // NHWC
+      gen->currentOutputC += window.outputSizeC;
+      if (gen->currentOutputC >= gen->info->outputImageC) {
+        gen->currentOutputC = 0;
+        gen->currentOutputX += window.outputW;
+      }
+
+      if (gen->currentOutputX >= gen->info->outputImageW) {
+        gen->currentOutputX = 0;
+        gen->currentOutputY += window.outputH;
+      }
+
+      if (gen->currentOutputY >= gen->info->outputImageH) {
+        gen->currentOutputC = -1;
+        gen->currentOutputX = -1;
+        gen->currentOutputY = -1;
+      }
+    }
+  } else {
+    gen->currentOutputX += window.outputW;
+    if (gen->currentOutputX >= gen->info->outputImageW) {
+      gen->currentOutputX = 0;
+      gen->currentOutputY += window.outputH;
+    }
+
+    if (gen->currentOutputY >= gen->info->outputImageH) {
+      gen->currentOutputX = -1;
+      gen->currentOutputY = -1;
+    }
+  }
+}
+
+void WindowGen_AdvanceTruePadding(WindowGen *gen,AdvancedWindow window) {
   if (gen->iterateC) {
     if (gen->isNCHW) {
       gen->currentOutputX += window.outputW;
@@ -1385,7 +1453,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     for (int i = 0; i < res.amount; i++) {
       ProfileSample sample = res.samples[i];
 
-      versat_printf("%s: ", sample.name);
+      versat_printf("%30s: ", sample.name);
       PrintU64(sample.time);
       versat_printf("\n");
     }
