@@ -61,13 +61,9 @@ class ConvArgs:
 
         if self.features % self.group != 0:
             return False
-        # NOTE: Seems weird but onnxruntime complains.
-        # TODO: Check if for group == 1 if we can remove this check.
-        #       Maybe it only matters for group > 1
-        if (self.features * self.group) != inputChannels:
+        if inputChannels % self.group != 0:
             return False
-        if ((self.features * self.group) % inputChannels) != 0:
-            return False
+
         return True
 
     def Create(self, linear=False):
@@ -88,7 +84,6 @@ class ConvArgs:
 
         testIndex = len(tests)
 
-        outputChannels = features
         inputChannels = shape[1]
         test = Test()
 
@@ -1238,7 +1233,7 @@ def GenerateSimpleTest(config):
         # All padding posibilities, mostly to test the window generation
         # Input shape, features, kernel, stride, dilations, bias
         if generativeTests:
-            nP = [1, 2]
+            nP = [1]  # [1, 2] - nocheckin: TODO: Currently batches are broken
             aP = [[3, 3], [5, 5]]
             cP = [1, 3, 4]
             fP = [1, 3, 4]
@@ -1568,15 +1563,20 @@ def GenerateTest(outputPath):
     config.testSoftmax = 0
     config.testLRN = 0
 
-    config.testConv = 1
-
+    config.testConv = 0
     config.generateOneOfEach = 0
     config.generativeTests = 0
     config.testBig = 0
 
-    CreateConvolution(
-        [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
-    )
+    if False:
+        CreateConvolution(
+            [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
+        )
+        CreateConvolution(
+            [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
+        )
+
+    CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
 
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)

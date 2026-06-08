@@ -245,6 +245,8 @@ float my_invsqrt(float number);
 
 void silent_clear_cache();
 
+void PrintTime(uint64_t start);
+
 // ======================================
 // Extra Info
 
@@ -339,9 +341,9 @@ WindowGen StartAdvancedWindowGen(ExtraInfo *info, bool iterateC, bool isNCHW,
                                  int cMaxAdvance);
 
 AdvancedWindow WindowGen_Get(WindowGen *gen);
-void WindowGen_GetTruePadding(WindowGen *gen,AdvancedWindow* out);
+void WindowGen_GetTruePadding(WindowGen *gen, AdvancedWindow *out);
 void WindowGen_Advance(WindowGen *gen);
-void WindowGen_AdvanceTruePadding(WindowGen *gen,AdvancedWindow w);
+void WindowGen_AdvanceTruePadding(WindowGen *gen, AdvancedWindow w);
 
 bool WindowGen_Valid(WindowGen *gen);
 

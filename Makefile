@@ -20,7 +20,7 @@ VERSION ?=$(shell cat ./versat_ai.py | grep version | cut -d '"' -f 4)
 
 BUILD_DIR ?= ../versat_ai_V$(VERSION)
 
-INIT_MEM ?= 1
+INIT_MEM ?= 0
 USE_EXTMEM ?= 1
 USE_INTMEM ?= 0
 USE_ETHERNET ?= 0

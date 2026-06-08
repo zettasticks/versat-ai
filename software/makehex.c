@@ -20,8 +20,6 @@ static int CharToInt(char ch) {
     return 10 + (ch - 'A');
   } else if (ch >= 'a' && ch <= 'f') {
     return 10 + (ch - 'a');
-  } else {
-    (*(char *)NULL) = 1;
   }
   return 0;
 }

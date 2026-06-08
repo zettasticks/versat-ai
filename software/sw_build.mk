@@ -51,11 +51,16 @@ VERSAT_AI_FW_SRC=src/versat_ai_firmware.S
 VERSAT_AI_FW_SRC+=src/versat_ai_firmware.c
 VERSAT_AI_FW_SRC+=src/iob_printf.c
 
+#VERSAT_AI_FW_SRC+=src/KeywordFixed.c
+#VERSAT_AI_FW_SRC+=src/ToyCar.c
+#VERSAT_AI_FW_SRC+=src/ImageFixed.c
+#VERSAT_AI_FW_SRC+=src/VisualFixed.c
+
 VERSAT_AI_FW_SRC+=src/versat_common.c
 VERSAT_AI_FW_SRC+=src/versat_software.c
 VERSAT_AI_FW_SRC+=src/versat_accel.c
 VERSAT_AI_FW_SRC+=src/iob-versat.c
- 
+
 # PERIPHERAL SOURCES
 PERIPHERALS+=iob_regfileif_inverted #FIXME Hack
 

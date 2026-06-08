@@ -214,6 +214,7 @@ int main() {
 
   ConfigCreateVCD(false);
 
+  Versat_SetTimeReset(timer_reset);
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);
   Versat_Init();
@@ -363,6 +364,8 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
   ConfigCreateVCD(false);
+
+  Versat_SetTimeReset(timer_reset);
   Versat_SetTimeMeasurementFunction(timer_get_count);
   Versat_SetClearCache(silent_clear_cache_args);
   Versat_Init();

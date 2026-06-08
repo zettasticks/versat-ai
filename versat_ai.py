@@ -19,7 +19,7 @@ def setup(py_params: dict):
         "use_ethernet": False,
         "mem_addr_w": mem_addr_w,
         "cpu": "iob_vexriscv",
-        "fw_addr_w": 18,
+        "fw_addr_w": 24,
         # Tester configuration
         "include_tester": False,
         "tester_use_ethernet": True,

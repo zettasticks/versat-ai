@@ -93,7 +93,7 @@ def IndexOfNodesThatUseOutput(cModel, outputName):
 def CalculateMemoryAllocations(cModel):
     memoryAllocations = []
     for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.output)
+        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
 
         if not indexes:
             continue
@@ -123,7 +123,7 @@ def CalculateMemoryAllocations(cModel):
 
     ptr = 0
     for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.output)
+        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
 
         if not indexes:
             continue
@@ -134,7 +134,7 @@ def CalculateMemoryAllocations(cModel):
     totalOutputMemory = 0
     outputOffsets = []
     for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.output)
+        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
 
         if indexes:
             continue

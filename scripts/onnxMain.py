@@ -25,8 +25,6 @@ from onnx import __version__, IR_VERSION
 from onnx.defs import onnx_opset_version
 from onnx import numpy_helper
 
-# import matplotlib.pyplot as plt
-
 
 # Nodes have either inputs from other nodes or initializers, which are the constant values embedded in the model.
 # If a given node input is a tensor then it is not an input and vice versa.
@@ -90,7 +88,8 @@ def CalculateOffsetFromSize(sizes: list[int]):
 def PackArrayNoHeader(array, endianess: Endianess = Endianess.NATIVE):
     dtype = array.dtype
     data = StructBuilder(endianess)
-    for x in np.nditer(array):
+    for index in np.ndindex(array.shape):
+        x = array[index]
         if dtype == np.int64:
             data.I64(x)
         else:
@@ -141,33 +140,11 @@ def RemoveContent(packed: PackedArrays, indexMap: dict[int, int]):
     for packIndex, finalIndex in indexMap:
         finalIndexToPackIndex[finalIndex] = packIndex
 
-    """
 
-    for index in indexesToPreserve:
-        offset = packed.offsets[index]
-
-        nextOffset = 0
-        if index + 1 < len(packed.offsets):
-            nextOffset = packed.offsets[index + 1]
-        else:
-            nextOffset = len(packed.data)
-
-        newOff = len(content)
-        content = content + packed.data[offset:nextOffset]
-        newOffsets.append(newOff)
-
-    if len(newOffsets):
-        return PackedArrays(content, newOffsets)
-    else:
-        return PackedArrays(bytearray(), [])
-
-    """
-
-
-def IndexOfNodeThatProducesOutput(cModel, outputName):
+def IndexOfNodeThatProducesOutput(cModel : Model, outputName):
     for index, op in enumerate(cModel.operations):
-        if outputName == op.output:
-            return index
+        if outputName == op.outputName:
+            return op.nodeIndex
     return None
 
 
@@ -175,14 +152,12 @@ def GenerateModelFromOnnxModel(onnxModel):
     shaped = shape_inference.infer_shapes(onnxModel)
     cModel = Model(shaped)
 
-    # Need the shape of the inputs and output tensors
-
     inputNames = []
     for value in onnxModel.graph.input:
         shape = [GetValueForDim(x) for x in value.type.tensor_type.shape.dim]
 
         if not GetTensor(shaped, value.name):
-            inputNames.append(Port(value.name, shape))
+            inputNames.append(InputData(value.name, shape))
     cModel.modelInputs = inputNames
 
     # Check for operators not supported.
@@ -190,7 +165,7 @@ def GenerateModelFromOnnxModel(onnxModel):
     for node in onnxModel.graph.node:
         opType = node.op_type
 
-        if not opType in operatorNameToSpec:
+        if opType not in operatorNameToSpec:
             opsNotSupported[opType] = 1
 
     if len(opsNotSupported):
@@ -241,37 +216,49 @@ def GenerateModelFromOnnxModel(onnxModel):
 
             parsedAttributes[attribute.name] = parsedAttribute
 
+        dataSources = []
         inputDimensions = []
         for name in node.input:
             shape = GetShape(shaped, name)
             inputDimensions.append(shape)
             tensor = GetTensor(onnxModel, name)
+            source = None
+
+            modelInput = None
+            inputIndex = 0
+            
+            for i,x in enumerate(cModel.modelInputs):
+                if x.name == name:
+                    modelInput = x
+                    inputIndex = i
+                    break
+
             if tensor:
                 asNpArray = onnx.numpy_helper.to_array(tensor)
-                cModel.initializers.append(asNpArray)
+                source = DataSource(DataSourceType.INITIALIZER, name)
+                source.data = asNpArray
+                source.index = cModel.NextInitializerIndex()
+            elif modelInput:
+                source = DataSource(DataSourceType.MODEL_INPUT, name)
+                source.tensorDims = modelInput.shape
+                source.index = inputIndex
+            else:
+                source = DataSource(DataSourceType.NODE_INPUT, name)
+                source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
+
+            dataSources.append(source)
 
         outputDimensions = []
         for output in node.output:
             shape = GetShape(shaped, output)
             outputDimensions.append(shape)
 
-        dataSources = []
-        for name in node.input:
-            tensor = GetTensor(onnxModel, name)
-            source = None
-            if tensor:
-                source = DataSource(DataSourceType.INITIALIZER, name)
-            elif name in [x.name for x in cModel.modelInputs]:
-                source = DataSource(DataSourceType.MODEL_INPUT, name)
-            else:
-                source = DataSource(DataSourceType.NODE_INPUT, name)
-            dataSources.append(source)
-
         outputName = node.output[0]  # Can a node have more than one output?
 
         op = Operation(
             node.name,
             node.op_type,
+            cModel.NextOperationIndex(),
             dataSources,
             outputName,
             inputDimensions,
@@ -280,39 +267,22 @@ def GenerateModelFromOnnxModel(onnxModel):
         )
         cModel.operations.append(op)
 
-    for index, c in enumerate(cModel.operations):
-        c.outputIndex = index
-
-    # Calculate initializer position
-    initializersSeen = 0
-    for index, c in enumerate(cModel.operations):
-        for source in c.inputs:
-            if source.sourceType == DataSourceType.INITIALIZER:
-                source.index = initializersSeen
-                initializersSeen += 1
-            elif source.sourceType == DataSourceType.MODEL_INPUT:
-                for index, port in enumerate(cModel.modelInputs):
-                    if port.name == source.name:
-                        source.index = index
-            else:
-                source.index = IndexOfNodeThatProducesOutput(cModel, source.name)
-
     allInputsShapes = sum([port.shape for port in cModel.modelInputs], [])
 
     mapped = {}
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if type(name) == str:
+            if isinstance(name,str):
                 mapped[name] = True
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if type(name) == str:
+                if isinstance(name,str):
                     mapped[name] = True
 
         for i, name in enumerate(op.outputDimensions):
-            if type(name) == str:
+            if isinstance(name,str):
                 mapped[name] = True
 
     for name in mapped.keys():
@@ -329,17 +299,17 @@ def GetModelFreeParameters(cModel):
 
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if type(name) == str:
+            if isinstance(name,str):
                 params[name] = True
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if type(name) == str:
+                if isinstance(name,str):
                     params[name] = True
 
         for i, name in enumerate(op.outputDimensions):
-            if type(name) == str:
+            if isinstance(name,str):
                 params[name] = True
 
     return params
@@ -351,37 +321,35 @@ def RestrictModelFreeParameter(cModel, paramValue):
 
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if type(name) == str:
+            if isinstance(name,str):
                 port.shape[i] = mapped.get(name, paramValue)
                 mapped[name] = port.shape[i]
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if type(name) == str:
+                if isinstance(name,str):
                     inputs[i] = mapped.get(name, paramValue)
                     mapped[name] = inputs[i]
 
         for outDim in op.outputDimensions:
             for i, name in enumerate(outDim):
-                if type(name) == str:
+                if isinstance(name,str):
                     outDim[i] = mapped.get(name, paramValue)
                     mapped[name] = outDim[i]
 
     return cModel
 
 
-def RunModel(model: Model, inputs):
-    if not model.sess:
-        model.sess = ort.InferenceSession(model.onnxModel.SerializeToString())
+def RunModel(model: Model, originalOnnxModel, inputs):
+    sess = ort.InferenceSession(originalOnnxModel.SerializeToString())
+    modelInputs = {x.name: y for x, y in zip(sess.get_inputs(), inputs)}
+    modelOutput = sess.run(None, modelInputs)
 
-    modelInputs = {x.name: y for x, y in zip(model.sess.get_inputs(), inputs)}
-    modelOutput = model.sess.run(None, modelInputs)
-
-    mappedOutputs = {x.name: y for x, y in zip(model.sess.get_outputs(), modelOutput)}
+    mappedOutputs = {x.name: y for x, y in zip(sess.get_outputs(), modelOutput)}
     outputs = [None] * len(model.operations)
     for index, op in enumerate(model.operations):
-        outputs[index] = mappedOutputs[op.output]
+        outputs[index] = mappedOutputs[op.outputName]
 
     return ModelRunResult(outputs)
 
@@ -439,7 +407,7 @@ class CDataEmitter:
 
         return content
 
-
+            
 # Copied from onnxruntime/tools/python/remove_initializer_from_input.py
 def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
     if model.ir_version < 4:
@@ -461,23 +429,28 @@ def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
 
     return modified
 
+def PrintModelData(cModel):
+    for op in cModel.operations:
+        print(f"[{op.opName}] {op.nodeName}")
+        for i,inp in enumerate(op.inputs):
+            print(f"Input_{i}:",cModel.GetGenericDataSource(inp).data)
+        print("Output_0:",op.correctOutputData)
 
 # TODO: We are starting to accumulate a bunch of config flags and stuff is starting to get out of control
 #       We probably want to make a struct that combines all this configuration into a single place and even offer some helper functions to simplify stuff otherwise
 #       it becomes clubersome to interact with this. Furthermore we are starting to generate more stuff than we care about and that is not good. Only generate what you need otherwise
 #       firmware starts becoming too large and sim time starts becoming problematic and all that stuff.
 def GenerateDebug(
-    testLocation: str,
-    modelName: str,
-    binOutputLocation: str,
-    sourceOutputLocation: str,
-    namespace: str,
-    focusLayerRange: [int, int] = None,
-    debugSoftware: bool = False,
+        testLocation: str,
+        modelName: str,
+        binOutputLocation: str,
+        sourceOutputLocation: str,
+        namespace: str,
+        focusLayerRange: [int, int] = None,
+        debugSoftware: bool = False,
 ):
     # TODO: It would be better if we could check all the inputs for correctness.
-
-    if type(namespace) != str or not namespace.isidentifier():
+    if not isinstance(namespace,str) or not namespace.isidentifier():
         print("Need a valid namespace name. Needs to follow identifier rules")
         sys.exit(0)
     if len(namespace) > 32:
@@ -511,7 +484,7 @@ def GenerateDebug(
         tensor = onnx.TensorProto()
         with open(input_file, "rb") as f:
             tensor.ParseFromString(f.read())
-        inputs.append(numpy_helper.to_array(tensor))
+            inputs.append(numpy_helper.to_array(tensor))
 
     isIntermediate = [False] * len(sess.get_outputs())
 
@@ -526,7 +499,7 @@ def GenerateDebug(
         tensor = onnx.TensorProto()
         with open(output_file, "rb") as f:
             tensor.ParseFromString(f.read())
-        ref_outputs.append(numpy_helper.to_array(tensor))
+            ref_outputs.append(numpy_helper.to_array(tensor))
 
     modelInputs = {x.name: y for x, y in zip(sess.get_inputs(), inputs)}
     modelOutput = sess.run(None, modelInputs)
@@ -546,14 +519,22 @@ def GenerateDebug(
     freeParameters = GetModelFreeParameters(cModel)
 
     if len(freeParameters) > 0:
-        # NOTE: Currently we assume that all free parameters are the same value.
-        #       All the testbenches that we have work on this assumption and I do not know if we can have a model where this assumption does not hold.
-        #       We are also assuming that we only have a single free parameter as input. Need to see a model where this assumption does not hold in order to
-        #       then decide on the proper way of progressing.
-        # assert len(freeParameters) <= 1
+        # NOTE: Currently we assume that all free parameters are the
+        #       same value.  All the testbenches that we have work on
+        #       this assumption and I do not know if we can have a
+        #       model where this assumption does not hold.  We are
+        #       also assuming that we only have a single free
+        #       parameter as input. Need to see a model where this
+        #       assumption does not hold in order to then decide on
+        #       the proper way of progressing.  assert
+        #       len(freeParameters) <= 1
 
-        # We match the parameter to the input and then we instantiate the model with it. No runtime handling of free parameters
-        # We do not know it if we need to generate code that can handle this at runtime. Worry about it later, for now we need to make this work on the board first before handling stuff like that.
+        # We match the parameter to the input and then we instantiate
+        # the model with it. No runtime handling of free parameters We
+        # do not know it if we need to generate code that can handle
+        # this at runtime. Worry about it later, for now we need to
+        # make this work on the board first before handling stuff like
+        # that.
         freeParameterValue = 1
         for op in cModel.operations:
             for inp in op.inputs:
@@ -564,328 +545,210 @@ def GenerateDebug(
                     inputShape = inputs[0].shape
 
                     for index in range(len(inputShape)):
-                        if type(inputDims[index]) == str:
+                        if isinstance(inputDims[index], str):
                             freeParameterValue = inputShape[index]
 
         cModel = RestrictModelFreeParameter(cModel, freeParameterValue)
 
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
     # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
-    result = RunModel(cModel, inputs)
+    result = RunModel(cModel,model,inputs)
     correctData = result.outputs
 
-    packedInputs = PackMultipleArrays(inputs)
-    packedCorrectData = PackMultipleArrays(correctData)
-    packedInitializers = PackMultipleArrays(cModel.initializers)
+    # Associate inputs to model data sources
+    for i,data in enumerate(inputs):
+        for op in cModel.operations:
+            for inp in op.inputs:
+                if inp.sourceType == DataSourceType.MODEL_INPUT and inp.index == i:
+                    inp.data = data
+                    
+    # Associate correct data to operation outputs
+    for i,data in enumerate(correctData):
+        cModel.operations[i].correctOutputData = data
 
-    layersToRemove = []
-    layersToKeep = []
-
-    if len(layersToRemove):
-        size = len(cModel.operations)
-        layersToKeep = list(set(range(size)) - set(layersToRemove))
-
-    if focusLayerRange != None:
+    # Remove layers if the user commands. Mostly to help test individual operations
+    if focusLayerRange:
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
 
-        layersToKeep = list(range(focusStart, focusEnd + 1))
+        for i in range(0,len(cModel.operations)):
+            if i >= focusStart and i <= focusEnd:
+                continue
 
-    if len(layersToKeep):
-        operations = []
-        for layer in layersToKeep:
-            operations.append(cModel.operations[layer])
+            op = cModel.GetOperationByIndexOrFail(i)
+            cModel.RemoveOperation(op)
 
-        # operations = cModel.operations[focusStart : focusEnd + 1]
-        cModel.operations = operations
+    # Graph based optimizations can be put here
 
-        inputIndexes = []
-        initializersIndexes = []
+    
+    # MARK
+    
+    if 1:
+        # RULE: Data,Data -> MatMul := Data,(Data -> Transpose) -> MatMul(bTransposed = True)
+        toAdd = []
+        for op in cModel.operations:
+            if op.opName == "MatMul":
+                attr = GetAttributesForOperator(op)
 
-        newInputIndex = 0
-        newNodeInputIndex = 0
-        newInitializerIndex = 0
+                if(attr['isBTransposed'] == 0):
+                    toAdd.append(op)
 
-        nodeInputToIndexMap = {}
+        for op in toAdd:
+            newOp = cModel.AddOperation("Transpose",1)
+            # TODO: Need to adapt this to the shape of the data. Cannot assume simple 2D shape
+            newOp.parsedAttributes["perm"] = (1,0)
+            cModel.InsertInTheMiddle(op,1,newOp,0)
+            op.parsedAttributes['isBTransposed'] = 1
 
-        for index, op in enumerate(operations):
-            # print(op.outputIndex)
+        # RULE: Init -> Transpose := Init(Transposed)
+        toRemove = []
+        for op in cModel.operations:
+            if op.opName == "Transpose":
+                if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
+                    attr = GetAttributesForOperator(op)
+                    op.inputs[0].data = np.transpose(op.inputs[0].data,axes = attr['perm'])
+                    toRemove.append(op)
+
+        for op in toRemove:
+            cModel.RemoveOperation(op)
+
+    print("After optimize")
+                
+    # Graph optimizations are not expected to preserve graph order
+    # Need to do a pass to convert back into DAG
+    
+    def CompressGraphIndexes(cModel):
+        mapIndexToRealIndex = {}
+        for i,op in enumerate(cModel.operations):
+            mapIndexToRealIndex[op.nodeIndex] = i
+            op.nodeIndex = i
+        for op in cModel.operations:
             for inp in op.inputs:
-                if inp.sourceType == DataSourceType.MODEL_INPUT:
-                    inputIndexes.append(inp.index)
-                    inp.index = newInputIndex
-                    newInputIndex += 1
-                if inp.sourceType == DataSourceType.NODE_INPUT:
-                    if not inp.index in nodeInputToIndexMap:
-                        nodeInputToIndexMap[inp.index] = newNodeInputIndex
-                        newNodeInputIndex += 1
+                if(inp.sourceType == DataSourceType.NODE_INPUT):
+                    inp.index = mapIndexToRealIndex[inp.index]
 
-                    inp.index = nodeInputToIndexMap[inp.index]
+    # Compress before DFG 
+    CompressGraphIndexes(cModel)
 
-                if inp.sourceType == DataSourceType.INITIALIZER:
-                    initializersIndexes.append(inp.index)
-                    inp.index = newInitializerIndex
-                    newInitializerIndex += 1
+    # Very simple DFG algorithm. Should be fast enough unless we start processing 100+ nodes graphs
+    allOutputNodes = []
+    nodeLevel = [None] * len(cModel.operations)
+    mark = [True] * len(cModel.operations)
+    for i,op in enumerate(cModel.operations):
+        for inp in op.inputs:
+            if(inp.sourceType == DataSourceType.NODE_INPUT):
+                mark[inp.index] = False
 
-            if not op.outputIndex in nodeInputToIndexMap:
-                nodeInputToIndexMap[op.outputIndex] = newNodeInputIndex
-                newNodeInputIndex += 1
+    for i,op in enumerate(cModel.operations):
+        if mark[i]:
+            allOutputNodes.append(op)
+            nodeLevel[i] = 0
 
-            op.outputIndex = nodeInputToIndexMap[op.outputIndex]
+    while True:
+        alreadyDone = True
+        for x in nodeLevel:
+            if x is None:
+                alreadyDone = False
 
-        nodeInputIndexes = [0] * len(nodeInputToIndexMap)
-        for x, k in nodeInputToIndexMap.items():
-            nodeInputIndexes[k] = x
+        if alreadyDone:
+            break
 
-        # print(inputIndexes)
-        # print(nodeInputIndexes)
-        # print(initializersIndexes)
+        for i,op in enumerate(cModel.operations):
+            if nodeLevel[i] is None:
+                continue
 
-        # for layer in range(focusStart,focusEnd + 1):
-        #    nodeInputIndexes.append(layer)
+            for inp in op.inputs:
+                if(inp.sourceType == DataSourceType.NODE_INPUT):
+                    nodeLevel[inp.index] = nodeLevel[i] + 1
 
-        newModelInputs = []
-        for index in inputIndexes:
-            newModelInputs.append(cModel.modelInputs[index])
-        cModel.modelInputs = newModelInputs
+    maxLevel = 0
+    for x in nodeLevel:
+        maxLevel = max(maxLevel,x)
 
-        # cModel.modelInputs = RemoveButPreserve(cModel.modelInputs, inputIndexes)
+    dfgSortedList = []
+    for level in range(maxLevel,-1,-1):
+        for i,x in enumerate(nodeLevel):
+            if x == level:
+                dfgSortedList.append(cModel.operations[i])
 
-        packedInputs = RemoveContentExcept(packedInputs, inputIndexes)
-        packedCorrectData = RemoveContentExcept(packedCorrectData, nodeInputIndexes)
-        packedInitializers = RemoveContentExcept(
-            packedInitializers, initializersIndexes
-        )
+    cModel.operations = dfgSortedList
+                
+    # Compress indexes back into aligning with array index now that everything is ordered again
+    CompressGraphIndexes(cModel)
 
-        if len(packedInputs.data) == 0:
-            cModel.modelInputs = []
+    # Compress initializers
+    initializerMaxIndex = 0
+    for op in cModel.operations:
+        for inp in op.inputs:
+            if inp.sourceType == DataSourceType.INITIALIZER:
+                initializerMaxIndex = max(initializerMaxIndex,inp.index)
+
+    realInitializerIndex = 0
+    for op in cModel.operations:
+        for inp in op.inputs:
+            if inp.sourceType == DataSourceType.INITIALIZER:
+                inp.index = realInitializerIndex
+                realInitializerIndex += 1
+
+    cModel.nextInitializerIndex = realInitializerIndex
+                
+    # At this point graph is compressed. Node indexes match array
+    # index and any superfluous data has been removed
 
     CalculateMemoryAllocations(cModel)
+                
+    # Pack inputs
+    allInputData = [None] * len(cModel.modelInputs)
+    for op in cModel.operations:
+        for inp in op.inputs:
+            if (inp.sourceType == DataSourceType.MODEL_INPUT):
+                assert allInputData[inp.index] is None
 
+                allInputData[inp.index] = inp.data
+
+    compactInputData = []
+    for data in allInputData:
+        if data is not None:
+            compactInputData.append(data)
+    packedInputs = PackMultipleArrays(compactInputData)
+    
+    # Pack initializers
+    allInitializers = []
+    for op in cModel.operations:
+        for inp in op.inputs:
+            if inp.sourceType == DataSourceType.INITIALIZER:
+                assert inp.index == len(allInitializers)
+                allInitializers.append(inp.data)
+
+    packedInitializers = PackMultipleArrays(allInitializers)
+
+    # Pack correct outputs
+    # Since we need all the outputs to verify correctness, might as well pack everything. In a proper impl we would go through the graph and count the amount of proper outputs instead.
+    amountOfOutputs = len(cModel.operations)
+    allOutputData = [None] * amountOfOutputs
+    compactCorrectData = []
+    for op in cModel.operations:
+        if(op.correctOutputData is not None):
+            compactCorrectData.append(op.correctOutputData)
+        else:
+            compactCorrectData.append(np.empty(dtype=np.float32))
+
+    packedCorrectData = PackMultipleArrays(compactCorrectData)
+    print("correctData")
+    print(compactCorrectData)
+    
     for i, c in enumerate(cModel.operations):
         print(i, c.opName, c.inputDimensions)
 
-    # I want to stop generating stuff that needs to be compiled. Everything must be data.
-
+    useValidDataAsInput = True
     debugging = True
-    if False:
-        with open(os.path.join(sourceOutputLocation, f"{namespace}_code.c"), "w") as f:
-            f.write('#include "versat_private.h"\n')
-            f.write('#include "stdint.h"\n\n')
-
-            f.write(f"static int numberLayers = {len(cModel.operations)};\n")
-
-            layerInfo = []
-
-            for index, c in enumerate(cModel.operations):
-                outputSize = 0
-                for x in c.outputDimensions:
-                    outputSize += TensorSize(x)
-
-                layerInfo.append(
-                    "{"
-                    + f'"{OperationToLayerName(c,not debugSoftware)}",{outputSize}'
-                    + "}"
-                )
-
-            f.write("static LayerInfo layers[] = {" + ",".join(layerInfo) + "};\n")
-
-            opcodeToOperationList = {}
-            for index, c in enumerate(cModel.operations):
-                opcodeToOperationList[c.opName] = opcodeToOperationList.get(
-                    c.opName, []
-                ) + [c]
-
-            emitter = CDataEmitter()
-
-            for opcode in opcodeToOperationList:
-                if not IsOperatorRegistered(opcode):
-                    continue
-
-                operationList = opcodeToOperationList[opcode]
-
-                structs = []
-                for index, op in enumerate(operationList):
-                    structs.append(EmitParameterList(emitter, op))
-
-                emitter.EmitNamedArray(f"{opcode}Infos", f"{opcode}Info", structs)
-
-            content = emitter.Representation()
-            f.write(content)
-
-            # Placeholder for operators not yet registered
-            for opcode, opList in opcodeToOperationList.items():
-                amount = len(opList)
-
-                if IsOperatorRegistered(opcode):
-                    continue
-
-                content = []
-                for op in opList:
-                    content.append("{}")
-
-                f.write(
-                    f"{opcode}Info {opcode}Infos[{amount}] = "
-                    + "{"
-                    + ",".join(content)
-                    + "};\n"
-                )
-
-            f.write(f"uint64_t {namespace}_time[{len(cModel.operations) + 1}];\n")
-
-            def OutputFunctionStart(debugging, fuctionName):
-                if debugging:
-                    f.write(
-                        f"\nInferenceOutput {fuctionName}(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory,void* correctInput)"
-                        + "{\n"
-                    )
-                else:
-                    f.write(
-                        f"\nInferenceOutput {fuctionName}(void* outputMemory,void* temporaryMemory,void** inputs,void* modelMemory)"
-                        + "{\n"
-                    )
-
-            def OutputFunction(debugging, fuctionName, useVersat, measureTime):
-                OutputFunctionStart(debugging, fuctionName)
-                opSeen = {}
-                for index, c in enumerate(cModel.operations):
-                    opName = c.opName
-                    opSpec = operatorNameToSpec[opName]
-
-                    content = []
-                    for inp in c.inputs:
-                        if inp.sourceType == DataSourceType.INITIALIZER:
-                            content.append(
-                                f"VERSAT_OFFSET_PTR(modelMemory,{packedInitializers.offsets[inp.index]})"
-                            )
-                        elif inp.sourceType == DataSourceType.MODEL_INPUT:
-                            content.append(f"inputs[{inp.index}]")
-                        else:
-                            if debugging:
-                                content.append(
-                                    f"VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[inp.index]})"
-                                )
-                            else:
-                                content.append(f"res_{inp.index}")
-
-                    outputStr = ""
-                    if c.outputMemoryAddress.memType == MemoryType.TEMP:
-                        outputStr = f"VERSAT_OFFSET_PTR(temporaryMemory,{c.outputMemoryAddress.offset})"
-                    else:
-                        outputStr = f"VERSAT_OFFSET_PTR(outputMemory,{c.outputMemoryAddress.offset})"
-
-                    functionName = OperationToFunctionName(c, useVersat)
-
-                    opIndex = opSeen.get(c.opName, -1) + 1
-                    opSeen[c.opName] = opIndex
-                    # if debugging:
-                    #    f.write(f'  versat_printf("Gonna run layer {index}\\n");\n')
-
-                    if measureTime:
-                        f.write(f"  {namespace}_time[{index}] = versat_time();\n")
-
-                    f.write(
-                        f"  void* res_{index} = "
-                        + functionName
-                        + "("
-                        + ",".join(content)
-                        + f",{outputStr},{index},&{c.opName}Infos[{opIndex}]);\n"
-                    )
-                    if debugging and (IsOperatorRegistered(c.opName)):
-                        precision = opSpec.floatPrecision
-                        # print(c.outputIndex,packedCorrectData.offsets)
-                        f.write(
-                            f"  AssertAlmostEqual(res_{index},VERSAT_OFFSET_PTR(correctInput,{packedCorrectData.offsets[c.outputIndex]}),{index},{precision},&layers[{index}]);\n"
-                        )
-
-                if measureTime:
-                    f.write(
-                        f"  {namespace}_time[{len(cModel.operations)}] = versat_time();\n"
-                    )
-
-                f.write("  return (InferenceOutput){};\n")
-                f.write("}\n")
-
-            outputAll = False
-            #              debugging, fuctionName, useVersat, measureTime
-            if outputAll:
-                OutputFunction(False, f"{namespace}_SoftwareRunInference", False, True)
-                OutputFunction(False, f"{namespace}_VersatRunInference", True, True)
-                OutputFunction(
-                    True, f"{namespace}_DebugRunInference", not debugSoftware, False
-                )
-            else:
-                OutputFunctionStart(False, f"{namespace}_SoftwareRunInference")
-                f.write("  (InferenceOutput){};\n")
-                f.write("}\n")
-                OutputFunctionStart(False, f"{namespace}_VersatRunInference")
-                f.write("  (InferenceOutput){};\n")
-                f.write("}\n")
-                OutputFunction(
-                    True, f"{namespace}_DebugRunInference", not debugSoftware, False
-                )
-
     correctDataSize = 0
     inputSize = 0
 
+    correctDataSize = len(packedCorrectData.data)
+
     if debugging:
-        correctDataSize = len(packedCorrectData.data)
         inputSize = len(cModel.modelInputs)
-
-    if False:
-        with open(
-            os.path.join(sourceOutputLocation, f"{namespace}_modelInfo.h"), "w"
-        ) as f:
-            f.write("#pragma once\n")
-
-            f.write('#include "versat_ai.h"\n\n')
-
-            totalInputSize = 0
-            inputOffsets = [0]
-            inputSizes = [0]
-
-            if len(cModel.modelInputs) > 0:
-                inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
-                inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
-
-            f.write(f"static const int {namespace}_INPUT_SIZE[] = " + "{")
-            f.write(",".join([str(x) for x in inputSizes]))
-            f.write("};\n")
-
-            f.write(f"static const int {namespace}_INPUT_OFFSET[] = " + "{")
-            f.write(",".join([str(x) for x in inputOffsets]))
-            f.write("};\n\n")
-
-            f.write(f"extern uint64_t {namespace}_time[];\n")
-
-            f.write(
-                f"InferenceOutput {namespace}_SoftwareRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory);\n"
-                f"InferenceOutput {namespace}_VersatRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory);\n"
-                f"InferenceOutput {namespace}_DebugRunInference(void *outputMemory, void *temporaryMemory,void **inputs, void *modelMemory,void *correctInput);\n\n"
-            )
-
-            f.write(f"static TestModelInfo {namespace}_ModelInfo = " + "{\n")
-            f.write(f"  .outputSize = {cModel.outputMemoryNeeded},\n")
-            f.write(f"  .tempSize = {cModel.tempMemoryNeeded},\n")
-            f.write(f"  .modelSize = {len(packedInitializers.data)},\n")
-            f.write(f"  .correctSize = {correctDataSize},\n")
-            f.write(f"  .totalInputSize = {totalInputSize},\n")
-
-            f.write(f'  .nameSpace = "{namespace}",\n')
-
-            f.write(f"  .inputCount = {inputSize},\n")
-            f.write(f"  .inputSizes = {namespace}_INPUT_SIZE,\n")
-            f.write(f"  .inputOffsets = {namespace}_INPUT_OFFSET,\n")
-
-            f.write(f"  .operatorCount = {len(cModel.operations)},\n")
-            f.write(f"  .timeMeasurements = {namespace}_time,\n")
-
-            f.write(
-                f"  .softwareInferenceFunction = {namespace}_SoftwareRunInference,\n"
-            )
-            f.write(f"  .versatInferenceFunction = {namespace}_VersatRunInference,\n")
-            f.write(f"  .debugInferenceFunction = {namespace}_DebugRunInference\n")
-            f.write("};\n")
 
     totalInputSize = 0
     inputOffsets = [0]
@@ -894,8 +757,6 @@ def GenerateDebug(
     if len(cModel.modelInputs) > 0:
         inputSizes = [TensorSize(x.shape) for x in cModel.modelInputs]
         inputOffsets, totalInputSize = CalculateOffsetFromSize(inputSizes)
-
-    # pprint(cModel)
 
     # Generate the structures of the operators.
     # Easier to do this automatically in order to ensure that data matches
@@ -967,7 +828,7 @@ def GenerateDebug(
             variableData = []
             for name, typeInfo in structure:
                 typeName = typeInfo
-                if type(typeInfo) == list or type(typeInfo) == tuple:
+                if isinstance(typeInfo,list) or isinstance(typeInfo,tuple):
                     isVariable = True
                     variableData.append((name, typeInfo[0], typeInfo[1]))
                     assert isVariable
@@ -1008,7 +869,6 @@ def GenerateDebug(
 
         f.write("#endif // VERSAT_AI_OPERATORS_META")
 
-    # MARK
     # Output generic version
     # TODO: A better way would be to have this also generate the struct and the code
     #       to iterate the data, therefore guaranteeing that stuff lines up correctly.
@@ -1023,7 +883,7 @@ def GenerateDebug(
 
     packer.U32(len(cModel.modelInputs))
     packer.U32(len(cModel.operations))
-
+    
     if len(cModel.modelInputs) > 0:
         # NOTE: We are not using input sizes so I think we might just skip this
         #       Only input offsets are actually needed.
@@ -1052,24 +912,40 @@ def GenerateDebug(
         outputSize = 0
         for x in op.outputDimensions:
             outputSize += TensorSize(x)
-        opInfo.U32(outputSize)
-        opInfo.DataSource(4, packedCorrectData.offsets[op.outputIndex])
+
+        if op.correctOutputData is not None:
+            opInfo.U32(outputSize)
+            opInfo.DataSource(4, packedCorrectData.offsets[op.nodeIndex])
+        else:
+            opInfo.U32(0)
+            opInfo.U32(0)
+            opInfo.U32(0)
 
         opInfo.U32(len(op.inputs))
 
         for inp in op.inputs:
-            if inp.sourceType == DataSourceType.INITIALIZER:
+            found = False
+            
+            if not found and inp.sourceType == DataSourceType.INITIALIZER:
+                found = True
                 opInfo.DataSource(3, packedInitializers.offsets[inp.index])
-            elif inp.sourceType == DataSourceType.MODEL_INPUT:
+            if not found and inp.sourceType == DataSourceType.MODEL_INPUT:
+                found = True
                 opInfo.DataSource(2, inp.index)
-            elif debugging:
-                opInfo.DataSource(4, packedCorrectData.offsets[inp.index])
-            else:
+
+            outputOp = None
+            if not found:
                 outputNodeIndex = inp.index
 
                 # Need to get the position of the output from a previous node.
                 outputOp = cModel.operations[outputNodeIndex]
-
+            
+            if not found and useValidDataAsInput:
+                if outputOp.correctOutputData is not None:
+                    found = True
+                    opInfo.DataSource(4, packedCorrectData.offsets[inp.index])
+            if not found:
+                found = True
                 if outputOp.outputMemoryAddress.memType == MemoryType.TEMP:
                     opInfo.DataSource(1, outputOp.outputMemoryAddress.offset)
                 else:

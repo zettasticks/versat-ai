@@ -218,6 +218,7 @@ typedef struct {
 #define VERSAT_ReshapeInfo_inputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(INFO,sizeof(ReshapeInfo)))
 
 typedef struct {
+  int isBTransposed;
   int numberInputADims;
   int numberInputBDims;
   int numberOutputDims;

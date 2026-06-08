@@ -78,7 +78,7 @@ def MakeAttrFloat(defaultValue):
 def GetAttributesForOperator(op: Operation) -> dict[str, any]:
     opName = op.opName
 
-    if not opName in operatorNameToSpec:
+    if opName not in operatorNameToSpec:
         return None
 
     opSpec = operatorNameToSpec[opName]
@@ -242,6 +242,7 @@ def EmitReshape(emitter, op: Operation):
 
 
 matMulStructure = [
+    ["isBTransposed", "int"],
     ["numberInputADims", "int"],
     ["numberInputBDims", "int"],
     ["numberOutputDims", "int"],
@@ -250,11 +251,21 @@ matMulStructure = [
     ["outputDims", ["int64_t", "numberOutputDims"]],
 ]
 
+matMulAttributes = {
+    "isBTransposed": MakeAttrInteger(0),
+}
+
 
 def EmitMatMul(emitter, op: Operation):
+    attr = GetAttributesForOperator(op)
+
+    isBTransposed = attr["isBTransposed"]
+
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
     res = op.outputDimensions[0]
+
+    emitter.I32(isBTransposed)
 
     emitter.I32(len(op0))
     emitter.I32(len(op1))
@@ -394,10 +405,10 @@ def EmitGemm(emitter, op: Operation):
     emitter.I32(transB)
 
     cShape = None
-    if(len(op.inputDimensions) > 2):
+    if len(op.inputDimensions) > 2:
         cShape = op.inputDimensions[2]
 
-    assert cShape # TODO: Need to handle this being optional
+    assert cShape  # TODO: Need to handle this being optional
     if len(cShape) == 1:
         cShape = [1, cShape[0]]
 
@@ -545,7 +556,7 @@ operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
     "Reshape", 5, EmitReshape, reshapeStructure, [], True
 )
 operatorNameToSpec["MatMul"] = OnnxOperatorSpec(
-    "MatMul", 6, EmitMatMul, matMulStructure, [], True
+    "MatMul", 6, EmitMatMul, matMulStructure, matMulAttributes, True
 )
 operatorNameToSpec["Softmax"] = OnnxOperatorSpec(
     "Softmax", 7, EmitSoftmax, softmaxStructure, softmaxAttributes, True

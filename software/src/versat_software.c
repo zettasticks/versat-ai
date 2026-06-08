@@ -22,7 +22,7 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int *strideDims = VERSAT_ConvInfo_strideDims(info);
   int *padsDims = VERSAT_ConvInfo_padsDims(info);
 
-  int batchSize = inputDims[0];
+  int batches = inputDims[0];
   int inChannels = inputDims[1];
   int inW = inputDims[3];
   int inH = inputDims[2];
@@ -69,57 +69,134 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int inputSize = inW * inH * inChannels;
   int outputSize = outW * outH * outChannels;
 
+  int inChannelsPerGroup = inChannels / group;
+  int outChannelsPerGroup = outChannels / group;
+
   float *inputView = input; // + (batch * inputSize);
 
-  for (; Address_IsValid(outGen); Address_Advance(outGen)) {
-    int outPos = Address_GetValue(outGen);
+  int64_t start = versat_time();
 
-    AddressGen inputPos = Address_Map2(outGen, inputDims, stride, offset);
+  if (info->dims == 4) {
+    int outDim1Size = outW;
+    int outDim2Size = outDim1Size * outH;
+    int outDim3Size = outDim2Size * outChannels;
 
-    // KernelGen does not know about the indexes used to access the kernel
-    // weights We compute them outside.
-    int outC = outGen->addressVars[1];
+    for (int batch = 0; batch < batches; batch++) {
+      for (int g = 0; g < group; g++) {
+        for (int outC = g * outChannelsPerGroup;
+             outC < ((g + 1) * outChannelsPerGroup); outC++) {
+          for (int outY = 0, inY = -extra.leftPadH; outY < outH;
+               outY++, inY += strideH) {
+            // int inY = outY * strideH - extra.leftPadH;
 
-    float accum = 0.0f;
-    KernelGen kernInst = StartKernel(&inputPos, kernelDims, 2);
-    KernelGen *kern = &kernInst;
+            for (int outX = 0, inX = -extra.leftPadW; outX < outW;
+                 outX++, inX += strideW) {
+              // int inX = outX * strideW - extra.leftPadW;
 
-    int inChannelsPerGroup = inChannels / group;
-    int outChannelsPerGroup = outChannels / group;
+              float accum = 0.0f;
+              if (bias) {
+                accum += bias[outC];
+              }
 
-    if (group == 1) {
-      kern->addressGenVars[1] = 0;
-    } else {
-      kern->addressGenVars[1] =
-          (outC / outChannelsPerGroup) * inChannelsPerGroup;
-    }
-    kern->kernelDims[1] = inChannels / group;
+              for (int inC = 0; inC < inChannelsPerGroup; inC++) {
+                for (int kY = 0; kY < kernelH; kY++) {
+                  int trueY = inY + kY;
 
-    int currentGroup = outC / outChannelsPerGroup;
-    for (int inC = currentGroup * inChannelsPerGroup;
-         inC < (currentGroup + 1) * inChannelsPerGroup; inC++) {
-      int kernelIndex =
-          outC * (inChannels / group) * extra.kernelW * extra.kernelH;
+                  if (trueY < 0 || trueY >= inH) {
+                    continue;
+                  }
 
-      for (; Kernel_IsValid(kern); Kernel_Advance(kern), kernelIndex += 1) {
-        bool isPadded = Kernel_IsInsidePad(kern);
-        if (isPadded) {
-          continue;
+                  for (int kX = 0; kX < kernelW; kX++) {
+                    int trueX = inX + kX;
+
+                    if (trueX < 0 || trueX >= inW) {
+                      continue;
+                    }
+
+                    int inputIn =
+                        ((batch * inChannels + (inC + g * inChannelsPerGroup)) *
+                             inH +
+                         trueY) *
+                            inW +
+                        trueX;
+                    float feature = input[inputIn];
+
+                    int weightIn =
+                        ((outC * inChannelsPerGroup + inC) * kernelH + kY) *
+                            kernelW +
+                        kX;
+                    float weight = kernel[weightIn];
+
+                    accum += feature * weight;
+                  }
+                }
+              }
+
+              int outPos = batch * outDim3Size + outC * outDim2Size +
+                           outY * outDim1Size + outX;
+              outView[outPos] = accum;
+            }
+          }
         }
-        int index = Kernel_GetValue(kern);
+      }
+    }
+  } else {
+    versat_printf("Slow impl\n");
 
-        float kernelVal = kernel[kernelIndex];
-        float inputVal = inputView[index];
-        accum += inputVal * kernelVal;
+    int total = 0;
+    for (; Address_IsValid(outGen); Address_Advance(outGen)) {
+      int outPos = Address_GetValue(outGen);
+
+      AddressGen inputPos = Address_Map2(outGen, inputDims, stride, offset);
+
+      // KernelGen does not know about the indexes used to access the kernel
+      // weights We compute them outside.
+      int outC = outGen->addressVars[1];
+
+      float accum = 0.0f;
+      KernelGen kernInst = StartKernel(&inputPos, kernelDims, 2);
+      KernelGen *kern = &kernInst;
+
+      if (group == 1) {
+        kern->addressGenVars[1] = 0;
+      } else {
+        kern->addressGenVars[1] =
+            (outC / outChannelsPerGroup) * inChannelsPerGroup;
+      }
+      kern->kernelDims[1] = inChannels / group;
+
+      int currentGroup = outC / outChannelsPerGroup;
+      for (int inC = currentGroup * inChannelsPerGroup;
+           inC < (currentGroup + 1) * inChannelsPerGroup; inC++) {
+        int kernelIndex =
+            outC * inChannelsPerGroup * extra.kernelW * extra.kernelH;
+
+        for (; Kernel_IsValid(kern); Kernel_Advance(kern), kernelIndex += 1) {
+          bool isPadded = Kernel_IsInsidePad(kern);
+          if (isPadded) {
+            continue;
+          }
+          int index = Kernel_GetValue(kern);
+
+          total += 1;
+
+          float kernelVal = kernel[kernelIndex];
+          float inputVal = inputView[index];
+          accum += inputVal * kernelVal;
+        }
+      }
+
+      if (bias) {
+        outView[outPos] = accum + bias[outC];
+      } else {
+        outView[outPos] = accum;
       }
     }
 
-    if (bias) {
-      outView[outPos] = accum + bias[outC];
-    } else {
-      outView[outPos] = accum;
-    }
+    versat_printf("T: %d\n", total);
   }
+
+  // PrintTime(start);
 
   return output;
 }
@@ -226,12 +303,7 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  versat_printf("%d\n", info->dims);
-
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
-
-  versat_printf("%llx\n", inputDims[0]);
-
   int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
   for (int64_t i = 0; i < totalSize; i++) {
@@ -252,9 +324,6 @@ void *Software_MaxPool(void *inputX, void *output, int index,
   int *kernelDims = VERSAT_MaxPoolInfo_kernelDims(info);
   int *strideDims = VERSAT_MaxPoolInfo_strideDims(info);
   int *padsDims = VERSAT_MaxPoolInfo_padsDims(info);
-
-  versat_printf("%llx %llx %llx %llx\n", inputDims[0], inputDims[1],
-                inputDims[2], inputDims[3]);
 
   ExtraInfo extra = CalculateExtraInfo_MaxPool(info);
 
@@ -381,25 +450,56 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
   int64_t *inputBDims = VERSAT_MatMulInfo_inputBDims(info);
   int64_t *outputDims = VERSAT_MatMulInfo_outputDims(info);
 
-  int AH = inputADims[0];
-  int AW = inputADims[1];
+  int AS = info->numberInputADims;
+  int AH;
+  int AW;
+  if (AS == 1) {
+    AH = 1;
+    AW = inputADims[0];
+  } else {
+    AH = inputADims[AS - 2];
+    AW = inputADims[AS - 1];
+  }
 
-  int BH = inputBDims[0];
-  int BW = inputBDims[1];
+  int BS = info->numberInputBDims;
+  int BH;
+  int BW;
+  if (BS == 1) {
+    BH = 1;
+    BW = inputBDims[0];
+  } else {
+    BH = inputBDims[BS - 2];
+    BW = inputBDims[BS - 1];
+  }
 
-  int OH = outputDims[0];
-  int OW = outputDims[1];
+  int OS = info->numberOutputDims;
+  int OH;
+  int OW;
+  if (OS == 1) {
+    OH = 1;
+    OW = outputDims[0];
+  } else {
+    OH = outputDims[OS - 2];
+    OW = outputDims[OS - 1];
+  }
 
   if (AW != BH) {
     versat_printf("Something very wrong is happening in MatMul\n");
   }
 
+  uint64_t start = versat_time();
+
+  // versat_printf("%d %d\n",OH,OW);
+
+  int count = 0;
   for (int y = 0; y < OH; y++) {
     for (int x = 0; x < OW; x++) {
       int indexOut = y * OW + x;
 
       viewOut[indexOut] = 0.0f;
       for (int c = 0; c < AW; c++) {
+        count += 1;
+
         int indexA = y * AW + c;
         int indexB = c * BW + x;
 
@@ -410,6 +510,9 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
       }
     }
   }
+
+  // versat_printf("C: %d\n",count);
+  // PrintTime(start);
 
   return output;
 }

@@ -14,10 +14,18 @@ Arena arenaInst;
 Arena *arena = &arenaInst;
 
 uint64_t Versat_DefaultMeasureTime() { return 0; }
+void Versat_DefaultTimeReset(){};
 void Versat_DefaultClearCache(void *ptr, size_t size) {}
 
 MeasureTimeFunction versat_time = Versat_DefaultMeasureTime;
+TimeResetFunction versat_timeReset = Versat_DefaultTimeReset;
 ClearCache versat_clearCache = Versat_DefaultClearCache;
+
+TimeResetFunction Versat_SetTimeReset(TimeResetFunction func) {
+  TimeResetFunction old = versat_timeReset;
+  versat_timeReset = func;
+  return old;
+}
 
 MeasureTimeFunction
 Versat_SetTimeMeasurementFunction(MeasureTimeFunction func) {
@@ -937,7 +945,7 @@ AdvancedWindow WindowGen_Get(WindowGen *gen) {
   return res;
 }
 
-void WindowGen_GetTruePadding(WindowGen *gen,AdvancedWindow* out) {
+void WindowGen_GetTruePadding(WindowGen *gen, AdvancedWindow *out) {
   out->outputX = gen->currentOutputX;
   out->outputY = gen->currentOutputY;
   out->outputC = gen->currentOutputC;
@@ -1033,7 +1041,7 @@ void WindowGen_Advance(WindowGen *gen) {
   }
 }
 
-void WindowGen_AdvanceTruePadding(WindowGen *gen,AdvancedWindow window) {
+void WindowGen_AdvanceTruePadding(WindowGen *gen, AdvancedWindow window) {
   if (gen->iterateC) {
     if (gen->isNCHW) {
       gen->currentOutputX += window.outputW;
@@ -1135,7 +1143,7 @@ typedef struct {
   void *tempMem;
   void **inputs;
   void *modelMem;
-  void *correctInput;
+  void *correctData;
 } InferenceState;
 
 void *GetSourcePointer(InferenceState *state, DataSource source) {
@@ -1153,7 +1161,7 @@ void *GetSourcePointer(InferenceState *state, DataSource source) {
     return VERSAT_OFFSET_PTR(state->modelMem, source.memOffset);
   } break;
   case SourceType_CORRECT_MEM: {
-    return VERSAT_OFFSET_PTR(state->correctInput, source.memOffset);
+    return VERSAT_OFFSET_PTR(state->correctData, source.memOffset);
   } break;
   }
 }
@@ -1176,9 +1184,10 @@ void DataSource_Print(DataSource source) {
     versat_printf("Correct_Mem: %d", source.memOffset);
   } break;
   default: {
-    versat_printf("Unknown data source type: %d\n", source.type);
+    versat_printf("Unknown data source type: %d", source.type);
   } break;
   }
+  versat_printf("\n");
 }
 
 void Operation_Print(Operation *op) {
@@ -1255,29 +1264,93 @@ static ProfileSample *storedProfiles = 0;
 static int maxProfiledSamples = 0;
 static int profileIndex = 0;
 
+void entry(const float tensor_input_1[1][32][32][3],
+           float tensor_Identity[1][10]);
+
+void PrintCurrentTime() {
+  uint64_t now = versat_time();
+  PrintU64(now);
+  versat_printf("\n");
+}
+
+void PrintTimeDiff(uint64_t start) {
+  uint64_t end = versat_time();
+  uint64_t diff = end - start;
+
+  versat_printf("Start,End,Diff\n");
+  PrintU64(start);
+  versat_printf("\n");
+  PrintU64(end);
+  versat_printf("\n");
+  PrintU64(diff);
+  versat_printf("\n\n");
+}
+
 InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
                                      void *temporaryMemory, void **inputs,
                                      void *modelMemory, void *correctInput) {
   Operation *ptr = CompiledModel_Operations(model);
 
-  versat_printf("Input values: %p %p\n", inputs[0], inputs[1]);
+  uint64_t start = 0;
 
-  uint64_t start = versat_time();
+#if 0
+  versat_printf("Onnx2c\n");
+
+  versat_timeReset();
+  start = versat_time();
+
+  float **asFloat = (float **)inputs;
+  entry(asFloat[0], (float *)outputMemory);
+
+  PrintTimeDiff(start);
+
+#endif
 
   InferenceState stateInst = {.outputMem = outputMemory,
                               .tempMem = temporaryMemory,
                               .inputs = inputs,
                               .modelMem = modelMemory,
-                              .correctInput = correctInput};
+                              .correctData = correctInput};
 
+#define PRINT_HELP 0
+
+#if PRINT_HELP
+    float** inputsAsFloats = (float**) inputs;
+    float* modelMemAsFloat = (float*) modelMemory;
+    float* correctInputAsFloat = (float*) correctInput;
+
+    versat_printf("Inputs\n");
+    for(int i = 0 ; i < 4; i++){
+      versat_printf("%f\n",inputsAsFloats[0][i]);
+    }
+    for(int i = 0 ; i < 4; i++){
+      versat_printf("%f\n",inputsAsFloats[1][i]);
+    }
+    
+    versat_printf("Correct data\n");
+    for(int i = 0 ; i < 8; i++){
+      versat_printf("%f\n",correctInputAsFloat[i]);
+    }
+#endif
+  
   InferenceState *state = &stateInst;
 
+  versat_printf("VersatSoft\n");
+  versat_timeReset();
+  start = versat_time();
   for (uint32_t i = 0; i < model->nOperations; i++) {
     bool useVersat = ptr->useVersat;
+    // useVersat = false;
 
     void *info = Operation_GetOperationInfo(ptr);
     void *out = NULL;
     void *correctOutput = GetSourcePointer(state, ptr->correctOutput);
+
+#if PRINT_HELP
+    versat_printf("CorrectData\n");
+    DataSource_Print(ptr->correctOutput);
+    versat_printf("%p\n",correctOutput);
+#endif
 
     void *input0 = NULL;
     void *input1 = NULL;
@@ -1286,9 +1359,19 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     void *input4 = NULL;
     if (ptr->nInputs > 0) {
       input0 = GetSourcePointer(state, ptr->inputs[0]);
+#if PRINT_HELP
+      versat_printf("Input0\n");
+      DataSource_Print(ptr->inputs[0]);
+      versat_printf("%p\n",input0);
+#endif
     }
     if (ptr->nInputs > 1) {
       input1 = GetSourcePointer(state, ptr->inputs[1]);
+#if PRINT_HELP
+      versat_printf("Input1\n");
+      DataSource_Print(ptr->inputs[1]);
+      versat_printf("%p\n",input1);
+#endif
     }
     if (ptr->nInputs > 2) {
       input2 = GetSourcePointer(state, ptr->inputs[2]);
@@ -1301,8 +1384,12 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 
     void *output = GetSourcePointer(state, ptr->output);
-
-#if 0
+#if PRINT_HELP
+    versat_printf("OutputPos\n");
+    DataSource_Print(ptr->output);
+#endif
+    
+#if 1
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
     float *asFloat = (float *)output;
@@ -1311,9 +1398,9 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-    versat_clearCache(NULL, 0);
+    // versat_clearCache(NULL, 0);
 
-    VersatProfileReset();
+    // VersatProfileReset();
 
     // TODO: Could be generated by python stuff
     switch (ptr->type) {
@@ -1411,75 +1498,77 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
       versat_printf("Unknown operation type: %d\n", ptr->type);
     } break;
     }
-
+    
 #if 0
-    versat_printf("%d-OK\n", i);
-
-#if 0
+    // Run profile ================================================================
+    versat_printf("L:%d\n",i);
     VersatProfile p = VersatProfileGet();
-
-    versat_printf("Runs:");
-    PrintU64(p.runCount);
-    versat_printf("\n");
 
     versat_printf("Cycles since last reset:");
     PrintU64(p.cyclesSinceLastReset);
     versat_printf("\n");
 
-    versat_printf("Cycles running:");
-    PrintU64(p.runningCycles);
-    versat_printf("\n");
-
-    versat_printf("Databus valid:");
-    PrintU64(p.databusValid);
-    versat_printf("\n");
-
-    versat_printf("Databus valid and ready:");
-    PrintU64(p.databusValidAndReady);
-    versat_printf("\n");
-
-    versat_printf("ConfigurationsSet:");
-    PrintU64(p.configurationsSet);
-    versat_printf("\n");
-
-    versat_printf("ConfigurationsSet while running:");
-    PrintU64(p.configurationsSetWhileRunning);
-    versat_printf("\n");
-
-    ProfileResult res = Profile_Get();
-
-    versat_printf("Profile samples: %d\n", res.amount);
-
-    for (int i = 0; i < res.amount; i++) {
-      ProfileSample sample = res.samples[i];
-
-      versat_printf("%30s: ", sample.name);
-      PrintU64(sample.time);
+    // Versat profiling registers ================================================
+    if(0){
+      versat_printf("Runs:");
+      PrintU64(p.runCount);
       versat_printf("\n");
+
+      versat_printf("Cycles since last reset:");
+      PrintU64(p.cyclesSinceLastReset);
+      versat_printf("\n");
+
+      versat_printf("Cycles running:");
+      PrintU64(p.runningCycles);
+      versat_printf("\n");
+
+      versat_printf("Databus valid:");
+      PrintU64(p.databusValid);
+      versat_printf("\n");
+
+      versat_printf("Databus valid and ready:");
+      PrintU64(p.databusValidAndReady);
+      versat_printf("\n");
+
+      versat_printf("ConfigurationsSet:");
+      PrintU64(p.configurationsSet);
+      versat_printf("\n");
+
+      versat_printf("ConfigurationsSet while running:");
+      PrintU64(p.configurationsSetWhileRunning);
+      versat_printf("\n");
+
+      ProfileResult res = Profile_Get();
+
+      versat_printf("Profile samples: %d\n", res.amount);
+
+      for (int i = 0; i < res.amount; i++) {
+        ProfileSample sample = res.samples[i];
+
+        versat_printf("%30s: ", sample.name);
+        PrintU64(sample.time);
+        versat_printf("\n");
+      }
+
+      Profile_Reset();
     }
 
-    Profile_Reset();
 #endif
 
-#else
-    LayerInfo layer = {};
-    layer.outputSize = ptr->outputSize;
-    layer.typeName = VERSAT_OperatorName(ptr->type, useVersat);
-    AssertAlmostEqual(out, correctOutput, i, ptr->precision, &layer);
+#if 1
+    // Check result of layer ======================================================
+    if(ptr->outputSize > 0){
+      LayerInfo layer = {};
+      layer.outputSize = ptr->outputSize;
+      layer.typeName = VERSAT_OperatorName(ptr->type, useVersat);
+      AssertAlmostEqual(out, correctOutput, i, ptr->precision, &layer);
+    }
 #endif
 
     ptr = VERSAT_OFFSET_PTR(ptr, ptr->operatorSize);
   }
 
-  uint64_t end = versat_time();
-  uint64_t diff = end - start;
-
-  PrintU64(start);
-  versat_printf("\n");
-  PrintU64(end);
-  versat_printf("\n");
-  PrintU64(diff);
-  versat_printf("\n");
+  PrintTimeDiff(start);
 }
 
 // ===============

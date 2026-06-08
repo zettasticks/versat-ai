@@ -28,7 +28,7 @@ def setup(py_params):
         "mem_addr_w": 30,
         "include_tester": False,  # This is already the tester. We don't want to include another one.
         "cpu": "iob_vexriscv",
-        "fw_addr_w": 17,
+        "fw_addr_w": 24,
     }
 
     py_params = update_params(iob_system_default_overrides, py_params)

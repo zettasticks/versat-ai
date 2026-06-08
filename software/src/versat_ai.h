@@ -88,6 +88,9 @@ void Versat_Init();
 typedef uint64_t (*MeasureTimeFunction)();
 MeasureTimeFunction Versat_SetTimeMeasurementFunction(MeasureTimeFunction func);
 
+typedef void (*TimeResetFunction)();
+TimeResetFunction Versat_SetTimeReset(TimeResetFunction func);
+
 // Clear cache starting from ptr and spaning size bytes
 // Depending on the architecture of the embedded system this might not be
 // required or it might be essential.
@@ -110,7 +113,7 @@ typedef struct {
   int amount;
 } ProfileResult;
 
-#define ProfileScope(INDEX, NAME) _ProfileScope(INDEX,NAME)
+#define ProfileScope(INDEX, NAME) // _ProfileScope(INDEX, NAME)
 void _ProfileScope(int index, const char *name);
 
 ProfileResult Profile_Get();

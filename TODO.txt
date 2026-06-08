@@ -10,3 +10,56 @@ every place that needs it. We can also try to figure out if we can find a simple
 [6] Need to take a look at the Group variable for Convolutions. Generated test was probably not properly testing this value since we 
 
 [7] Softmax memory size seems bugged for some reason. It does not cause problems for itself but causes other tests to fail after running a big example. 
+
+
+/*
+
+I want to make it very easy to add and remove nodes as well as change edges and whatnot.
+It would be easier to 
+
+First lets start with MatMul.
+
+Rules:
+
+Data,Initializer -> MatMul -> Data := Data,(Initializer -> Transpose) -> MatMul(bTransposed = true) -> Data (same format)
+
+In this case we need to add a Transpose between matmul and initializer and change the MatMul op to add the bTranposed flag to true (custom Versat only flag.)
+
+*/
+
+
+/*
+
+Major graph optimizations:
+
+1) Having to insert padding automatically in the Conv layer is kinda problematic. Memory allocation, extra time moving stuff and so on.
+   If we could move it to the graph layer and have operators being able to processed embedded padding directly instead of having a preprocess step on the Conv layer would
+   be better.
+
+2) Having to perform the conversion between NCHW and NHWC as a preprocessing layer is also problematic. It would be better if we could preserve NHWC data layout as much as   possible
+
+Now the major problem is making sure that everything works ok.
+Since we are using onnx runtime to compute the verification data we need to make sure that we can still check if everything is correct at the end of it all.
+Furthermore if we go the route of adding custom operators that are versat specific we need to make sure that we can still test everything in the end.
+
+If we use ALPHA to represent NCHW and OMEGA to represent NHWC.
+
+As an example if we have the flow:
+
+Data(ALPHA) -> Conv(ALPHA) -> Output(ALPHA).
+
+And we do something like
+
+Data(OMEGA) -> Conv(OMEGA) -> Transpose_OMEGA_ALPHA -> Output(ALPHA)
+
+then we can still verify wether Conv(OMEGA) is working correctly since output is the same in each case.
+
+First step, for every convolution we can add a transpose at the input and at the output.
+
+Rules:
+
+Conv(Alpha) :=  Transpose_ALPHA_OMEGA -> Conv(OMEGA) -> Tranpose_OMEGA_ALPHA.
+
+Transpose_X_Y -> Relu := Relu -> Transpose_X_Y
+
+*/

@@ -215,10 +215,12 @@ module Top_MatMul(){
    mat_muller -> myAccum;
    myAccum -> output;
 ##
-   config Simple(leftAddr: Address,rightAddr: Address,size: Dyn){
-      for x 0..size {
-         leftRow = leftAddr[x];
-         rightRow = rightAddr[x];
+   config Simple(leftAddr: Address,rightAddr: Address,size: Fixed,linesToProcess: Dyn){
+      for y 0..linesToProcess{
+         for x 0..size {
+            leftRow = leftAddr[x];
+            rightRow = rightAddr[y * size + x];
+         }
       }
    }   
 
