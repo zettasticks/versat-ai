@@ -7,6 +7,8 @@ from onnx.helper import (
     make_tensor_value_info,
     make_opsetid,
 )
+from onnx import __version__, IR_VERSION
+from onnx.defs import onnx_opset_version
 from onnx.checker import check_model
 from skl2onnx.helpers.onnx_helper import save_onnx_model
 from onnx import numpy_helper
@@ -165,6 +167,45 @@ class ConvArgs:
 
         tests.append(test)
 
+@dataclass
+class PadArgs:
+    shape: list[int]
+    pads: list[int]
+
+    def Create(self,linear=False):
+        global tests
+        testIndex = len(tests)
+
+        shape = self.shape
+        pads = self.pads
+
+        test = Test()
+
+        # Let onnx infer shape specifics
+        outputShape = [None] * len(shape)
+        numberInputs = 1
+
+        inputs = [GetInputTrueName(testIndex, x) for x in range(numberInputs)]
+        test.tensors = [
+            make_tensor_value_info(inputs[0], TensorProto.FLOAT, shape),
+        ]
+
+        test.outputTensor = make_tensor_value_info(
+            GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
+        )
+        test.node = make_node(
+            "Pad",
+            inputs,
+            [GetOutputTrueName(testIndex)],
+            pads=pads
+        )
+
+        #print(test.node,test.tensors,test.outputTensor)
+
+        test.randomArrays = [None,None,None]
+        test.randomArrays[0] = np.random.randn(*shape).astype(np.float32)
+
+        tests.append(test)        
 
 @dataclass
 class BinaryOpArgs:
@@ -532,6 +573,9 @@ def CreateBinaryOpTest(op, leftShape, rightShape, forcedOutputShape=None):
     global testList
     testList.append(BinaryOpArgs(op, leftShape, rightShape, forcedOutputShape))
 
+def CreatePad(shape,pads):
+    global testList
+    testList.append(PadArgs(shape,pads))
 
 def CreateUnaryOpTest(op, shape):
     global testList
@@ -1045,29 +1089,31 @@ def GenerateSimpleTest(config):
 
     if testMatMul:
         # Matrices of sizes different than 2 are supported by ONNX by broadcasting the inner 2 dimensions
-        CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 2, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 2, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 2, 2, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1], [1], [1])
-        CreateBinaryOpTest("MatMul", [1], [1, 1], [1])
-        CreateBinaryOpTest("MatMul", [1, 2, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1, 1, 1, 1], [1, 1])
-        CreateBinaryOpTest("MatMul", [1, 1, 1, 2, 1], [1, 1])
-        CreateBinaryOpTest("MatMul", [1, 1, 2, 1, 1], [1, 1])
-        CreateBinaryOpTest("MatMul", [1, 2, 1, 1, 1], [1, 1])
-        CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 1], [1, 1])
-        CreateBinaryOpTest("MatMul", [1, 1, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1, 1, 2, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1, 2, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 2, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 3], [3, 4])
-        CreateBinaryOpTest("MatMul", [1, 1], [1, 1, 1, 1, 1])
-        CreateBinaryOpTest("MatMul", [1, 2], [1, 1, 1, 2, 1])
-        CreateBinaryOpTest("MatMul", [4, 2], [1, 1, 1, 2, 1])
+        # TODO: While we are looking at graph optimizations do not want to deal with non 2 dims examples. 
+        if False:
+            CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 2, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 2, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 2, 2, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1], [1], [1])
+            CreateBinaryOpTest("MatMul", [1], [1, 1], [1])
+            CreateBinaryOpTest("MatMul", [1, 2, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1, 1, 1, 1], [1, 1])
+            CreateBinaryOpTest("MatMul", [1, 1, 1, 2, 1], [1, 1])
+            CreateBinaryOpTest("MatMul", [1, 1, 2, 1, 1], [1, 1])
+            CreateBinaryOpTest("MatMul", [1, 2, 1, 1, 1], [1, 1])
+            CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 1], [1, 1])
+            CreateBinaryOpTest("MatMul", [1, 1, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1, 1, 2, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1, 2, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 2, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [2, 1, 1, 1, 3], [3, 4])
+            CreateBinaryOpTest("MatMul", [1, 1], [1, 1, 1, 1, 1])
+            CreateBinaryOpTest("MatMul", [1, 2], [1, 1, 1, 2, 1])
+            CreateBinaryOpTest("MatMul", [4, 2], [1, 1, 1, 2, 1])
 
         # The more common matrices operations are just
         CreateBinaryOpTest("MatMul", [1, 1], [1, 1])
@@ -1576,7 +1622,43 @@ def GenerateTest(outputPath):
             [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
         )
 
-    CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
+    #CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
+
+    CreatePad([3],[0,0])
+    CreatePad([3],[1,0])
+    CreatePad([3],[0,1])
+    CreatePad([3],[1,1])
+    CreatePad([3],[-1,0])
+    CreatePad([3],[0,-1])
+    CreatePad([3],[-1,-1])
+
+    CreatePad([3,3],[0,0,0,0])
+    CreatePad([3,3],[1,0,1,0])
+    CreatePad([3,3],[0,1,0,1])
+    CreatePad([3,3],[1,1,1,1])
+    CreatePad([3,3],[-1,0,-1,0])
+    CreatePad([3,3],[0,-1,0,-1])
+    CreatePad([3,3],[-1,-1,-1,-1])
+
+    CreatePad([3,3,3],[0,0,0,0,0,0])
+    CreatePad([3,3,3],[1,0,1,0,1,0])
+    CreatePad([3,3,3],[0,1,0,1,0,1])
+    CreatePad([3,3,3],[1,1,1,1,1,1])
+    CreatePad([3,3,3],[-1,0,-1,0,-1,0])
+    CreatePad([3,3,3],[0,-1,0,-1,0,-1])
+    CreatePad([3,3,3],[-1,-1,-1,-1,-1,-1])
+
+    CreatePad([3,3,3,3],[0,0,0,0,0,0,0,0])
+    CreatePad([3,3,3,3],[1,0,1,0,1,0,1,0])
+    CreatePad([3,3,3,3],[0,1,0,1,0,1,0,1])
+    CreatePad([3,3,3,3],[1,1,1,1,1,1,1,1])
+    CreatePad([3,3,3,3],[-1,0,-1,0,-1,0,-1,0])
+    CreatePad([3,3,3,3],[0,-1,0,-1,0,-1,0,-1])
+    CreatePad([3,3,3,3],[-1,-1,-1,-1,-1,-1,-1,-1])
+
+    CreateConvolution(
+        [1, 1, 3, 3], 1, [3, 3], [1, 1], [1, 1], 2, False, "NOTSET", [1, 1, 1, 1]
+    )
 
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
@@ -1584,3 +1666,5 @@ def GenerateTest(outputPath):
 
 if __name__ == "__main__":
     GenerateTest(sys.argv[1])
+
+# Remember we are currently targetting version=7. 

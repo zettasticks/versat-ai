@@ -416,6 +416,33 @@ def EmitGemm(emitter, op: Operation):
     emitter.I64Array(op.inputDimensions[1])
     emitter.I64Array(cShape)
 
+padStructure = [
+    ["dims", "int"],
+    ["mode", "int"],
+    ["constant", "float"],
+    ["inputDims", ["int64_t", "dims"]],
+    ["outputDims", ["int64_t", "dims"]],
+    ["pad", ["int64_t", "dims * 2"]],
+]
+
+def EmitPad(emitter,op: Operation):
+    dims = len(op.inputDimensions[0])
+    attr = GetAttributesForOperator(op)
+
+    emitter.I32(dims)
+
+    if(attr['mode'] == "constant"):
+        emitter.I32(0)
+    if(attr['mode'] == "reflect"):
+        emitter.I32(1)
+    if(attr['mode'] == "edge"):
+        emitter.I32(2)
+
+    emitter.F32(attr['value'])
+
+    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(op.outputDimensions[0])
+    emitter.I64Array(attr['pads'])
 
 def IsOperatorRegistered(opName: str):
     return opName in operatorNameToSpec
@@ -491,6 +518,12 @@ gemmAttributes = {
     "beta": MakeAttrFloat(1.0),
     "transA": MakeAttrInteger(0),
     "transB": MakeAttrInteger(0),
+}
+
+padAttributes = {
+    "mode": MakeAttrBoundedString(["constant","reflect","edge"],"constant"),
+    "pads": MakeAttrAxisPairList(0),
+    "value": MakeAttrFloat(0.0)
 }
 
 dropoutAttributes = {"ratio": MakeAttrFloat(0.5)}
@@ -592,4 +625,8 @@ operatorNameToSpec["LRN"] = OnnxOperatorSpec(
 )
 operatorNameToSpec["Gemm"] = OnnxOperatorSpec(
     "Gemm", 12, EmitGemm, gemmStructure, gemmAttributes, True
+)
+
+operatorNameToSpec["Pad"] = OnnxOperatorSpec(
+    "Pad", 13, EmitPad, padStructure, padAttributes, False
 )

@@ -206,6 +206,7 @@ void *Software_Dropout(void *input, void *out, int index, DropoutInfo *info);
 void *Software_LRN(void *input, void *out, int index, LRNInfo *info);
 void *Software_Gemm(void *inA, void *inB, void *inC, void *out, int index,
                     GemmInfo *info);
+void *Software_Pad(void *inA, void *out, int index,PadInfo *info);
 
 // Accelerator implementations
 void *Versat_Add(void *inputA, void *inputB, void *output, int index,

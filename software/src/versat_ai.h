@@ -159,7 +159,7 @@ typedef struct {
   uint32_t operatorSize;
 
   uint32_t type;
-  uint32_t useVersat;
+  uint32_t useSoftware;
   float precision;
   DataSource output;
 

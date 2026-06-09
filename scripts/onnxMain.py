@@ -578,11 +578,21 @@ def GenerateDebug(
             op = cModel.GetOperationByIndexOrFail(i)
             cModel.RemoveOperation(op)
 
+    # For debugging purposes it might be useful to embed the inputs as initializers.
+    # That way we can test certain optimizations.
+    transformInputToInitializer = False
+
+    if transformInputToInitializer:
+        for op in cModel.operations:
+            for inp in op.inputs:
+                if inp.sourceType == DataSourceType.MODEL_INPUT:
+                    inp.sourceType = DataSourceType.INITIALIZER
+                    inp.index = cModel.NextInitializerIndex()
+            
     # Graph based optimizations can be put here
 
-    
+                    
     # MARK
-    
     if 1:
         # RULE: Data,Data -> MatMul := Data,(Data -> Transpose) -> MatMul(bTransposed = True)
         toAdd = []
@@ -734,8 +744,6 @@ def GenerateDebug(
             compactCorrectData.append(np.empty(dtype=np.float32))
 
     packedCorrectData = PackMultipleArrays(compactCorrectData)
-    print("correctData")
-    print(compactCorrectData)
     
     for i, c in enumerate(cModel.operations):
         print(i, c.opName, c.inputDimensions)
@@ -785,15 +793,15 @@ def GenerateDebug(
         )
         f.write("\n} OperatorType;\n\n")
 
-        f.write("static inline char* VERSAT_OperatorName(int opType,int useVersat){\n")
+        f.write("static inline char* VERSAT_OperatorName(int opType,int useSoftware){\n")
         f.write("  switch(opType){\n")
         for opName in allOperatorSpecsDict:
             spec = allOperatorSpecsDict[opName]
             f.write(f"    case {spec.index}: " + "{\n")
-            f.write("      if(useVersat){\n")
-            f.write(f'        return "Versat_{opName}";\n')
-            f.write("      } else {\n")
+            f.write("      if(useSoftware){\n")
             f.write(f'        return "Soft_{opName}";\n')
+            f.write("      } else {\n")
+            f.write(f'        return "Versat_{opName}";\n')
             f.write("      }\n")
             f.write("    } break;\n")
         f.write('  return "";\n')
@@ -901,7 +909,7 @@ def GenerateDebug(
         # Operator size gets prepended at the end.
 
         opInfo.U32(spec.index)
-        opInfo.U32(1)
+        opInfo.U32(debugSoftware)
         opInfo.F32(spec.floatPrecision)
 
         if op.outputMemoryAddress.memType == MemoryType.TEMP:

@@ -16,100 +16,108 @@ typedef enum {
   OperatorType_BatchNormalization = 9,
   OperatorType_Dropout = 10,
   OperatorType_LRN = 11,
-  OperatorType_Gemm = 12
+  OperatorType_Gemm = 12,
+  OperatorType_Pad = 13
 } OperatorType;
 
-static inline char* VERSAT_OperatorName(int opType,int useVersat){
+static inline char* VERSAT_OperatorName(int opType,int useSoftware){
   switch(opType){
     case 0: {
-      if(useVersat){
-        return "Versat_Add";
-      } else {
+      if(useSoftware){
         return "Soft_Add";
+      } else {
+        return "Versat_Add";
       }
     } break;
     case 1: {
-      if(useVersat){
-        return "Versat_Relu";
-      } else {
+      if(useSoftware){
         return "Soft_Relu";
+      } else {
+        return "Versat_Relu";
       }
     } break;
     case 2: {
-      if(useVersat){
-        return "Versat_MaxPool";
-      } else {
+      if(useSoftware){
         return "Soft_MaxPool";
+      } else {
+        return "Versat_MaxPool";
       }
     } break;
     case 3: {
-      if(useVersat){
-        return "Versat_AveragePool";
-      } else {
+      if(useSoftware){
         return "Soft_AveragePool";
+      } else {
+        return "Versat_AveragePool";
       }
     } break;
     case 4: {
-      if(useVersat){
-        return "Versat_Conv";
-      } else {
+      if(useSoftware){
         return "Soft_Conv";
+      } else {
+        return "Versat_Conv";
       }
     } break;
     case 5: {
-      if(useVersat){
-        return "Versat_Reshape";
-      } else {
+      if(useSoftware){
         return "Soft_Reshape";
+      } else {
+        return "Versat_Reshape";
       }
     } break;
     case 6: {
-      if(useVersat){
-        return "Versat_MatMul";
-      } else {
+      if(useSoftware){
         return "Soft_MatMul";
+      } else {
+        return "Versat_MatMul";
       }
     } break;
     case 7: {
-      if(useVersat){
-        return "Versat_Softmax";
-      } else {
+      if(useSoftware){
         return "Soft_Softmax";
+      } else {
+        return "Versat_Softmax";
       }
     } break;
     case 8: {
-      if(useVersat){
-        return "Versat_Transpose";
-      } else {
+      if(useSoftware){
         return "Soft_Transpose";
+      } else {
+        return "Versat_Transpose";
       }
     } break;
     case 9: {
-      if(useVersat){
-        return "Versat_BatchNormalization";
-      } else {
+      if(useSoftware){
         return "Soft_BatchNormalization";
+      } else {
+        return "Versat_BatchNormalization";
       }
     } break;
     case 10: {
-      if(useVersat){
-        return "Versat_Dropout";
-      } else {
+      if(useSoftware){
         return "Soft_Dropout";
+      } else {
+        return "Versat_Dropout";
       }
     } break;
     case 11: {
-      if(useVersat){
-        return "Versat_LRN";
-      } else {
+      if(useSoftware){
         return "Soft_LRN";
+      } else {
+        return "Versat_LRN";
       }
     } break;
     case 12: {
-      if(useVersat){
-        return "Versat_Gemm";
-      } else {
+      if(useSoftware){
         return "Soft_Gemm";
+      } else {
+        return "Versat_Gemm";
+      }
+    } break;
+    case 13: {
+      if(useSoftware){
+        return "Soft_Pad";
+      } else {
+        return "Versat_Pad";
       }
     } break;
   return "";
@@ -298,5 +306,19 @@ typedef struct {
 #define VERSAT_GemmInfo_aDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(INFO,sizeof(GemmInfo)))
 #define VERSAT_GemmInfo_bDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_GemmInfo_aDims(INFO),INFO->numberInputDims * sizeof(int64_t)))
 #define VERSAT_GemmInfo_cDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_GemmInfo_bDims(INFO),INFO->numberInputDims * sizeof(int64_t)))
+
+typedef struct {
+  int dims;
+  int mode;
+  float constant;
+  // Followed by
+  // int64_t inputDims[dims];
+  // int64_t outputDims[dims];
+  // int64_t pad[dims * 2];
+} PadInfo;
+
+#define VERSAT_PadInfo_inputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(INFO,sizeof(PadInfo)))
+#define VERSAT_PadInfo_outputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_PadInfo_inputDims(INFO),INFO->dims * sizeof(int64_t)))
+#define VERSAT_PadInfo_pad(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_PadInfo_outputDims(INFO),INFO->dims * sizeof(int64_t)))
 
 #endif // VERSAT_AI_OPERATORS_META
