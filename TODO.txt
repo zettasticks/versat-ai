@@ -11,29 +11,14 @@ every place that needs it. We can also try to figure out if we can find a simple
 
 [7] Softmax memory size seems bugged for some reason. It does not cause problems for itself but causes other tests to fail after running a big example. 
 
-
-/*
-
-I want to make it very easy to add and remove nodes as well as change edges and whatnot.
-It would be easier to 
-
-First lets start with MatMul.
-
-Rules:
-
-Data,Initializer -> MatMul -> Data := Data,(Initializer -> Transpose) -> MatMul(bTransposed = true) -> Data (same format)
-
-In this case we need to add a Transpose between matmul and initializer and change the MatMul op to add the bTranposed flag to true (custom Versat only flag.)
-
-*/
-
+[8] Generating defines to access the emitted data is error prone. Consider replacing it with an inline function approach, maybe.
 
 /*
 
 Major graph optimizations:
 
 1) Having to insert padding automatically in the Conv layer is kinda problematic. Memory allocation, extra time moving stuff and so on.
-   If we could move it to the graph layer and have operators being able to processed embedded padding directly instead of having a preprocess step on the Conv layer would
+   If we could move it to the graph layer and have operators being able to process embedded padding directly instead of having a preprocess step on the Conv layer would
    be better.
 
 2) Having to perform the conversion between NCHW and NHWC as a preprocessing layer is also problematic. It would be better if we could preserve NHWC data layout as much as   possible

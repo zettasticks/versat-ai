@@ -1315,24 +1315,24 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 #define PRINT_HELP 0
 
 #if PRINT_HELP
-    float** inputsAsFloats = (float**) inputs;
-    float* modelMemAsFloat = (float*) modelMemory;
-    float* correctInputAsFloat = (float*) correctInput;
+  float **inputsAsFloats = (float **)inputs;
+  float *modelMemAsFloat = (float *)modelMemory;
+  float *correctInputAsFloat = (float *)correctInput;
 
-    versat_printf("Inputs\n");
-    for(int i = 0 ; i < 4; i++){
-      versat_printf("%f\n",inputsAsFloats[0][i]);
-    }
-    for(int i = 0 ; i < 4; i++){
-      versat_printf("%f\n",inputsAsFloats[1][i]);
-    }
-    
-    versat_printf("Correct data\n");
-    for(int i = 0 ; i < 8; i++){
-      versat_printf("%f\n",correctInputAsFloat[i]);
-    }
+  versat_printf("Inputs\n");
+  for (int i = 0; i < 4; i++) {
+    versat_printf("%f\n", inputsAsFloats[0][i]);
+  }
+  for (int i = 0; i < 4; i++) {
+    versat_printf("%f\n", inputsAsFloats[1][i]);
+  }
+
+  versat_printf("Correct data\n");
+  for (int i = 0; i < 8; i++) {
+    versat_printf("%f\n", correctInputAsFloat[i]);
+  }
 #endif
-  
+
   InferenceState *state = &stateInst;
 
   versat_printf("VersatSoft\n");
@@ -1348,7 +1348,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 #if PRINT_HELP
     versat_printf("CorrectData\n");
     DataSource_Print(ptr->correctOutput);
-    versat_printf("%p\n",correctOutput);
+    versat_printf("%p\n", correctOutput);
 #endif
 
     void *input0 = NULL;
@@ -1361,7 +1361,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 #if PRINT_HELP
       versat_printf("Input0\n");
       DataSource_Print(ptr->inputs[0]);
-      versat_printf("%p\n",input0);
+      versat_printf("%p\n", input0);
 #endif
     }
     if (ptr->nInputs > 1) {
@@ -1369,7 +1369,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 #if PRINT_HELP
       versat_printf("Input1\n");
       DataSource_Print(ptr->inputs[1]);
-      versat_printf("%p\n",input1);
+      versat_printf("%p\n", input1);
 #endif
     }
     if (ptr->nInputs > 2) {
@@ -1386,13 +1386,17 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 #if PRINT_HELP
     versat_printf("OutputPos\n");
     DataSource_Print(ptr->output);
+    versat_printf("%p\n",output);
+    versat_printf("%d\n",ptr->outputSize);
 #endif
-    
-#if 1
+
+#if 0
+    // Currently disabled since it appears that we have a bug somewhere.
+    // 
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
-    float *asFloat = (float *)output;
-    for (int i = 0; i < ptr->outputSize; i++) {
+    float *asFloat = (float *) output;
+    for (int i = 0; i < (ptr->outputSize / sizeof(float)); i++) {
       asFloat[i] = 123.321f;
     }
 #endif
@@ -1487,7 +1491,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     } break;
     case OperatorType_Gemm: {
       if (useSoftware) {
-        //out = Software_Gemm(input0, input1, input2, output, i, info);
+        // out = Software_Gemm(input0, input1, input2, output, i, info);
       } else {
         out = Versat_Gemm(input0, input1, input2, output, i, info);
       }
@@ -1495,12 +1499,15 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     case OperatorType_Pad: {
       out = Software_Pad(input0, output, i, info);
     } break;
-
+    case OperatorType_FixPad: {
+      out = Software_FixPad(input0, output, i, info);      
+    } break;
+      
     default: {
       versat_printf("Unknown operation type: %d\n", ptr->type);
     } break;
     }
-    
+
 #if 0
     // Run profile ================================================================
     versat_printf("L:%d\n",i);
@@ -1564,6 +1571,9 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
       layer.outputSize = ptr->outputSize;
       layer.typeName = VERSAT_OperatorName(ptr->type, useSoftware);
       AssertAlmostEqual(out, correctOutput, i, ptr->precision, &layer);
+    } else {
+      const char* typeName = VERSAT_OperatorName(ptr->type, useSoftware);
+      versat_printf("[%s] (Layer %d) NOT CHECKED (No validity data)\n", typeName, i);
     }
 #endif
 

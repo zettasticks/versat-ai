@@ -17,7 +17,9 @@ typedef enum {
   OperatorType_Dropout = 10,
   OperatorType_LRN = 11,
   OperatorType_Gemm = 12,
-  OperatorType_Pad = 13
+  OperatorType_Pad = 13,
+  OperatorType_FixPad = 254,
+  OperatorType_NIL = 255
 } OperatorType;
 
 static inline char* VERSAT_OperatorName(int opType,int useSoftware){
@@ -118,6 +120,20 @@ static inline char* VERSAT_OperatorName(int opType,int useSoftware){
         return "Soft_Pad";
       } else {
         return "Versat_Pad";
+      }
+    } break;
+    case 254: {
+      if(useSoftware){
+        return "Soft_FixPad";
+      } else {
+        return "Versat_FixPad";
+      }
+    } break;
+    case 255: {
+      if(useSoftware){
+        return "Soft_NIL";
+      } else {
+        return "Versat_NIL";
       }
     } break;
   return "";
@@ -320,5 +336,16 @@ typedef struct {
 #define VERSAT_PadInfo_inputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(INFO,sizeof(PadInfo)))
 #define VERSAT_PadInfo_outputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_PadInfo_inputDims(INFO),INFO->dims * sizeof(int64_t)))
 #define VERSAT_PadInfo_pad(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_PadInfo_outputDims(INFO),INFO->dims * sizeof(int64_t)))
+
+typedef struct {
+  int dims;
+  float constant;
+  // Followed by
+  // int64_t outputDims[dims];
+  // int64_t pad[dims * 2];
+} FixPadInfo;
+
+#define VERSAT_FixPadInfo_outputDims(INFO) ((int64_t *) VERSAT_OFFSET_PTR(INFO,sizeof(FixPadInfo)))
+#define VERSAT_FixPadInfo_pad(INFO) ((int64_t *) VERSAT_OFFSET_PTR(VERSAT_FixPadInfo_outputDims(INFO),INFO->dims * sizeof(int64_t)))
 
 #endif // VERSAT_AI_OPERATORS_META

@@ -14,6 +14,7 @@ from structBuilder import StructBuilder
 
 from onnx import shape_inference
 from pprint import pprint
+from copy import deepcopy
 
 import struct
 import numpy as np
@@ -141,7 +142,7 @@ def RemoveContent(packed: PackedArrays, indexMap: dict[int, int]):
         finalIndexToPackIndex[finalIndex] = packIndex
 
 
-def IndexOfNodeThatProducesOutput(cModel : Model, outputName):
+def IndexOfNodeThatProducesOutput(cModel: Model, outputName):
     for index, op in enumerate(cModel.operations):
         if outputName == op.outputName:
             return op.nodeIndex
@@ -209,7 +210,7 @@ def GenerateModelFromOnnxModel(onnxModel):
                 parsedAttribute = float(attribute.f)
             elif spec.attrType == OnnxAttributeType.ENUM:
                 name = attribute.s.decode("UTF-8")
-                parsedAttribute = spec.allowedValues[name]
+                parsedAttribute = name
             else:
                 print(spec.attrType)
                 assert False
@@ -226,8 +227,8 @@ def GenerateModelFromOnnxModel(onnxModel):
 
             modelInput = None
             inputIndex = 0
-            
-            for i,x in enumerate(cModel.modelInputs):
+
+            for i, x in enumerate(cModel.modelInputs):
                 if x.name == name:
                     modelInput = x
                     inputIndex = i
@@ -272,17 +273,17 @@ def GenerateModelFromOnnxModel(onnxModel):
     mapped = {}
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if isinstance(name,str):
+            if isinstance(name, str):
                 mapped[name] = True
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if isinstance(name,str):
+                if isinstance(name, str):
                     mapped[name] = True
 
         for i, name in enumerate(op.outputDimensions):
-            if isinstance(name,str):
+            if isinstance(name, str):
                 mapped[name] = True
 
     for name in mapped.keys():
@@ -299,17 +300,17 @@ def GetModelFreeParameters(cModel):
 
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if isinstance(name,str):
+            if isinstance(name, str):
                 params[name] = True
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if isinstance(name,str):
+                if isinstance(name, str):
                     params[name] = True
 
         for i, name in enumerate(op.outputDimensions):
-            if isinstance(name,str):
+            if isinstance(name, str):
                 params[name] = True
 
     return params
@@ -321,20 +322,20 @@ def RestrictModelFreeParameter(cModel, paramValue):
 
     for port in cModel.modelInputs:
         for i, name in enumerate(port.shape):
-            if isinstance(name,str):
+            if isinstance(name, str):
                 port.shape[i] = mapped.get(name, paramValue)
                 mapped[name] = port.shape[i]
 
     for op in cModel.operations:
         for inputs in op.inputDimensions:
             for i, name in enumerate(inputs):
-                if isinstance(name,str):
+                if isinstance(name, str):
                     inputs[i] = mapped.get(name, paramValue)
                     mapped[name] = inputs[i]
 
         for outDim in op.outputDimensions:
             for i, name in enumerate(outDim):
-                if isinstance(name,str):
+                if isinstance(name, str):
                     outDim[i] = mapped.get(name, paramValue)
                     mapped[name] = outDim[i]
 
@@ -407,7 +408,7 @@ class CDataEmitter:
 
         return content
 
-            
+
 # Copied from onnxruntime/tools/python/remove_initializer_from_input.py
 def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
     if model.ir_version < 4:
@@ -429,28 +430,47 @@ def remove_initializer_from_input(model: onnx.ModelProto) -> bool:
 
     return modified
 
+def AllZeros(inp: list[int]):
+    allZero = True
+    for x in inp:
+        if x != 0:
+            allZero = False
+
+    return allZero
+
+
+def NotAllZeros(inp: list[int]):
+    noZero = False
+    for x in inp:
+        if x != 0:
+            noZero = True
+
+    return noZero
+
+
 def PrintModelData(cModel):
     for op in cModel.operations:
         print(f"[{op.opName}] {op.nodeName}")
-        for i,inp in enumerate(op.inputs):
-            print(f"Input_{i}:",cModel.GetGenericDataSource(inp).data)
-        print("Output_0:",op.correctOutputData)
+        for i, inp in enumerate(op.inputs):
+            print(f"Input_{i}:", cModel.GetGenericDataSource(inp).data)
+        print("Output_0:", op.correctOutputData)
+
 
 # TODO: We are starting to accumulate a bunch of config flags and stuff is starting to get out of control
 #       We probably want to make a struct that combines all this configuration into a single place and even offer some helper functions to simplify stuff otherwise
 #       it becomes clubersome to interact with this. Furthermore we are starting to generate more stuff than we care about and that is not good. Only generate what you need otherwise
 #       firmware starts becoming too large and sim time starts becoming problematic and all that stuff.
 def GenerateDebug(
-        testLocation: str,
-        modelName: str,
-        binOutputLocation: str,
-        sourceOutputLocation: str,
-        namespace: str,
-        focusLayerRange: [int, int] = None,
-        debugSoftware: bool = False,
+    testLocation: str,
+    modelName: str,
+    binOutputLocation: str,
+    sourceOutputLocation: str,
+    namespace: str,
+    focusLayerRange: [int, int] = None,
+    debugSoftware: bool = False,
 ):
     # TODO: It would be better if we could check all the inputs for correctness.
-    if not isinstance(namespace,str) or not namespace.isidentifier():
+    if not isinstance(namespace, str) or not namespace.isidentifier():
         print("Need a valid namespace name. Needs to follow identifier rules")
         sys.exit(0)
     if len(namespace) > 32:
@@ -552,18 +572,18 @@ def GenerateDebug(
 
     # TODO: Implement multiple testcases by running the model multiple times and outputting multiple correct data bins.
     # NOTE: Is it possible for different testcases to generate different amounts of correctData? It shouldn't be possible.
-    result = RunModel(cModel,model,inputs)
+    result = RunModel(cModel, model, inputs)
     correctData = result.outputs
 
     # Associate inputs to model data sources
-    for i,data in enumerate(inputs):
+    for i, data in enumerate(inputs):
         for op in cModel.operations:
             for inp in op.inputs:
                 if inp.sourceType == DataSourceType.MODEL_INPUT and inp.index == i:
                     inp.data = data
-                    
+
     # Associate correct data to operation outputs
-    for i,data in enumerate(correctData):
+    for i, data in enumerate(correctData):
         cModel.operations[i].correctOutputData = data
 
     # Remove layers if the user commands. Mostly to help test individual operations
@@ -571,7 +591,7 @@ def GenerateDebug(
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
 
-        for i in range(0,len(cModel.operations)):
+        for i in range(0, len(cModel.operations)):
             if i >= focusStart and i <= focusEnd:
                 continue
 
@@ -588,101 +608,194 @@ def GenerateDebug(
                 if inp.sourceType == DataSourceType.MODEL_INPUT:
                     inp.sourceType = DataSourceType.INITIALIZER
                     inp.index = cModel.NextInitializerIndex()
-            
-    # Graph based optimizations can be put here
 
-                    
-    # MARK
-    if 1:
-        # RULE: Data,Data -> MatMul := Data,(Data -> Transpose) -> MatMul(bTransposed = True)
-        toAdd = []
-        for op in cModel.operations:
-            if op.opName == "MatMul":
-                attr = GetAttributesForOperator(op)
-
-                if(attr['isBTransposed'] == 0):
-                    toAdd.append(op)
-
-        for op in toAdd:
-            newOp = cModel.AddOperation("Transpose",1)
-            # TODO: Need to adapt this to the shape of the data. Cannot assume simple 2D shape
-            newOp.parsedAttributes["perm"] = (1,0)
-            cModel.InsertInTheMiddle(op,1,newOp,0)
-            op.parsedAttributes['isBTransposed'] = 1
-
-        # RULE: Init -> Transpose := Init(Transposed)
-        toRemove = []
-        for op in cModel.operations:
-            if op.opName == "Transpose":
-                if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
-                    attr = GetAttributesForOperator(op)
-                    op.inputs[0].data = np.transpose(op.inputs[0].data,axes = attr['perm'])
-                    toRemove.append(op)
-
-        for op in toRemove:
-            cModel.RemoveOperation(op)
-
-    print("After optimize")
-                
-    # Graph optimizations are not expected to preserve graph order
-    # Need to do a pass to convert back into DAG
-    
     def CompressGraphIndexes(cModel):
         mapIndexToRealIndex = {}
-        for i,op in enumerate(cModel.operations):
+        for i, op in enumerate(cModel.operations):
             mapIndexToRealIndex[op.nodeIndex] = i
             op.nodeIndex = i
         for op in cModel.operations:
             for inp in op.inputs:
-                if(inp.sourceType == DataSourceType.NODE_INPUT):
+                if inp.sourceType == DataSourceType.NODE_INPUT:
                     inp.index = mapIndexToRealIndex[inp.index]
 
-    # Compress before DFG 
-    CompressGraphIndexes(cModel)
-
     # Very simple DFG algorithm. Should be fast enough unless we start processing 100+ nodes graphs
-    allOutputNodes = []
-    nodeLevel = [None] * len(cModel.operations)
-    mark = [True] * len(cModel.operations)
-    for i,op in enumerate(cModel.operations):
-        for inp in op.inputs:
-            if(inp.sourceType == DataSourceType.NODE_INPUT):
-                mark[inp.index] = False
+    def ReorganizeGraph(cModel):
+        # Compress before DFG
+        CompressGraphIndexes(cModel)
 
-    for i,op in enumerate(cModel.operations):
-        if mark[i]:
-            allOutputNodes.append(op)
-            nodeLevel[i] = 0
-
-    while True:
-        alreadyDone = True
-        for x in nodeLevel:
-            if x is None:
-                alreadyDone = False
-
-        if alreadyDone:
-            break
-
-        for i,op in enumerate(cModel.operations):
-            if nodeLevel[i] is None:
-                continue
-
+        allOutputNodes = []
+        nodeLevel = [None] * len(cModel.operations)
+        mark = [True] * len(cModel.operations)
+        for i, op in enumerate(cModel.operations):
             for inp in op.inputs:
-                if(inp.sourceType == DataSourceType.NODE_INPUT):
-                    nodeLevel[inp.index] = nodeLevel[i] + 1
+                if inp.sourceType == DataSourceType.NODE_INPUT:
+                    mark[inp.index] = False
 
-    maxLevel = 0
-    for x in nodeLevel:
-        maxLevel = max(maxLevel,x)
+        for i, op in enumerate(cModel.operations):
+            if mark[i]:
+                allOutputNodes.append(op)
+                nodeLevel[i] = 0
 
-    dfgSortedList = []
-    for level in range(maxLevel,-1,-1):
-        for i,x in enumerate(nodeLevel):
-            if x == level:
-                dfgSortedList.append(cModel.operations[i])
+        while True:
+            alreadyDone = True
+            for x in nodeLevel:
+                if x is None:
+                    alreadyDone = False
 
-    cModel.operations = dfgSortedList
+            if alreadyDone:
+                break
+
+            for i, op in enumerate(cModel.operations):
+                if nodeLevel[i] is None:
+                    continue
+
+                for inp in op.inputs:
+                    if inp.sourceType == DataSourceType.NODE_INPUT:
+                        nodeLevel[inp.index] = nodeLevel[i] + 1
+
+        maxLevel = 0
+        for x in nodeLevel:
+            maxLevel = max(maxLevel, x)
+
+        dfgSortedList = []
+        for level in range(maxLevel, -1, -1):
+            for i, x in enumerate(nodeLevel):
+                if x == level:
+                    dfgSortedList.append(cModel.operations[i])
+
+        cModel.operations = dfgSortedList
+                    
+                    
+    # Graph based optimizations can be put here
+    # Any rule that requires 3 specific nodes is problematic.
+    # We want rules that have at most 2 specific nodes otherwise becomes
+    # to constrain.
+    # We also want to push stuff towards inputs as much as possible.
+    # The closer it is to initializers and whatnot the easier it will
+    # be to precompute.
+
+    # Its becoming really weird to preserve stuff as much as possible.
+    # While it is easy to change the edges easily, the dimensions
+    # and the correct data however is problematic.
+    
+    for i, c in enumerate(cModel.operations):
+        print(i, c.opName, c.inputDimensions)
+    
+    # MARK
+    if 1:
+        # RULE: Conv(NotSetPadding) := Pad -> Conv(NoPadding)
+        if 1:
+            toAdd = []
+
+            for op in cModel.operations:
+                if op.opName == "Conv":
+                    attr = GetAttributesForOperator(op)
+                    if attr["auto_pad"] == "NOTSET" and NotAllZeros(attr["pads"]):
+                        toAdd.append(op)
+
+            for op in toAdd:
+                attr = GetAttributesForOperator(op)
+
+                truePads = [0, 0] + attr["pads"][:2] + [0, 0] + attr["pads"][2:]
+
+                newOp = cModel.AddOperation("Pad", 1)
+                newOp.parsedAttributes["pads"] = truePads
+
+                op.parsedAttributes["pads"] = [0] * len(attr["pads"])
+
+                cModel.InsertInTheMiddle(op, 0, newOp, 0)
+
+                #op.inputDimensions[0] = newOp.outputDimensions[0]
+                #op.parsedAttributes["pads"] = [0] * len(attr["pads"])
+        
+        # Pad -> Pad := AddedPad
+
+        # N -> Pad := Pad -> N
+        # For now we only care about Relu
+        if 1:
+            for op in cModel.operations:
+                padNode = op
+                reluNode = cModel.GetInputNode(padNode,0)
+
+                if reluNode.opName == "Relu" and padNode.opName == "Pad":
+                    cModel.Swap(reluNode,padNode)
+                    
+        # Conv has 2 inputs. Pad only has 1 input. Easier to move pad around.
+        # Conv -> Pad := Pad -> Conv -> FixupPad
+        # Conv cannot contain any type of padding
+        if 0:
+            toRemove = []
+            for op in cModel.operations:
+                padNode = op
+                convNode = cModel.GetInputNode(padNode,0)
+
+                if convNode.opName == "Conv" and padNode.opName == "Pad":
+                    attr = GetAttributesForOperator(convNode)
+                    if attr["auto_pad"] == "NOTSET" and AllZeros(attr["pads"]):
+                        # Lets start without the FixupPad stuff.
+                        newOp = cModel.AddOperation("Pad", 1)
+
+                        newOp.parsedAttributes = deepcopy(padNode.parsedAttributes)
+                        newOp.parsedAttributes["pads"][2] *= attr["strides"][0]
+                        newOp.parsedAttributes["pads"][3] *= attr["strides"][1]
+                        newOp.parsedAttributes["pads"][6] *= attr["strides"][0]
+                        newOp.parsedAttributes["pads"][7] *= attr["strides"][1]
+
+                        fixPad = cModel.AddOperation("FixPad",1)
+                        fixPad.parsedAttributes = deepcopy(padNode.parsedAttributes)
+
+                        cModel.InsertInTheMiddle(convNode,0,newOp,0)
+                        cModel.InsertAfter(convNode,fixPad)
+
+                        toRemove.append(padNode)
+                    
+            for op in toRemove:
+                cModel.RemoveOperation(op)
                 
+        # RULE: Data,Data -> MatMul := Data,(Data -> Transpose) -> MatMul(bTransposed = True)
+        if 0:
+            toAdd = []
+            for op in cModel.operations:
+                if op.opName == "MatMul":
+                    attr = GetAttributesForOperator(op)
+
+                    if attr["isBTransposed"] == 0:
+                        toAdd.append(op)
+
+            for op in toAdd:
+                newOp = cModel.AddOperation("Transpose", 1)
+                # TODO: Need to adapt this to the shape of the data. Cannot assume simple 2D shape
+                newOp.parsedAttributes["perm"] = (1, 0)
+                cModel.InsertInTheMiddle(op, 1, newOp, 0)
+                op.parsedAttributes["isBTransposed"] = 1
+
+        # RULE: Init -> Transpose := Init(Transposed)
+        if 0:
+            toRemove = []
+            for op in cModel.operations:
+                if op.opName == "Transpose":
+                    if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
+                        attr = GetAttributesForOperator(op)
+                        op.inputs[0].data = np.transpose(
+                            op.inputs[0].data, axes=attr["perm"]
+                        )
+                        toRemove.append(op)
+
+            for op in toRemove:
+                cModel.RemoveOperation(op)
+
+    print("After optimize")
+
+    for op in cModel.operations:
+        # Programmer error if NIL node ever reaches this point
+        assert op.opName != "NIL"
+    
+    # Graph optimizations are not expected to preserve graph order
+    # Need to do a pass to convert back into DAG
+
+    ReorganizeGraph(cModel)
+
     # Compress indexes back into aligning with array index now that everything is ordered again
     CompressGraphIndexes(cModel)
 
@@ -691,7 +804,7 @@ def GenerateDebug(
     for op in cModel.operations:
         for inp in op.inputs:
             if inp.sourceType == DataSourceType.INITIALIZER:
-                initializerMaxIndex = max(initializerMaxIndex,inp.index)
+                initializerMaxIndex = max(initializerMaxIndex, inp.index)
 
     realInitializerIndex = 0
     for op in cModel.operations:
@@ -701,17 +814,17 @@ def GenerateDebug(
                 realInitializerIndex += 1
 
     cModel.nextInitializerIndex = realInitializerIndex
-                
+
     # At this point graph is compressed. Node indexes match array
     # index and any superfluous data has been removed
 
     CalculateMemoryAllocations(cModel)
-                
+
     # Pack inputs
     allInputData = [None] * len(cModel.modelInputs)
     for op in cModel.operations:
         for inp in op.inputs:
-            if (inp.sourceType == DataSourceType.MODEL_INPUT):
+            if inp.sourceType == DataSourceType.MODEL_INPUT:
                 assert allInputData[inp.index] is None
 
                 allInputData[inp.index] = inp.data
@@ -721,7 +834,7 @@ def GenerateDebug(
         if data is not None:
             compactInputData.append(data)
     packedInputs = PackMultipleArrays(compactInputData)
-    
+
     # Pack initializers
     allInitializers = []
     for op in cModel.operations:
@@ -738,17 +851,20 @@ def GenerateDebug(
     allOutputData = [None] * amountOfOutputs
     compactCorrectData = []
     for op in cModel.operations:
-        if(op.correctOutputData is not None):
+        if op.correctOutputData is not None:
             compactCorrectData.append(op.correctOutputData)
         else:
-            compactCorrectData.append(np.empty(dtype=np.float32))
+            # We store a single zero since its easier than an empty value
+            # At the emitter stage we also set a flag to avoid checking meaning that we
+            # could store whatever we wanted in here. Sending one value is just easier 
+            compactCorrectData.append(np.zeros(1,dtype=np.float32))
 
     packedCorrectData = PackMultipleArrays(compactCorrectData)
-    
+
     for i, c in enumerate(cModel.operations):
         print(i, c.opName, c.inputDimensions)
 
-    useValidDataAsInput = True
+    useValidDataAsInput = False
     debugging = True
     correctDataSize = 0
     inputSize = 0
@@ -758,6 +874,8 @@ def GenerateDebug(
     if debugging:
         inputSize = len(cModel.modelInputs)
 
+    #pprint(cModel)
+        
     totalInputSize = 0
     inputOffsets = [0]
     inputSizes = [0]
@@ -793,7 +911,9 @@ def GenerateDebug(
         )
         f.write("\n} OperatorType;\n\n")
 
-        f.write("static inline char* VERSAT_OperatorName(int opType,int useSoftware){\n")
+        f.write(
+            "static inline char* VERSAT_OperatorName(int opType,int useSoftware){\n"
+        )
         f.write("  switch(opType){\n")
         for opName in allOperatorSpecsDict:
             spec = allOperatorSpecsDict[opName]
@@ -836,7 +956,7 @@ def GenerateDebug(
             variableData = []
             for name, typeInfo in structure:
                 typeName = typeInfo
-                if isinstance(typeInfo,list) or isinstance(typeInfo,tuple):
+                if isinstance(typeInfo, list) or isinstance(typeInfo, tuple):
                     isVariable = True
                     variableData.append((name, typeInfo[0], typeInfo[1]))
                     assert isVariable
@@ -891,7 +1011,7 @@ def GenerateDebug(
 
     packer.U32(len(cModel.modelInputs))
     packer.U32(len(cModel.operations))
-    
+
     if len(cModel.modelInputs) > 0:
         # NOTE: We are not using input sizes so I think we might just skip this
         #       Only input offsets are actually needed.
@@ -933,7 +1053,7 @@ def GenerateDebug(
 
         for inp in op.inputs:
             found = False
-            
+
             if not found and inp.sourceType == DataSourceType.INITIALIZER:
                 found = True
                 opInfo.DataSource(3, packedInitializers.offsets[inp.index])
@@ -947,7 +1067,7 @@ def GenerateDebug(
 
                 # Need to get the position of the output from a previous node.
                 outputOp = cModel.operations[outputNodeIndex]
-            
+
             if not found and useValidDataAsInput:
                 if outputOp.correctOutputData is not None:
                     found = True

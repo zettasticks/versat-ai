@@ -140,7 +140,7 @@ def CalculateMemoryAllocations(cModel):
             continue
 
         # TODO: Support different tensor types and whatnot.
-        memoryRequired = 4  # Size of a float
+        memoryRequired = 1  # Size of a float
         for dim in c.outputDimensions:
             memoryRequired *= TensorSize(dim)
 

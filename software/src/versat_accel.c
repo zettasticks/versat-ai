@@ -763,7 +763,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   float *viewA = (float *)inputA;
   float *viewB = (float *)inputB;
   float *viewOut = (float *)output;
-  
+
   // TODO: The names are kinda wrong. AH and AW are "technically" swapped in
   // name only.
   int AS = info->numberInputADims;
@@ -796,7 +796,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   }
 
   if (info->isBTransposed) {
-    versat_printf("MatMul  with transposed\n");
+    // versat_printf("MatMul  with transposed\n");
   }
 
   int OS = info->numberOutputDims;
@@ -869,7 +869,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
       }
     }
     if (info->isBTransposed) {
-      dataSource = viewB;//&tempB[valB * BH];
+      dataSource = viewB; //&tempB[valB * BH];
     }
 
     silent_clear_cache();

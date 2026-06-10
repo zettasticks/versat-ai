@@ -502,10 +502,10 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
 
         int indexA = y * AW + c;
         int indexB = c * BW + x;
-        if(info->isBTransposed){
+        if (info->isBTransposed) {
           indexB = x * AW + c;
         }
-        
+
         float valA = viewA[indexA];
         float valB = viewB[indexB];
 
@@ -696,31 +696,30 @@ void *Software_Gemm(void *inA, void *inB, void *inC, void *out, int index,
   return out;
 }
 
-void *Software_Pad(void *inA, void *out, int index,PadInfo *info) {
+void *Software_Pad(void *inA, void *out, int index, PadInfo *info) {
   int dims = info->dims;
 
-  int64_t* inputDims = VERSAT_PadInfo_inputDims(info);
-  int64_t* outputDims = VERSAT_PadInfo_outputDims(info);
-  int64_t* pad = VERSAT_PadInfo_pad(info);
+  int64_t *inputDims = VERSAT_PadInfo_inputDims(info);
+  int64_t *outputDims = VERSAT_PadInfo_outputDims(info);
+  int64_t *pad = VERSAT_PadInfo_pad(info);
 
-  float* input = (float*) inA;
-  float* output = (float*) out;
+  float *input = (float *)inA;
+  float *output = (float *)out;
   
-  if(dims == 1){
-    for(int x = 0,inX = -pad[0]; x < outputDims[0]; x++,inX++){
-      if(inX < 0 || inX >= inputDims[0]){
+  if (dims == 1) {
+    for (int x = 0, inX = -pad[0]; x < outputDims[0]; x++, inX++) {
+      if (inX < 0 || inX >= inputDims[0]) {
         output[x] = 0.0f;
       } else {
         output[x] = input[inX];
       }
     }
-  }
-  else if(dims == 2){
-    for(int y = 0,inY = -pad[0]; y < outputDims[0]; y++, inY++){
-      for(int x = 0,inX = -pad[1]; x < outputDims[1]; x++, inX++){
+  } else if (dims == 2) {
+    for (int y = 0, inY = -pad[0]; y < outputDims[0]; y++, inY++) {
+      for (int x = 0, inX = -pad[1]; x < outputDims[1]; x++, inX++) {
         int outputPos = y * outputDims[1] + x;
 
-        if(inX < 0 || inY < 0 || inY >= inputDims[0] || inX >= inputDims[1]){
+        if (inX < 0 || inY < 0 || inY >= inputDims[0] || inX >= inputDims[1]) {
           output[outputPos] = 0.0f;
         } else {
           int inputPos = inY * inputDims[1] + inX;
@@ -728,14 +727,14 @@ void *Software_Pad(void *inA, void *out, int index,PadInfo *info) {
         }
       }
     }
-  }
-  else if(dims == 3){
-    for(int z = 0,inZ = -pad[0]; z < outputDims[0]; z++,inZ++){
-      for(int y = 0,inY = -pad[1]; y < outputDims[1]; y++, inY++){
-        for(int x = 0,inX = -pad[2]; x < outputDims[2]; x++, inX++){
+  } else if (dims == 3) {
+    for (int z = 0, inZ = -pad[0]; z < outputDims[0]; z++, inZ++) {
+      for (int y = 0, inY = -pad[1]; y < outputDims[1]; y++, inY++) {
+        for (int x = 0, inX = -pad[2]; x < outputDims[2]; x++, inX++) {
           int outputPos = (z * outputDims[1] + y) * outputDims[2] + x;
 
-          if(inX < 0 || inY < 0 || inZ < 0 || inZ >= inputDims[0] || inY >= inputDims[1] || inX >= inputDims[2]){
+          if (inX < 0 || inY < 0 || inZ < 0 || inZ >= inputDims[0] ||
+              inY >= inputDims[1] || inX >= inputDims[2]) {
             output[outputPos] = 0.0f;
           } else {
             int inputPos = (inZ * inputDims[1] + inY) * inputDims[2] + inX;
@@ -744,18 +743,23 @@ void *Software_Pad(void *inA, void *out, int index,PadInfo *info) {
         }
       }
     }
-  }
-  else if(dims == 4){
-    for(int w = 0,inW = -pad[0]; w < outputDims[0]; w++,inW++){
-      for(int z = 0,inZ = -pad[1]; z < outputDims[1]; z++,inZ++){
-        for(int y = 0,inY = -pad[2]; y < outputDims[2]; y++, inY++){
-          for(int x = 0,inX = -pad[3]; x < outputDims[3]; x++, inX++){
-            int outputPos = ((w * outputDims[1] + z) * outputDims[2] + y) * outputDims[3] + x;
+  } else if (dims == 4) {
+    for (int w = 0, inW = -pad[0]; w < outputDims[0]; w++, inW++) {
+      for (int z = 0, inZ = -pad[1]; z < outputDims[1]; z++, inZ++) {
+        for (int y = 0, inY = -pad[2]; y < outputDims[2]; y++, inY++) {
+          for (int x = 0, inX = -pad[3]; x < outputDims[3]; x++, inX++) {
+            int outputPos =
+                ((w * outputDims[1] + z) * outputDims[2] + y) * outputDims[3] +
+                x;
 
-            if(inX < 0 || inY < 0 || inZ < 0 || inW < 0 || inW >= inputDims[0] || inZ >= inputDims[1] || inY >= inputDims[2] || inX >= inputDims[3]){
+            if (inX < 0 || inY < 0 || inZ < 0 || inW < 0 ||
+                inW >= inputDims[0] || inZ >= inputDims[1] ||
+                inY >= inputDims[2] || inX >= inputDims[3]) {
               output[outputPos] = 0.0f;
             } else {
-              int inputPos = ((inW * inputDims[1] + inZ) * inputDims[2] + inY) * inputDims[3] + inX;
+              int inputPos = ((inW * inputDims[1] + inZ) * inputDims[2] + inY) *
+                                 inputDims[3] +
+                             inX;
               output[outputPos] = input[inputPos];
             }
           }
@@ -765,6 +769,58 @@ void *Software_Pad(void *inA, void *out, int index,PadInfo *info) {
   } else {
     // TODO: Implement generic case
   }
+
+  return out;
+}
+
+void *Software_FixPad(void *inA, void *out, int index, FixPadInfo *info) {
+  int dims = info->dims;
   
+  int64_t *outputDims = VERSAT_FixPadInfo_outputDims(info);
+  int64_t *pad = VERSAT_FixPadInfo_pad(info);
+
+  float *input = (float *)inA;
+  float *output = (float *)out;
+  
+  // NOTE: We can be more efficient because right now we are iterating a lot of empty space.
+  
+  if (dims == 1) {
+    for (int x = 0; x < outputDims[0]; x++) {
+      if(x < pad[0] || x > outputDims[0] - pad[1]){
+        output[x] = 0.0f;
+      } else {
+        output[x] = input[x];
+      }
+    }
+  }
+  if (dims == 2) {
+    for(int y = 0; y < outputDims[0]; y++){
+      for (int x = 0; x < outputDims[1]; x++) {
+        int pos = y * outputDims[1] + x;
+        if(y < pad[0] || y > outputDims[0] - pad[2] ||  x < pad[1] || x > outputDims[1] - pad[3]){
+          output[pos] = 0.0f;
+        } else {
+          output[pos] = input[pos];
+        }
+      }
+    }
+  }
+  if (dims == 4) {
+    for(uint64_t w = 0; w < outputDims[0]; w++){
+      for(uint64_t z = 0; z < outputDims[1]; z++){
+        for(uint64_t y = 0; y < outputDims[2]; y++){
+          for (uint64_t x = 0; x < outputDims[3]; x++) {
+            int pos = ((w * outputDims[1] + z) * outputDims[2] + y) * outputDims[3] + x;
+            if(w < pad[0] || z < pad[1] || y < pad[2] || x < pad[3] || w >= outputDims[0] - pad[4] || z >= outputDims[1] - pad[5] || y >= outputDims[2] - pad[6] || x >= outputDims[3] - pad[7]){
+              output[pos] = 0.0f;
+            } else {
+              output[pos] = input[pos];
+            }
+          }
+        }
+      }
+    }
+  }
+
   return out;
 }

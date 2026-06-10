@@ -14,6 +14,7 @@ from skl2onnx.helpers.onnx_helper import save_onnx_model
 from onnx import numpy_helper
 from dataclasses import dataclass, fields
 from onnxOperators import BroadCastShape, ExtendShape
+from pprint import pprint
 
 import sys
 import numpy as np
@@ -167,12 +168,13 @@ class ConvArgs:
 
         tests.append(test)
 
+
 @dataclass
 class PadArgs:
     shape: list[int]
     pads: list[int]
 
-    def Create(self,linear=False):
+    def Create(self, linear=False):
         global tests
         testIndex = len(tests)
 
@@ -193,19 +195,15 @@ class PadArgs:
         test.outputTensor = make_tensor_value_info(
             GetOutputTrueName(testIndex), TensorProto.FLOAT, outputShape
         )
-        test.node = make_node(
-            "Pad",
-            inputs,
-            [GetOutputTrueName(testIndex)],
-            pads=pads
-        )
+        test.node = make_node("Pad", inputs, [GetOutputTrueName(testIndex)], pads=pads)
 
-        #print(test.node,test.tensors,test.outputTensor)
+        # print(test.node,test.tensors,test.outputTensor)
 
-        test.randomArrays = [None,None,None]
+        test.randomArrays = [None, None, None]
         test.randomArrays[0] = np.random.randn(*shape).astype(np.float32)
 
-        tests.append(test)        
+        tests.append(test)
+
 
 @dataclass
 class BinaryOpArgs:
@@ -573,9 +571,11 @@ def CreateBinaryOpTest(op, leftShape, rightShape, forcedOutputShape=None):
     global testList
     testList.append(BinaryOpArgs(op, leftShape, rightShape, forcedOutputShape))
 
-def CreatePad(shape,pads):
+
+def CreatePad(shape, pads):
     global testList
-    testList.append(PadArgs(shape,pads))
+    testList.append(PadArgs(shape, pads))
+
 
 def CreateUnaryOpTest(op, shape):
     global testList
@@ -872,6 +872,7 @@ class GenerateTestConfig:
     testBatchNormalization: int = 0
     testSoftmax: int = 0
     testLRN: int = 0
+    testPad: int = 0
     generateOneOfEach: int = 0
     generativeTests: int = 0
     testBig: int = 0
@@ -1089,7 +1090,7 @@ def GenerateSimpleTest(config):
 
     if testMatMul:
         # Matrices of sizes different than 2 are supported by ONNX by broadcasting the inner 2 dimensions
-        # TODO: While we are looking at graph optimizations do not want to deal with non 2 dims examples. 
+        # TODO: While we are looking at graph optimizations do not want to deal with non 2 dims examples.
         if False:
             CreateBinaryOpTest("MatMul", [2, 1, 3], [3, 4])
             CreateBinaryOpTest("MatMul", [2, 1, 1, 3], [3, 4])
@@ -1460,6 +1461,39 @@ def GenerateSimpleTest(config):
                 p.padding,
             )
 
+    if config.testPad:
+        CreatePad([3], [0, 0])
+        CreatePad([3], [1, 0])
+        CreatePad([3], [0, 1])
+        CreatePad([3], [1, 1])
+        CreatePad([3], [-1, 0])
+        CreatePad([3], [0, -1])
+        CreatePad([3], [-1, -1])
+
+        CreatePad([3, 3], [0, 0, 0, 0])
+        CreatePad([3, 3], [1, 0, 1, 0])
+        CreatePad([3, 3], [0, 1, 0, 1])
+        CreatePad([3, 3], [1, 1, 1, 1])
+        CreatePad([3, 3], [-1, 0, -1, 0])
+        CreatePad([3, 3], [0, -1, 0, -1])
+        CreatePad([3, 3], [-1, -1, -1, -1])
+
+        CreatePad([3, 3, 3], [0, 0, 0, 0, 0, 0])
+        CreatePad([3, 3, 3], [1, 0, 1, 0, 1, 0])
+        CreatePad([3, 3, 3], [0, 1, 0, 1, 0, 1])
+        CreatePad([3, 3, 3], [1, 1, 1, 1, 1, 1])
+        CreatePad([3, 3, 3], [-1, 0, -1, 0, -1, 0])
+        CreatePad([3, 3, 3], [0, -1, 0, -1, 0, -1])
+        CreatePad([3, 3, 3], [-1, -1, -1, -1, -1, -1])
+
+        CreatePad([3, 3, 3, 3], [0, 0, 0, 0, 0, 0, 0, 0])
+        CreatePad([3, 3, 3, 3], [1, 0, 1, 0, 1, 0, 1, 0])
+        CreatePad([3, 3, 3, 3], [0, 1, 0, 1, 0, 1, 0, 1])
+        CreatePad([3, 3, 3, 3], [1, 1, 1, 1, 1, 1, 1, 1])
+        CreatePad([3, 3, 3, 3], [-1, 0, -1, 0, -1, 0, -1, 0])
+        CreatePad([3, 3, 3, 3], [0, -1, 0, -1, 0, -1, 0, -1])
+        CreatePad([3, 3, 3, 3], [-1, -1, -1, -1, -1, -1, -1, -1])
+
 
 def MakeHashable(val):
     if type(val) == list:
@@ -1494,7 +1528,14 @@ def OutputFilesFromTestList(outputPath):
         for tensor, randomArray in zip(x.tensors, x.randomArrays):
             allInputNodesAndValuesInOrder.append([tensor, randomArray])
 
-    allNodes = [x.node for x in tests]
+    allNodes = []
+    for t in tests:
+        if isinstance(t.node,list):
+            allNodes += t.node 
+        else:
+            allNodes.append(t.node)
+
+    #allNodes = [x.node for x in tests]
     allInputNodes = [x[0] for x in allInputNodesAndValuesInOrder]
     allOutputNodes = [x.outputTensor for x in tests]
 
@@ -1554,6 +1595,191 @@ def OutputFilesFromTestList(outputPath):
 
     save_onnx_model(shaped, os.path.join(outputPath, "model.onnx"))
 
+def GenerateConvAfterConv():
+    global tests
+    testIndex = len(tests)
+
+    shape = [1,1,1,1]
+
+    firstKernel = [3,3]
+    secondKernel = [3,3]
+
+    firstKernelShape = [1, 1, firstKernel[0], firstKernel[1]]
+    secondKernelShape = [1, 1, secondKernel[0], secondKernel[1]]
+
+    firstPad = [1,1,1,1]
+    secondPad = [1,1,1,1]
+
+    test = Test()
+
+    # First Conv
+    firstInputTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    firstKernelTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 1), TensorProto.FLOAT, firstKernelShape
+    )
+
+    secondKernelTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 2), TensorProto.FLOAT, secondKernelShape
+    )
+
+    firstOutputName = f"TEMP_OUT_CONV_CONV_{testIndex}"
+    firstOutputTensor = make_tensor_value_info(
+        firstOutputName, TensorProto.FLOAT, [None] * len(shape)
+    )
+    firstInputs = [GetInputTrueName(testIndex, 0),GetInputTrueName(testIndex, 1)]
+
+    firstNode = make_node(
+        "Conv",
+        firstInputs,
+        [firstOutputName],
+        kernel_shape=firstKernel,
+        strides=[1,1],
+        dilations=[1,1],
+        group=1,
+        auto_pad="NOTSET",
+        pads=firstPad
+    )
+
+    secondOutputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, [None] * len(shape)
+    )
+
+    secondInputs = [firstOutputName,GetInputTrueName(testIndex, 2)]
+
+    secondNode = make_node(
+        "Conv",
+        secondInputs,
+        [GetOutputTrueName(testIndex)],
+        kernel_shape=secondKernel,
+        strides=[1,1],
+        dilations=[1,1],
+        group=1,
+        auto_pad="NOTSET",
+        pads=secondPad
+    )
+
+    randomArray0 = np.random.randn(*shape).astype(np.float32)
+    randomArray1 = np.random.randn(*firstKernelShape).astype(np.float32)
+    randomArray2 = np.random.randn(*secondKernelShape).astype(np.float32)
+
+    test.tensors = [firstInputTensor, firstKernelTensor, secondKernelTensor]
+    test.outputTensor = secondOutputTensor
+    test.node = [firstNode,secondNode]
+    test.randomArrays = [randomArray0, randomArray1 ,randomArray2]
+
+    tests.append(test)
+
+def GeneratePadAfterConv():
+    global tests
+    testIndex = len(tests)
+
+    shape = [1,1,6,6]
+
+    firstKernel = [2,2]
+    firstKernelShape = [1, 1, firstKernel[0], firstKernel[1]]
+    firstPad = [0,0,0,0]
+    strides = [3,3]
+
+    test = Test()
+
+    # First Conv
+    firstInputTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    firstKernelTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 1), TensorProto.FLOAT, firstKernelShape
+    )
+
+    firstOutputName = f"TEMP_OUT_PAD_CONV_{testIndex}"
+    firstOutputTensor = make_tensor_value_info(
+        firstOutputName, TensorProto.FLOAT, [None] * len(shape)
+    )
+    firstInputs = [GetInputTrueName(testIndex, 0),GetInputTrueName(testIndex, 1)]
+
+    firstNode = make_node(
+        "Conv",
+        firstInputs,
+        [firstOutputName],
+        kernel_shape=firstKernel,
+        strides=strides,
+        dilations=[1,1],
+        group=1,
+        auto_pad="NOTSET",
+        pads=firstPad
+    )
+
+    secondOutputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, [None] * len(shape)
+    )
+
+    secondInputs = [firstOutputName]
+
+    secondNode = make_node(
+        "Pad",
+        secondInputs,
+        [GetOutputTrueName(testIndex)],
+        pads=[0,0,2,2,0,0,2,2]
+    )
+
+    randomArray0 = np.random.randn(*shape).astype(np.float32)
+    randomArray1 = np.random.randn(*firstKernelShape).astype(np.float32)
+
+    test.tensors = [firstInputTensor, firstKernelTensor]
+    test.outputTensor = secondOutputTensor
+    test.node = [firstNode,secondNode]
+    test.randomArrays = [randomArray0, randomArray1]
+
+    tests.append(test)
+
+def GeneratePadAfterRelu():
+    global tests
+    testIndex = len(tests)
+
+    shape = [1,1,2,2]
+
+    test = Test()
+
+    # First Conv
+    firstInputTensor = make_tensor_value_info(
+        GetInputTrueName(testIndex, 0), TensorProto.FLOAT, shape
+    )
+
+    firstOutputName = f"TEMP_OUT_PAD_RELU{testIndex}"
+    firstOutputTensor = make_tensor_value_info(
+        firstOutputName, TensorProto.FLOAT, [None] * len(shape)
+    )
+    firstInputs = [GetInputTrueName(testIndex, 0)]
+
+    firstNode = make_node(
+        "Relu",
+        firstInputs,
+        [firstOutputName]    )
+
+    secondOutputTensor = make_tensor_value_info(
+        GetOutputTrueName(testIndex), TensorProto.FLOAT, [None] * len(shape)
+    )
+
+    secondInputs = [firstOutputName]
+
+    secondNode = make_node(
+        "Pad",
+        secondInputs,
+        [GetOutputTrueName(testIndex)],
+        pads=[0,0,2,2,0,0,2,2]
+    )
+
+    randomArray0 = np.random.randn(*shape).astype(np.float32)
+
+    test.tensors = [firstInputTensor]
+    test.outputTensor = secondOutputTensor
+    test.node = [firstNode,secondNode]
+    test.randomArrays = [randomArray0]
+
+    tests.append(test)
 
 def GenerateSoftmax(outputPath):
     config = GenerateTestConfig()
@@ -1608,11 +1834,20 @@ def GenerateTest(outputPath):
     config.testBatchNormalization = 0
     config.testSoftmax = 0
     config.testLRN = 0
+    config.testPad = 0
 
     config.testConv = 0
     config.generateOneOfEach = 0
     config.generativeTests = 0
     config.testBig = 0
+
+    #CreateConvolution(
+    #    [1, 1, 1, 1], 1, [3, 3], [1, 1], [1, 1], 1, False, "NOTSET", [1, 1, 1, 1]
+    #)
+
+    #GenerateConvAfterConv()
+    GeneratePadAfterConv()
+    #GeneratePadAfterRelu()
 
     if False:
         CreateConvolution(
@@ -1622,43 +1857,11 @@ def GenerateTest(outputPath):
             [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
         )
 
-    #CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
+    # CreateBinaryOpTest("MatMul", [2, 2], [2, 2])
 
-    CreatePad([3],[0,0])
-    CreatePad([3],[1,0])
-    CreatePad([3],[0,1])
-    CreatePad([3],[1,1])
-    CreatePad([3],[-1,0])
-    CreatePad([3],[0,-1])
-    CreatePad([3],[-1,-1])
-
-    CreatePad([3,3],[0,0,0,0])
-    CreatePad([3,3],[1,0,1,0])
-    CreatePad([3,3],[0,1,0,1])
-    CreatePad([3,3],[1,1,1,1])
-    CreatePad([3,3],[-1,0,-1,0])
-    CreatePad([3,3],[0,-1,0,-1])
-    CreatePad([3,3],[-1,-1,-1,-1])
-
-    CreatePad([3,3,3],[0,0,0,0,0,0])
-    CreatePad([3,3,3],[1,0,1,0,1,0])
-    CreatePad([3,3,3],[0,1,0,1,0,1])
-    CreatePad([3,3,3],[1,1,1,1,1,1])
-    CreatePad([3,3,3],[-1,0,-1,0,-1,0])
-    CreatePad([3,3,3],[0,-1,0,-1,0,-1])
-    CreatePad([3,3,3],[-1,-1,-1,-1,-1,-1])
-
-    CreatePad([3,3,3,3],[0,0,0,0,0,0,0,0])
-    CreatePad([3,3,3,3],[1,0,1,0,1,0,1,0])
-    CreatePad([3,3,3,3],[0,1,0,1,0,1,0,1])
-    CreatePad([3,3,3,3],[1,1,1,1,1,1,1,1])
-    CreatePad([3,3,3,3],[-1,0,-1,0,-1,0,-1,0])
-    CreatePad([3,3,3,3],[0,-1,0,-1,0,-1,0,-1])
-    CreatePad([3,3,3,3],[-1,-1,-1,-1,-1,-1,-1,-1])
-
-    CreateConvolution(
-        [1, 1, 3, 3], 1, [3, 3], [1, 1], [1, 1], 2, False, "NOTSET", [1, 1, 1, 1]
-    )
+    #CreateConvolution(
+    #    [1, 1, 3, 3], 1, [3, 3], [1, 1], [1, 1], 1, False, "NOTSET", [1, 1, 1, 1]
+    #)
 
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
@@ -1667,4 +1870,4 @@ def GenerateTest(outputPath):
 if __name__ == "__main__":
     GenerateTest(sys.argv[1])
 
-# Remember we are currently targetting version=7. 
+# Remember we are currently targetting version=7.

@@ -38,11 +38,6 @@ def BroadCastShape(op0, op1):
         res.append(max(a, b))
     return res
 
-
-def MakeAttrEnum(enumType, default):
-    return OnnxAttribute(OnnxAttributeType.ENUM, enumType, default)
-
-
 def MakeAttrBoundedString(allowedStringValues: list[str], default: str = None):
     return OnnxAttribute(OnnxAttributeType.BOUNDED_STRING, allowedStringValues, default)
 
@@ -163,11 +158,13 @@ def EmitMaxPool(emitter, op: Operation):
     pads = attr["pads"]
     padType = attr["auto_pad"]
 
+    padAsEnum = PaddingType[padType]
+    
     emitter.I32(dims)
     emitter.I32(len(kernel))
     emitter.I32(len(stride))
     emitter.I32(len(pads))
-    emitter.I32(padType.value)
+    emitter.I32(padAsEnum.value)
     emitter.I32Array(kernel)
     emitter.I32Array(stride)
     emitter.I32Array(pads)
@@ -205,6 +202,8 @@ def EmitConv(emitter, op: Operation):
     group = attr["group"]
     padType = attr["auto_pad"]
 
+    padAsEnum = PaddingType[padType]
+    
     featureMaps = op.inputDimensions[1][0]
 
     emitter.I32(dims)
@@ -214,7 +213,7 @@ def EmitConv(emitter, op: Operation):
     emitter.I32(len(stride))
     emitter.I32(len(dilations))
     emitter.I32(len(pads))
-    emitter.I32(padType.value)
+    emitter.I32(padAsEnum.value)
 
     emitter.I32Array(kernel)
     emitter.I32Array(stride)
@@ -416,6 +415,7 @@ def EmitGemm(emitter, op: Operation):
     emitter.I64Array(op.inputDimensions[1])
     emitter.I64Array(cShape)
 
+
 padStructure = [
     ["dims", "int"],
     ["mode", "int"],
@@ -425,24 +425,44 @@ padStructure = [
     ["pad", ["int64_t", "dims * 2"]],
 ]
 
-def EmitPad(emitter,op: Operation):
+def EmitPad(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
 
     emitter.I32(dims)
 
-    if(attr['mode'] == "constant"):
+    if attr["mode"] == "constant":
         emitter.I32(0)
-    if(attr['mode'] == "reflect"):
+    if attr["mode"] == "reflect":
         emitter.I32(1)
-    if(attr['mode'] == "edge"):
+    if attr["mode"] == "edge":
         emitter.I32(2)
 
-    emitter.F32(attr['value'])
+    emitter.F32(attr["value"])
 
     emitter.I64Array(op.inputDimensions[0])
     emitter.I64Array(op.outputDimensions[0])
-    emitter.I64Array(attr['pads'])
+    emitter.I64Array(attr["pads"])
+
+    
+fixPadStructure = [
+    ["dims", "int"],
+    ["constant", "float"],
+    ["outputDims", ["int64_t", "dims"]],
+    ["pad", ["int64_t", "dims * 2"]],
+]
+
+def EmitFixPad(emitter, op: Operation):
+    dims = len(op.outputDimensions[0])
+    attr = GetAttributesForOperator(op)
+
+    emitter.I32(dims)
+    emitter.F32(attr["value"])
+
+    emitter.I64Array(op.outputDimensions[0])
+    emitter.I64Array(attr["pads"])
+    
+
 
 def IsOperatorRegistered(opName: str):
     return opName in operatorNameToSpec
@@ -464,7 +484,7 @@ def EmitParameterList(emitter, op: Operation):
 
 
 convAttributes = {
-    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
+    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
     "dilations": MakeAttrAxisList(1),
     "group": MakeAttrInteger(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -473,7 +493,7 @@ convAttributes = {
 }
 
 maxPoolAttributes = {
-    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
+    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -483,7 +503,7 @@ maxPoolAttributes = {
 }
 
 averagePoolAttributes = {
-    "auto_pad": MakeAttrEnum(PaddingType, PaddingType.NOTSET),
+    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -521,9 +541,14 @@ gemmAttributes = {
 }
 
 padAttributes = {
-    "mode": MakeAttrBoundedString(["constant","reflect","edge"],"constant"),
+    "mode": MakeAttrBoundedString(["constant", "reflect", "edge"], "constant"),
     "pads": MakeAttrAxisPairList(0),
-    "value": MakeAttrFloat(0.0)
+    "value": MakeAttrFloat(0.0),
+}
+
+fixPadAttributes = {
+    "pads": MakeAttrAxisPairList(0),
+    "value": MakeAttrFloat(0.0),
 }
 
 dropoutAttributes = {"ratio": MakeAttrFloat(0.5)}
@@ -629,4 +654,12 @@ operatorNameToSpec["Gemm"] = OnnxOperatorSpec(
 
 operatorNameToSpec["Pad"] = OnnxOperatorSpec(
     "Pad", 13, EmitPad, padStructure, padAttributes, False
+)
+
+operatorNameToSpec["FixPad"] = OnnxOperatorSpec(
+    "FixPad", 254, EmitFixPad, fixPadStructure, fixPadAttributes, False
+)
+
+operatorNameToSpec["NIL"] = OnnxOperatorSpec(
+    "NIL", 255, lambda *args: None, [], {}, False
 )
