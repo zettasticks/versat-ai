@@ -303,6 +303,10 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
+  if(inputX == output){
+    versat_printf("INPLACE RELU\n");
+  }
+  
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
   int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
@@ -775,6 +779,10 @@ void *Software_Pad(void *inA, void *out, int index, PadInfo *info) {
 
 void *Software_FixPad(void *inA, void *out, int index, FixPadInfo *info) {
   int dims = info->dims;
+
+  if(inA == out){
+    versat_printf("INPLACE FIXPAD\n");
+  }
   
   int64_t *outputDims = VERSAT_FixPadInfo_outputDims(info);
   int64_t *pad = VERSAT_FixPadInfo_pad(info);

@@ -26,6 +26,11 @@ from onnx import __version__, IR_VERSION
 from onnx.defs import onnx_opset_version
 from onnx import numpy_helper
 
+COLOR_BASE = '\33[0m'
+COLOR_RED = '\33[31m'
+COLOR_GREEN = '\33[32m'
+COLOR_BLUE = '\33[34m'
+
 
 # Nodes have either inputs from other nodes or initializers, which are the constant values embedded in the model.
 # If a given node input is a tensor then it is not an input and vice versa.
@@ -148,6 +153,9 @@ def IndexOfNodeThatProducesOutput(cModel: Model, outputName):
             return op.nodeIndex
     return None
 
+def PrintModelSimple(cModel):
+    for i, c in enumerate(cModel.operations):
+        print(i, c.opName, c.inputDimensions)
 
 def GenerateModelFromOnnxModel(onnxModel):
     shaped = shape_inference.infer_shapes(onnxModel)
@@ -238,6 +246,7 @@ def GenerateModelFromOnnxModel(onnxModel):
                 asNpArray = onnx.numpy_helper.to_array(tensor)
                 source = DataSource(DataSourceType.INITIALIZER, name)
                 source.data = asNpArray
+                source.tensorDims = [int(x) for x in asNpArray.shape]
                 source.index = cModel.NextInitializerIndex()
             elif modelInput:
                 source = DataSource(DataSourceType.MODEL_INPUT, name)
@@ -609,20 +618,25 @@ def GenerateDebug(
                     inp.sourceType = DataSourceType.INITIALIZER
                     inp.index = cModel.NextInitializerIndex()
 
+    # Compresses node indexes to align with array indexes. (cModel.operations[N].nodeIndex == N for all nodes)
+    # Returns mapping from old index to new index
     def CompressGraphIndexes(cModel):
-        mapIndexToRealIndex = {}
+        mapOldIndexToNew = {}
         for i, op in enumerate(cModel.operations):
-            mapIndexToRealIndex[op.nodeIndex] = i
+            mapOldIndexToNew[op.nodeIndex] = i
             op.nodeIndex = i
         for op in cModel.operations:
             for inp in op.inputs:
                 if inp.sourceType == DataSourceType.NODE_INPUT:
-                    inp.index = mapIndexToRealIndex[inp.index]
+                    inp.index = mapOldIndexToNew[inp.index]
+
+        return mapOldIndexToNew
 
     # Very simple DFG algorithm. Should be fast enough unless we start processing 100+ nodes graphs
+    # Returns mapping from old index to new index
     def ReorganizeGraph(cModel):
         # Compress before DFG
-        CompressGraphIndexes(cModel)
+        oldToCompressed = CompressGraphIndexes(cModel)
 
         allOutputNodes = []
         nodeLevel = [None] * len(cModel.operations)
@@ -665,125 +679,263 @@ def GenerateDebug(
                     dfgSortedList.append(cModel.operations[i])
 
         cModel.operations = dfgSortedList
-                    
-                    
+        compressedToSorted = CompressGraphIndexes(cModel)
+
+        finalMapping = {}
+        for x in oldToCompressed:
+            finalMapping[x] = compressedToSorted[oldToCompressed[x]]
+            
+        return finalMapping
+            
     # Graph based optimizations can be put here
     # Any rule that requires 3 specific nodes is problematic.
     # We want rules that have at most 2 specific nodes otherwise becomes
-    # to constrain.
+    # hard to apply.
     # We also want to push stuff towards inputs as much as possible.
     # The closer it is to initializers and whatnot the easier it will
-    # be to precompute.
+    # be to fold.
 
-    # Its becoming really weird to preserve stuff as much as possible.
-    # While it is easy to change the edges easily, the dimensions
-    # and the correct data however is problematic.
-    
+    print("Before optimization:\n")
     for i, c in enumerate(cModel.operations):
         print(i, c.opName, c.inputDimensions)
-    
-    # MARK
-    if 1:
-        # RULE: Conv(NotSetPadding) := Pad -> Conv(NoPadding)
-        if 1:
-            toAdd = []
+    print("\n\n")
 
-            for op in cModel.operations:
-                if op.opName == "Conv":
-                    attr = GetAttributesForOperator(op)
-                    if attr["auto_pad"] == "NOTSET" and NotAllZeros(attr["pads"]):
-                        toAdd.append(op)
+    while 1:
+        nodesChanged = []
+        ruleFound = None
+        terminateEarly = False
 
-            for op in toAdd:
-                attr = GetAttributesForOperator(op)
+        # Find first applicable rule
+        # We probably wanna reverse the direction, at least for some of the rules.
+        for op in cModel.operations:
+            attr = GetAttributesForOperator(op)
+            inputNode = cModel.GetInputNode(op,0)
+            
+            if True and op.opName == "Conv":
+                if attr["auto_pad"] == "NOTSET" and NotAllZeros(attr["pads"]):
+                    ruleFound = OptimizationRules.EXTRACT_CONV_PAD
+                    nodesChanged.append(op)
+                    break
 
-                truePads = [0, 0] + attr["pads"][:2] + [0, 0] + attr["pads"][2:]
-
-                newOp = cModel.AddOperation("Pad", 1)
-                newOp.parsedAttributes["pads"] = truePads
-
-                op.parsedAttributes["pads"] = [0] * len(attr["pads"])
-
-                cModel.InsertInTheMiddle(op, 0, newOp, 0)
-
-                #op.inputDimensions[0] = newOp.outputDimensions[0]
-                #op.parsedAttributes["pads"] = [0] * len(attr["pads"])
-        
-        # Pad -> Pad := AddedPad
-
-        # N -> Pad := Pad -> N
-        # For now we only care about Relu
-        if 1:
-            for op in cModel.operations:
-                padNode = op
-                reluNode = cModel.GetInputNode(padNode,0)
-
-                if reluNode.opName == "Relu" and padNode.opName == "Pad":
-                    cModel.Swap(reluNode,padNode)
-                    
-        # Conv has 2 inputs. Pad only has 1 input. Easier to move pad around.
-        # Conv -> Pad := Pad -> Conv -> FixupPad
-        # Conv cannot contain any type of padding
-        if 0:
-            toRemove = []
-            for op in cModel.operations:
-                padNode = op
-                convNode = cModel.GetInputNode(padNode,0)
-
-                if convNode.opName == "Conv" and padNode.opName == "Pad":
-                    attr = GetAttributesForOperator(convNode)
-                    if attr["auto_pad"] == "NOTSET" and AllZeros(attr["pads"]):
-                        # Lets start without the FixupPad stuff.
-                        newOp = cModel.AddOperation("Pad", 1)
-
-                        newOp.parsedAttributes = deepcopy(padNode.parsedAttributes)
-                        newOp.parsedAttributes["pads"][2] *= attr["strides"][0]
-                        newOp.parsedAttributes["pads"][3] *= attr["strides"][1]
-                        newOp.parsedAttributes["pads"][6] *= attr["strides"][0]
-                        newOp.parsedAttributes["pads"][7] *= attr["strides"][1]
-
-                        fixPad = cModel.AddOperation("FixPad",1)
-                        fixPad.parsedAttributes = deepcopy(padNode.parsedAttributes)
-
-                        cModel.InsertInTheMiddle(convNode,0,newOp,0)
-                        cModel.InsertAfter(convNode,fixPad)
-
-                        toRemove.append(padNode)
-                    
-            for op in toRemove:
-                cModel.RemoveOperation(op)
+            if False and op.opName == "FixPad":
+                if inputNode.opName == "FixPad":
+                    nodesChanged.append(op)
+                    nodesChanged.append(inputNode)
+                    ruleFound = OptimizationRules.JOIN_FIXPADS
+                    break
                 
-        # RULE: Data,Data -> MatMul := Data,(Data -> Transpose) -> MatMul(bTransposed = True)
-        if 0:
-            toAdd = []
-            for op in cModel.operations:
-                if op.opName == "MatMul":
-                    attr = GetAttributesForOperator(op)
+            if False and op.opName == "Pad":
+                if inputNode.opName == "Pad":
+                    nodesChanged.append(op)
+                    nodesChanged.append(inputNode)
+                    ruleFound = OptimizationRules.JOIN_PADS
+                    break
 
-                    if attr["isBTransposed"] == 0:
-                        toAdd.append(op)
+                if inputNode.opName == "FixPad":
+                    nodesChanged.append(op)
+                    nodesChanged.append(inputNode)
+                    ruleFound = OptimizationRules.PUSH_PAD_OVER_FIXPAD
+                    break
+                
+                if inputNode.opName == "Relu":
+                    nodesChanged.append(op)
+                    nodesChanged.append(inputNode)
+                    ruleFound = OptimizationRules.PUSH_PAD_TOWARDS_INPUTS
+                    break
 
-            for op in toAdd:
-                newOp = cModel.AddOperation("Transpose", 1)
-                # TODO: Need to adapt this to the shape of the data. Cannot assume simple 2D shape
-                newOp.parsedAttributes["perm"] = (1, 0)
-                cModel.InsertInTheMiddle(op, 1, newOp, 0)
-                op.parsedAttributes["isBTransposed"] = 1
+                if inputNode.opName == "Conv":
+                    nodesChanged.append(op)
+                    nodesChanged.append(inputNode)
+                    ruleFound = OptimizationRules.PUSH_PAD_OVER_CONV
+                    break
 
-        # RULE: Init -> Transpose := Init(Transposed)
-        if 0:
-            toRemove = []
-            for op in cModel.operations:
-                if op.opName == "Transpose":
-                    if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
-                        attr = GetAttributesForOperator(op)
-                        op.inputs[0].data = np.transpose(
-                            op.inputs[0].data, axes=attr["perm"]
-                        )
-                        toRemove.append(op)
+            if False and op.opName == "MatMul":
+                if attr["isBTransposed"] == 0:
+                    nodesChanged.append(op)
+                    ruleFound = OptimizationRules.MATMUL_TRANSPOSE
+                    break
 
-            for op in toRemove:
-                cModel.RemoveOperation(op)
+            # TODO: Giving error when enabled.
+            #       And the problem appears to be in the validity data.
+            if False and op.opName == "Transpose":
+                if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
+                    nodesChanged.append(op)
+                    ruleFound = OptimizationRules.FOLD_TRANSPOSE
+                    break
+
+        op = None
+                    
+        if ruleFound is None:
+            break
+
+        changedNodesIndexes = [x.nodeIndex for x in nodesChanged]
+
+        # Apply rule
+        print(f"Gonna apply rule: {ruleFound}")
+        
+        addedNodesIndexes = []
+        nodesToRemove = []
+        ruleApplied = False
+
+        node = nodesChanged[0]
+        attr = GetAttributesForOperator(node)
+
+        inputNode = None
+        inputAttr = None
+        
+        if(len(nodesChanged) > 1):
+            inputNode = nodesChanged[1]
+            inputAttr = GetAttributesForOperator(inputNode)
+
+        def PrintSimpleNodeInfo(i,c: Operation):
+            inputs = [x.index for x in c.inputs if x.sourceType == DataSourceType.NODE_INPUT]
+
+            print(i,inputs, c.nodeIndex, c.opName, c.inputDimensions, c.outputDimensions)
+            
+        print("BEFORE:\n")
+        for i, c in enumerate(cModel.operations):
+            if c.nodeIndex == node.nodeIndex or inputNode and c.nodeIndex == inputNode.nodeIndex:
+                print(COLOR_GREEN,sep='',end='')
+                PrintSimpleNodeInfo(i,c)
+                print(COLOR_BASE,sep='',end='')
+            else:
+                PrintSimpleNodeInfo(i,c)
+            
+        if ruleFound == OptimizationRules.EXTRACT_CONV_PAD:
+            ruleApplied = True
+
+            newOp = cModel.AddOperation("Pad", 1)
+            addedNodesIndexes.append(newOp.nodeIndex)
+
+            truePads = [0, 0] + attr["pads"][:2] + [0, 0] + attr["pads"][2:]
+            newOp.parsedAttributes["pads"] = truePads
+            node.parsedAttributes["pads"] = [0] * len(attr["pads"])
+
+            cModel.UpdateNodeData(node)
+            
+            cModel.InsertBefore(node, 0, newOp, 0)
+
+            terminateEarly = True
+
+        if ruleFound == OptimizationRules.PUSH_PAD_TOWARDS_INPUTS:
+            ruleApplied = True
+            cModel.Swap(node,inputNode)
+
+        if ruleFound == OptimizationRules.PUSH_PAD_OVER_CONV:
+            ruleApplied = True
+
+            padNode = node
+            convNode = inputNode
+
+            padCorrectData = deepcopy(padNode.correctOutputData)
+            
+            # Lets start without the FixupPad stuff.
+            newOp = cModel.AddOperation("Pad", 1)
+
+            newOp.parsedAttributes = deepcopy(padNode.parsedAttributes)
+            newOp.parsedAttributes["pads"][2] *= inputAttr["strides"][0]
+            newOp.parsedAttributes["pads"][3] *= inputAttr["strides"][1]
+            newOp.parsedAttributes["pads"][6] *= inputAttr["strides"][0]
+            newOp.parsedAttributes["pads"][7] *= inputAttr["strides"][1]
+
+            fixPad = cModel.AddOperation("FixPad",1)
+            fixPad.parsedAttributes = deepcopy(padNode.parsedAttributes)
+
+            cModel.InsertBefore(convNode,0,newOp,0)
+            cModel.InsertAfter(convNode,fixPad)
+
+            fixPadCorrectData = fixPad.correctOutputData
+
+            # For some reason this is failing for a smaller rtol
+            # It is kinda weird but is hard to see what is causing this. Would need to
+            # craft a custom smaller test to make it easier to see what is happening.
+            np.testing.assert_allclose(padCorrectData,fixPadCorrectData, rtol=1e-03,verbose=True)
+            
+            nodesToRemove.append(padNode)
+            addedNodesIndexes.append(newOp.nodeIndex)
+            addedNodesIndexes.append(fixPad.nodeIndex)
+
+        if ruleFound == OptimizationRules.JOIN_PADS:
+            ruleApplied = True
+
+            for i,x in enumerate(node.parsedAttributes["pads"]):
+                inputNode.parsedAttributes["pads"][i] += x
+
+            cModel.UpdateNodeData(inputNode)
+            
+            nodesToRemove.append(node)
+
+        if ruleFound == OptimizationRules.PUSH_PAD_OVER_FIXPAD:
+            ruleApplied = True
+
+            for i,x in enumerate(node.parsedAttributes["pads"]):
+                inputNode.parsedAttributes["pads"][i] += x
+
+            cModel.Swap(node,inputNode)
+
+        if ruleFound == OptimizationRules.JOIN_FIXPADS:
+            ruleApplied = True
+
+            for i,x in enumerate(node.parsedAttributes["pads"]):
+                inputNode.parsedAttributes["pads"][i] = max(inputNode.parsedAttributes["pads"][i],x)
+
+            cModel.UpdateNodeData(inputNode)
+            
+            nodesToRemove.append(node)
+
+            
+        if ruleFound == OptimizationRules.MATMUL_TRANSPOSE:
+            ruleApplied = True
+
+            newOp = cModel.AddOperation("Transpose", 1)
+
+            # TODO: Need to adapt this to the shape of the data. Cannot assume simple 2D shape
+            newOp.parsedAttributes["perm"] = [1, 0]
+            node.parsedAttributes["isBTransposed"] = 1
+
+            cModel.InsertBefore(node, 1, newOp, 0)
+
+            addedNodesIndexes.append(newOp.nodeIndex)
+
+        if ruleFound == OptimizationRules.FOLD_TRANSPOSE:
+            ruleApplied = True
+
+            node.inputs[0].data = np.transpose(
+                node.inputs[0].data, axes=attr["perm"]
+            )
+            nodesToRemove.append(node)
+            
+        if not ruleApplied:
+            assert False and "Rule does not contain implementation"
+            
+        toRemoveIndexes = {x.nodeIndex for x in nodesToRemove}
+
+        for node in nodesToRemove:
+            cModel.RemoveOperation(node)
+
+        oldIndexToNew = ReorganizeGraph(cModel)
+
+        # NOTE: Since we could remove nodes it might be possible that they no longer appear in the mapping
+        changedNodes = {oldIndexToNew.get(x,-1):True for x in changedNodesIndexes}
+        addedNodes = {oldIndexToNew.get(x,-1):True for x in addedNodesIndexes}
+
+        print("\nAFTER:\n")
+        for i, c in enumerate(cModel.operations):
+            if i in changedNodes:
+                print(COLOR_GREEN,sep='',end='')
+                PrintSimpleNodeInfo(i,c)
+                print(COLOR_BASE,sep='',end='')
+            elif i in addedNodes:
+                print(COLOR_BLUE,sep='',end='')
+                PrintSimpleNodeInfo(i,c)
+                print(COLOR_BASE,sep='',end='')
+            else:
+                PrintSimpleNodeInfo(i,c)
+
+        print("\n\n")
+
+        if terminateEarly:
+            break
 
     print("After optimize")
 
@@ -796,9 +948,23 @@ def GenerateDebug(
 
     ReorganizeGraph(cModel)
 
-    # Compress indexes back into aligning with array index now that everything is ordered again
-    CompressGraphIndexes(cModel)
+    LEFT HERE - For some reason if we only have 3 operations then
+                everything works fine but having 4 operations breaks 4
+                and 3. The most likely explanation is that we are
+                overwritting memory somewhere at runtime or that any
+                of the memory computations gets messed up.
+                Inplace optimization is disabled and this only occurs with the
+                proper data flow and the conv padding optimization.
 
+                The quickest way of progressing is checking what data the
+                runtime is getting, comparing as we change things in here
+                and then going from there. It might be possible that
+                we are computing memory wrong from some out-of-sync
+                data or that the runtime is overwritting something
+                or a problem in the emitter.
+
+    cModel.operations = cModel.operations[0:4]
+    
     # Compress initializers
     initializerMaxIndex = 0
     for op in cModel.operations:
@@ -861,11 +1027,15 @@ def GenerateDebug(
 
     packedCorrectData = PackMultipleArrays(compactCorrectData)
 
-    for i, c in enumerate(cModel.operations):
-        print(i, c.opName, c.inputDimensions)
+    PrintModelSimple(cModel)
 
+    # All nodes get their data from the valid data array
+    # Basically any error in any node does not propagate to other nodes (only for validation purposes)
     useValidDataAsInput = False
     debugging = True
+    if not debugging:
+        useValidDataAsInput = False
+    
     correctDataSize = 0
     inputSize = 0
 
@@ -874,8 +1044,6 @@ def GenerateDebug(
     if debugging:
         inputSize = len(cModel.modelInputs)
 
-    #pprint(cModel)
-        
     totalInputSize = 0
     inputOffsets = [0]
     inputSizes = [0]

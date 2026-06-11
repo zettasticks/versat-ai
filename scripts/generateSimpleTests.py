@@ -1678,10 +1678,10 @@ def GeneratePadAfterConv():
 
     shape = [1,1,6,6]
 
-    firstKernel = [2,2]
+    firstKernel = [3,3]
     firstKernelShape = [1, 1, firstKernel[0], firstKernel[1]]
-    firstPad = [0,0,0,0]
-    strides = [3,3]
+    firstPad = [4,1,5,2]
+    strides = [2,2]
 
     test = Test()
 
@@ -1722,7 +1722,7 @@ def GeneratePadAfterConv():
         "Pad",
         secondInputs,
         [GetOutputTrueName(testIndex)],
-        pads=[0,0,2,2,0,0,2,2]
+        pads=[0,0,2,2,0,0,4,4]
     )
 
     randomArray0 = np.random.randn(*shape).astype(np.float32)

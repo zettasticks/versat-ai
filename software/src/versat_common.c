@@ -1314,25 +1314,6 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 
 #define PRINT_HELP 0
 
-#if PRINT_HELP
-  float **inputsAsFloats = (float **)inputs;
-  float *modelMemAsFloat = (float *)modelMemory;
-  float *correctInputAsFloat = (float *)correctInput;
-
-  versat_printf("Inputs\n");
-  for (int i = 0; i < 4; i++) {
-    versat_printf("%f\n", inputsAsFloats[0][i]);
-  }
-  for (int i = 0; i < 4; i++) {
-    versat_printf("%f\n", inputsAsFloats[1][i]);
-  }
-
-  versat_printf("Correct data\n");
-  for (int i = 0; i < 8; i++) {
-    versat_printf("%f\n", correctInputAsFloat[i]);
-  }
-#endif
-
   InferenceState *state = &stateInst;
 
   versat_printf("VersatSoft\n");

@@ -53,7 +53,6 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
     # Layers are just a list of ordered ranges. No point making a proper struct for such simple use case
     totalCycles = max([x.lastCycle for x in memoryAllocations])
     layers: list[list[int | int]] = [[] for x in range(totalCycles)]
-    offsets: list[int] = [0] * (totalCycles - 1)
     totalMemoryNeeded = 0
     for index, memAlloc in enumerate(memoryAllocations):
         size = memAlloc.amount
@@ -73,29 +72,28 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
 
             if canFit:
                 foundFit = True
-                offsets[index] = currentPoint
+                memAlloc.offset = currentPoint
                 totalMemoryNeeded = max(totalMemoryNeeded, currentPoint + size)
                 for layer in range(memAlloc.firstCycle + 1, memAlloc.lastCycle):
                     AddRegion(layer, currentPoint, size)
 
-    return totalMemoryNeeded, offsets
-
-
-def IndexOfNodesThatUseOutput(cModel, outputName):
-    indexes = []
-    for index, op in enumerate(cModel.operations):
-        for inp in op.inputs:
-            if inp.name == outputName:
-                indexes.append(index)
-    return indexes
-
+    return totalMemoryNeeded
 
 def CalculateMemoryAllocations(cModel):
-    memoryAllocations = []
-    for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
+    # Certain operators can work directly on the input memory instead of
+    # having to copy everything into an output region.
+    # This only works if the input is not used by anyone else meaning that
+    # there are restrictions. Also only certain ops use this.
+    useInplaceOptimization = False
 
-        if not indexes:
+    memoryAllocations = []
+    indexesToMemoryAllocation = {}
+    inplaceIndexes = []
+    for index, c in enumerate(cModel.operations):
+        outputPorts = cModel.GetOutputNodesAndPortIndexes(c,0)
+        indexes = [x[0].nodeIndex for x in outputPorts]
+
+        if len(indexes) == 0:
             continue
         else:
             lastCycle = max(indexes)
@@ -103,44 +101,64 @@ def CalculateMemoryAllocations(cModel):
         # In order to prevent operations that write on top of their input
         lastCycle += 1
 
-        # Very simple memory calculation, might be wrong, especially if we decide to add padding and stuff like that. Need to make this more customizable.
-        # TODO: We are also not handling the fact that some layers might support different tensor types.
-        memoryRequired = 4  # Size of a float
-        for dim in c.outputDimensions:
-            memoryRequired *= TensorSize(dim)
+        # If node supports inplace
+        # TODO: More generic way of doing this. Need a "supportsInplace" in the operatorSpec.
+        if useInplaceOptimization and (c.opName == "Relu" or c.opName == "FixPad") and c.inputs[0].sourceType == DataSourceType.NODE_INPUT:
+            nodeIndex = c.inputs[0].index
 
-        memoryAllocations.append(MemoryAllocation(index, lastCycle, memoryRequired))
+            outputs = cModel.GetOutputNodesAndPortIndexes(cModel.operations[nodeIndex],0)
+            # The logic is not complete but should suffice for now.
+            # We need to get more complex graphs to experiment in here
+            if len(outputs) == 1:
+                memoryAllocation = indexesToMemoryAllocation[nodeIndex]
+                memoryAllocation.lastCycle = max(memoryAllocation.lastCycle,lastCycle)
 
-    totalTempMemoryNeeded, offsets = CalculateGreedyMemoryAllocationOffset(
-        memoryAllocations
-    )
-
-    # Embedded does not support unaligned memory. Need to be very carefully with all the allocations that are just passed directly to the embedded this way
-    for x in offsets:
-        assert x % 4 == 0
-
-    cModel.tempMemoryNeeded = totalTempMemoryNeeded
-
-    ptr = 0
-    for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
-
-        if not indexes:
-            continue
-
-        c.outputMemoryAddress = MemoryLocation(offsets[ptr], MemoryType.TEMP)
-        ptr += 1
-
-    totalOutputMemory = 0
-    outputOffsets = []
-    for index, c in enumerate(cModel.operations):
-        indexes = IndexOfNodesThatUseOutput(cModel, c.outputName)
-
-        if indexes:
+                indexesToMemoryAllocation[index] = memoryAllocation
+                inplaceIndexes.append(index)
+                
             continue
 
         # TODO: Support different tensor types and whatnot.
-        memoryRequired = 1  # Size of a float
+        memoryRequired = 1
+        for dim in c.outputDimensions:
+            memoryRequired *= TensorSize(dim)
+
+        mem = MemoryAllocation(index, lastCycle, memoryRequired)
+        indexesToMemoryAllocation[index] = mem
+        memoryAllocations.append(mem)
+        
+    totalTempMemoryNeeded = CalculateGreedyMemoryAllocationOffset(
+        memoryAllocations
+    )
+
+    cModel.tempMemoryNeeded = totalTempMemoryNeeded
+
+    for mem in memoryAllocations:
+        # Embedded does not support unaligned memory. Need to be very
+        # carefully with all the allocations that are just passed directly
+        # to the embedded this way
+        assert mem.offset % 4 == 0
+
+        op = cModel.operations[mem.firstCycle]
+        op.outputMemoryAddress = MemoryLocation(mem.offset, MemoryType.TEMP)
+
+    for index in inplaceIndexes:
+        op = cModel.operations[index]
+        mem = indexesToMemoryAllocation[index]
+        op.outputMemoryAddress = MemoryLocation(mem.offset, MemoryType.TEMP)
+        
+    totalOutputMemory = 0
+    outputOffsets = []
+    for index, c in enumerate(cModel.operations):
+        outputPorts = cModel.GetOutputNodesAndPortIndexes(c,0)
+        indexes = [x[0].nodeIndex for x in outputPorts]
+
+        # Node is graph output
+        if len(indexes) != 0:
+            continue
+
+        # TODO: Support different tensor types and whatnot.
+        memoryRequired = 1
         for dim in c.outputDimensions:
             memoryRequired *= TensorSize(dim)
 
@@ -148,4 +166,12 @@ def CalculateMemoryAllocations(cModel):
         c.outputMemoryAddress = MemoryLocation(totalOutputMemory, MemoryType.OUTPUT)
         totalOutputMemory += memoryRequired
 
+    if 0:
+        for index, c in enumerate(cModel.operations):
+            print(f"Node: {c.nodeIndex}, Type: {c.opName}")
+            for i,inp in enumerate(c.inputs):
+                if inp.sourceType == DataSourceType.NODE_INPUT:
+                    print(f"  Input {i} mem:",cModel.operations[inp.index].outputMemoryAddress.offset)
+            print(f"  Output mem:",c.outputMemoryAddress.offset)
+        
     cModel.outputMemoryNeeded = totalOutputMemory

@@ -590,9 +590,9 @@ def GetAllOperatorSpecs():
 
 # name,emitFunction,attributesDict,supportedByVersat,broadcastType
 operatorNameToSpec = {}
-operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", 0, EmitAdd, addStructure, [], True)
+operatorNameToSpec["Add"] = OnnxOperatorSpec("Add", 0, EmitAdd, addStructure, {}, True)
 operatorNameToSpec["Relu"] = OnnxOperatorSpec(
-    "Relu", 1, EmitRelu, reluStructure, [], True
+    "Relu", 1, EmitRelu, reluStructure, {}, True
 )
 operatorNameToSpec["MaxPool"] = OnnxOperatorSpec(
     "MaxPool",
@@ -611,7 +611,7 @@ operatorNameToSpec["Conv"] = OnnxOperatorSpec(
     "Conv", 4, EmitConv, convStructure, convAttributes, True
 )
 operatorNameToSpec["Reshape"] = OnnxOperatorSpec(
-    "Reshape", 5, EmitReshape, reshapeStructure, [], True
+    "Reshape", 5, EmitReshape, reshapeStructure, {}, True
 )
 operatorNameToSpec["MatMul"] = OnnxOperatorSpec(
     "MatMul", 6, EmitMatMul, matMulStructure, matMulAttributes, True
