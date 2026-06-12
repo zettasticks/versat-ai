@@ -22,8 +22,6 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int *strideDims = VERSAT_ConvInfo_strideDims(info);
   int *padsDims = VERSAT_ConvInfo_padsDims(info);
 
-#define NHWC 1
-
 #if 0
   versat_printf("%llx %llx %llx %llx\n",inputDims[0],inputDims[1],inputDims[2],inputDims[3]);
   versat_printf("%llx %llx %llx %llx\n",outputDims[0],outputDims[1],outputDims[2],outputDims[3]);
@@ -79,11 +77,11 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int inH = inputDims[2];
   int inW = inputDims[3];
 
-#if NHWC
-  // inChannels = inputDims[3];
-  // inH = inputDims[1];
-  // inW = inputDims[2];
-#endif
+  if (info->isNHWC) {
+    inChannels = inputDims[3];
+    inH = inputDims[1];
+    inW = inputDims[2];
+  }
 
 #if PRINT
   versat_printf("IN(NCHW): %d %d %d %d\n", batches, inChannels, inH, inW);
@@ -103,18 +101,11 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int outH = outputDims[2];
   int outW = outputDims[3];
 
-  /*
-    Important. As it stands the input dimensions of the convolution remain the
-    exact same, the channel appears first regardless of NCHW or NHWC. However
-    the output changes. This is because the onnx script is starting to break a
-    little after a bunch of changes and we are now riding it out as far as it
-    goes.
-   */
-#if NHWC
-  outChannels = outputDims[3];
-  outH = outputDims[1];
-  outW = outputDims[2];
-#endif
+  if (info->isNHWC) {
+    outChannels = outputDims[3];
+    outH = outputDims[1];
+    outW = outputDims[2];
+  }
 
 #if PRINT
   versat_printf("OUT(NCHW): %d %d %d %d\n", 1, outChannels, outH, outW);
@@ -160,11 +151,11 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
     int outDim2Size = outDim1Size * outH;
     int outDim3Size = outDim2Size * outChannels;
 
-#if NHWC
-    outDim1Size = outChannels;
-    outDim2Size = outDim1Size * outW;
-    outDim3Size = outDim2Size * outH;
-#endif
+    if (info->isNHWC) {
+      outDim1Size = outChannels;
+      outDim2Size = outDim1Size * outW;
+      outDim3Size = outDim2Size * outH;
+    }
 
     for (int batch = 0; batch < batches; batch++) {
       for (int g = 0; g < group; g++) {
@@ -180,10 +171,10 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
               int outPos = batch * outDim3Size + outC * outDim2Size +
                            outY * outDim1Size + outX;
 
-#if NHWC
-              outPos = batch * outDim3Size + outY * outDim2Size +
-                       outX * outDim1Size + outC;
-#endif
+              if (info->isNHWC) {
+                outPos = batch * outDim3Size + outY * outDim2Size +
+                         outX * outDim1Size + outC;
+              }
 
 #if PRINT
               versat_printf("Out: %d\n", outPos);
@@ -215,11 +206,11 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
                          trueY) *
                             inW +
                         trueX;
-#if NHWC
-                    inputIn =
-                        ((batch * inH + trueY) * inW + trueX) * inChannels +
-                        (inC + g * inChannelsPerGroup);
-#endif
+                    if (info->isNHWC) {
+                      inputIn =
+                          ((batch * inH + trueY) * inW + trueX) * inChannels +
+                          (inC + g * inChannelsPerGroup);
+                    }
                     float feature = input[inputIn];
 
 #if PRINT
@@ -595,6 +586,12 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
     BW = inputBDims[BS - 1];
   }
 
+  if (info->isBTransposed) {
+    int temp = BW;
+    BW = BH;
+    BH = temp;
+  }
+
   int OS = info->numberOutputDims;
   int OH;
   int OW;
@@ -650,6 +647,11 @@ void *Software_Softmax(void *input, void *output, int index,
 
   int64_t *inputDims = VERSAT_SoftmaxInfo_inputDims(info);
 
+  for(int i = 0; i < 10; i++){
+    float* a = (float*) input;
+    versat_printf("%f\n",a[i]);
+  }
+  
   // Axis are normalized here, no need to handle negative axis after this point
   int axis = info->axis;
   if (axis < 0) {
@@ -701,6 +703,11 @@ void *Software_Softmax(void *input, void *output, int index,
     }
   }
 
+  for(int i = 0; i < 10; i++){
+    float* a = (float*) output;
+    versat_printf("%f\n",a[i]);
+  }
+  
   return output;
 }
 

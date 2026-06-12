@@ -182,6 +182,7 @@ convStructure = [
     ["strideSize", "int"],
     ["dilationsSize", "int"],
     ["padsSize", "int"],
+    ["isNHWC", "int"],
     ["padding", "PaddingType"],
     ["kernelDims", ("int", "kernelSize")],
     ["strideDims", ("int", "strideSize")],
@@ -203,14 +204,9 @@ def EmitConv(emitter, op: Operation):
     pads = attr["pads"]
     group = attr["group"]
     padType = attr["auto_pad"]
-
-    # NHWC -> NCHW
-    LEFT HERE - This needs to be inside the operator logic, not in the emitter.
-    newDims = [d[0],d[3],d[1],d[2]]
-    d = newDims
+    isNHWC = attr["isNHWC"]
 
     padAsEnum = PaddingType[padType]
-
     featureMaps = op.inputDimensions[1][0]
 
     emitter.I32(dims)
@@ -220,6 +216,7 @@ def EmitConv(emitter, op: Operation):
     emitter.I32(len(stride))
     emitter.I32(len(dilations))
     emitter.I32(len(pads))
+    emitter.I32(1 if isNHWC else 0)
     emitter.I32(padAsEnum.value)
 
     emitter.I32Array(kernel)
@@ -261,7 +258,6 @@ matMulAttributes = {
     "isBTransposed": MakeAttrInteger(0),
 }
 
-
 def EmitMatMul(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 
@@ -270,9 +266,6 @@ def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
     res = op.outputDimensions[0]
-
-    LEFT HERE - This needs to be inside the operator logic, not in the emitter.
-    op1 = [op1[1],op1[0]]
 
     emitter.I32(isBTransposed)
 
@@ -503,6 +496,7 @@ convAttributes = {
     "kernel_shape": MakeAttrIntegerList(None),
     "pads": MakeAttrAxisPairList(0),
     "strides": MakeAttrAxisList(1),
+    "isNHWC": MakeAttrInteger(0),
 }
 
 maxPoolAttributes = {

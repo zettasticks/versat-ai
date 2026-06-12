@@ -738,15 +738,21 @@ ExtraInfo CalculateExtraInfo_Conv(ConvInfo *info) {
   res.inputImageH = inputDims[2];
   res.inputImageC = inputDims[1];
 
+  if (info->isNHWC) {
+    res.inputImageC = inputDims[3];
+    res.inputImageH = inputDims[1];
+    res.inputImageW = inputDims[2];
+  }
+
   res.outputImageC = outputDims[1];
   res.outputImageH = outputDims[2];
   res.outputImageW = outputDims[3];
 
-#if NHWC
-  res.outputImageC = outputDims[3];
-  res.outputImageH = outputDims[1];
-  res.outputImageW = outputDims[2];
-#endif
+  if (info->isNHWC) {
+    res.outputImageC = outputDims[3];
+    res.outputImageH = outputDims[1];
+    res.outputImageW = outputDims[2];
+  }
 
   if (info->padding == PaddingType_NOTSET) {
     // TODO: Need a better way of handling errors in this layer, I think.
@@ -1319,7 +1325,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
                               .modelMem = modelMemory,
                               .correctData = correctInput};
 
-#define PRINT_HELP 0
+#define PRINT_HELP 1
 
   InferenceState *state = &stateInst;
 

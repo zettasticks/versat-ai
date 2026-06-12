@@ -31,9 +31,11 @@ class OptimizationRules(Enum):
     JOIN_PADS = auto()  # Pad -> Pad := Pad
     # FixPad stuff
     JOIN_FIXPADS = auto()
+    # Add stuff
+    ADD_REMOVE_BOTH_TRANSPOSE = auto()
     # Transpose stuff
     JOIN_TRANSPOSE = auto()  # Transpose -> Transpose := Transpose
-    PUSH_TRANSPOSE_SIMPLE = (
+    PUSH_TRANSPOSE_OVER_RELU = (
         auto()
     )  # N -> Transpose := Transpose -> N. For some N that do not require special treatment
     PUSH_TRANSPOSE_OVER_FIXPAD = auto()
@@ -292,6 +294,8 @@ class Model:
     tempMemoryNeeded: int = -1
     outputMemoryNeeded: int = -1
 
+    anyFailedUpdates: bool = False
+
     def GetGenericDataSource(self, src: DataSource):
         dims = None
         data = None
@@ -413,9 +417,18 @@ class Model:
 
         return newOp
 
+    def PreserveOnlyOne(self,toPreserve):
+        for inp in toPreserve.inputs:
+            gen = self.GetGenericDataSource(inp)
+            
+            inp.sourceType = DataSourceType.INITIALIZER
+            inp.index = self.NextInitializerIndex()
+            inp.data = deepcopy(gen.data)
+
+        self.operations = [toPreserve]
+    
     def RemoveOperation(self, toRemove: Operation):
-        if len(toRemove.inputs) == 1 and len(toRemove.outputDimensions) == 1:
-            print("A")
+        if len(toRemove.inputs) == 1:
             # A -> B -> C
             # When we remove B, we have to connect all the Cs to A.
             ASrc = toRemove.inputs[0]
@@ -433,12 +446,20 @@ class Model:
             # very hacky way of trying to generate anything at all.
             # assert False
 
-            for op in self.operations:
-                for inp in op.inputs:
-                    if IsSourceNode(inp, toRemove.nodeIndex):
-                        inp.sourceType = DataSourceType.INITIALIZER
-                        inp.index = self.NextInitializerIndex()
-                        inp.data = toRemove.correctOutputData
+            allOutputNodes = self.GetOutputNodesAndPortIndexes(toRemove,0)
+
+            #print(allOutputNodes)
+            for node,port in allOutputNodes:
+                node.inputs[port].sourceType = DataSourceType.INITIALIZER
+                node.inputs[port].index = self.NextInitializerIndex()
+                node.inputs[port].data = deepcopy(toRemove.correctOutputData)
+
+            #for op in self.operations:
+            #    for inp in op.inputs:
+            #        if IsSourceNode(inp, toRemove.nodeIndex):
+            #            inp.sourceType = DataSourceType.INITIALIZER
+            #            inp.index = self.NextInitializerIndex()
+            #            inp.data = toRemove.correctOutputData
 
                 # self.UpdateNodeData(op)
 
@@ -532,6 +553,7 @@ class Model:
             onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
             onnx_model = version_converter.convert_version(onnx_model, 7)
             shaped = onnx.shape_inference.infer_shapes(onnx_model)
+            print(shaped)
 
             op.inputDimensions = [None for x in inputData]
             op.outputDimensions = [None]
@@ -563,9 +585,7 @@ class Model:
                 op.outputDimensions[0] = [int(x) for x in modelOutput[0].shape]
             except:
                 print(f"Failed to update node of index: {op.nodeIndex} {op.opName}")
-                LEFT HERE - We do not actually want to ignore stuff completely.
-                Want the freedom to update nodes when I want but we also want to be able to fail and still
-                check the result of wathever succeeded
+                anyFailedUpdates = True
 
     def NextInitializerIndex(self):
         res = self.nextInitializerIndex

@@ -215,6 +215,7 @@ typedef struct {
   int strideSize;
   int dilationsSize;
   int padsSize;
+  int isNHWC;
   PaddingType padding;
   // Followed by
   // int kernelDims[kernelSize];

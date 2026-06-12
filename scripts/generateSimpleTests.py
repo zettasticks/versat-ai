@@ -1270,6 +1270,8 @@ def GenerateSimpleTest(config):
         # Common example
         CreateAveragePool([1, 3, 32, 32], [2, 2], [2, 2], "VALID")
 
+        CreateAveragePool([1, 64, 8, 8], [8, 8], [8, 8])
+
         if testBig:
             CreateAveragePool([1, 3, 100, 100], [100, 100], [100, 100], "SAME_LOWER")
 
@@ -1853,7 +1855,7 @@ def GenerateTest(outputPath):
     config.testReshape = 0
     config.testTranspose = 0
     config.testMaxPool = 0
-    config.testAveragePool = 0
+    config.testAveragePool = 1
     config.testMatMul = 0
     config.testDropout = 0
     config.testGemm = 0
@@ -1862,21 +1864,10 @@ def GenerateTest(outputPath):
     config.testLRN = 0
     config.testPad = 0
 
-    config.testConv = 1
+    config.testConv = 0
     config.generateOneOfEach = 0
     config.generativeTests = 0
     config.testBig = 0
-
-    # CreateConvolution(
-    #    [1, 1, 1, 1], 1, [3, 3], [1, 1], [1, 1], 1, False, "NOTSET", [1, 1, 1, 1]
-    # )
-
-    # GenerateConvAfterConv()
-    # GeneratePadAfterConv()
-    # GeneratePadAfterRelu()
-
-    # CreateConvolution([1, 4, 4, 4], 2, [2, 2], [2, 2], [1, 1], 2)
-    # CreateConvolution([1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1)
 
     if False:
         CreateConvolution(

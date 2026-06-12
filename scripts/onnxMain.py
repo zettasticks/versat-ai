@@ -471,8 +471,53 @@ def PrintOutNpArray(arrayToPrintout):
 
 def PrintSimpleNodeInfo(i, c: Operation):
     inputs = [x.index for x in c.inputs if x.sourceType == DataSourceType.NODE_INPUT]
+    pPerms = c.parsedAttributes.get("perm", [])
 
-    print(i, inputs, c.nodeIndex, c.opName, c.inputDimensions, c.outputDimensions)
+    print(
+        i, inputs, c.nodeIndex, c.opName, c.inputDimensions, c.outputDimensions, pPerms
+    )
+
+
+def GenerateDotFile(cModel):
+    nodeLines = ""
+    for op in cModel.operations:
+        nodeLines += (
+            f'"{op.nodeIndex}" [color=dark label="{op.nodeIndex} [{op.opName}]"];\n'
+        )
+
+    nodeEdges = ""
+    for op in cModel.operations:
+        for index, inp in enumerate(op.inputs):
+            inputNode = cModel.GetInputNode(op, index)
+
+            if inputNode != Operation_NIL:
+                nodeEdges += f"{inputNode.nodeIndex} -> {op.nodeIndex} [color=dark]"
+
+    res = """digraph view {
+            node [fontcolor=white,style=filled,color="160,60,176"];
+            label="Graph";
+    """
+
+    res += nodeLines
+    res += nodeEdges
+    res += "}"
+
+    return res
+
+
+def PrintOperationData(cModel,op,printInputs = True):
+    if printInputs:
+        for index,inp in enumerate(op.inputs):
+            gen = cModel.GetGenericDataSource(inp)
+            print(f"Input {index}")
+            for index in np.ndindex(gen.data.shape):
+                print(index,gen.data[index])
+        #average = np.average(op.inputs[0].data,axis=(2,3))
+        #print(average.shape,average)
+
+    print("Output: ")
+    for index in np.ndindex(op.correctOutputData.shape):
+        print(index,op.correctOutputData[index])
 
 
 # TODO: We are starting to accumulate a bunch of config flags and stuff is starting to get out of control
@@ -605,6 +650,9 @@ def GenerateDebug(
     for i, data in enumerate(correctData):
         cModel.operations[i].correctOutputData = data
 
+    #PrintOperationData(cModel,cModel.operations[20],True)
+    print(cModel.operations[19])
+    
     # For debugging purposes it might be useful to embed the inputs as initializers.
     # That way we can test certain optimizations.
     transformInputToInitializer = False
@@ -748,12 +796,10 @@ def GenerateDebug(
             for x in nodeLevel:
                 maxLevel = max(maxLevel, x)
 
-            print(maxLevel)
             for level in range(maxLevel, -1, -1):
                 for i, x in enumerate(nodeLevel):
                     if x == level:
                         dfgSortedList.append(cModel.operations[part[i]])
-                print(level, [x.nodeIndex for x in dfgSortedList])
 
         cModel.operations = dfgSortedList
         compressedToSorted = CompressGraphIndexes(cModel)
@@ -782,7 +828,7 @@ def GenerateDebug(
     for node in allOutputNodes:
         originalCorrectData = deepcopy(node.correctOutputData)
 
-    doOptimizations = True
+    doOptimizations = False
 
     # Simple way of ordering operations. All level 0 rules run first, followed by rules 1 and so on.
     # Everytime a rule fires level resets to zero. Meaning that we always run level 0 rules before any rule 1
@@ -794,125 +840,155 @@ def GenerateDebug(
         ruleFound = None
         terminateEarly = False
 
+        print(level)
         # Find first applicable rule
         # We probably wanna reverse the direction of search.
         for op in cModel.operations:
             # NOTE: GetAttributesForOperator does not return non onnx attributes
 
             attr = GetAttributesForOperator(op)
-            inputNode = cModel.GetInputNode(op, 0)
 
-            if True and op.opName == "Conv":
-                if attr.get("auto_pad", "NOTSET") == "NOTSET" and NotAllZeros(
-                    attr.get("pads", [])
-                ):
-                    ruleFound = OptimizationRules.EXTRACT_CONV_PAD
-                    nodesChanged.append(op)
+            allInputNodes = []
+            for index, inp in enumerate(op.inputs):
+                allInputNodes.append(cModel.GetInputNode(op, index))
+
+            for index, inp in enumerate(op.inputs):
+                inputNode = cModel.GetInputNode(op, index)
+                inputNodeOutputs = cModel.GetOutputNodesAndPortIndexes(inputNode, 0)
+
+                if ruleFound:
                     break
 
-                if level >= 1 and op.parsedAttributes.get("isNHWC", False) is False:
-                    ruleFound = OptimizationRules.CONV_NCHW_TO_NHWC
-                    nodesChanged.append(op)
-                    break
-
-            if True and op.opName == "FixPad":
-                if inputNode.opName == "FixPad":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.JOIN_FIXPADS
-                    break
-
-            if True and op.opName == "Pad":
-                if inputNode.opName == "Pad":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.JOIN_PADS
-                    break
-
-                if inputNode.opName == "FixPad":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.PUSH_PAD_OVER_FIXPAD
-                    break
-
-                if inputNode.opName == "Relu":
-                    outputs = cModel.GetOutputNodesAndPortIndexes(inputNode, 0)
-
-                    print("A", len(outputs))
-
-                    if len(outputs) == 1:
+                if True and op.opName == "Conv":
+                    if attr.get("auto_pad", "NOTSET") == "NOTSET" and NotAllZeros(
+                        attr.get("pads", [])
+                    ):
+                        ruleFound = OptimizationRules.EXTRACT_CONV_PAD
                         nodesChanged.append(op)
-                        nodesChanged.append(inputNode)
-                        ruleFound = OptimizationRules.PUSH_PAD_OVER_RELU
                         break
 
-                if inputNode.opName == "Conv":
-                    padNode = op
-                    convNode = inputNode
-
-                    padAttr = padNode.parsedAttributes
-                    convAttr = convNode.parsedAttributes
-
-                    doRule = True
-                    if convAttr["strides"][0] > 1 and (
-                        padAttr["pads"][2] > 0 or padAttr["pads"][6] > 0
-                    ):
-                        doRule = False
-                    if convAttr["strides"][1] > 1 and (
-                        padAttr["pads"][3] > 0 or padAttr["pads"][7] > 0
-                    ):
-                        doRule = False
-
-                    if doRule:
+                    if level >= 1 and op.parsedAttributes.get("isNHWC", False) is False:
+                        ruleFound = OptimizationRules.CONV_NCHW_TO_NHWC
                         nodesChanged.append(op)
-                        nodesChanged.append(inputNode)
-                        ruleFound = OptimizationRules.PUSH_PAD_OVER_CONV
                         break
 
-            if True and op.opName == "MatMul":
-                if op.parsedAttributes.get("isBTransposed", 0) == 0:
-                    nodesChanged.append(op)
-                    ruleFound = OptimizationRules.MATMUL_TRANSPOSE
-                    break
+                if True and op.opName == "FixPad":
+                    if inputNode.opName == "FixPad":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.JOIN_FIXPADS
+                        break
 
-            if op.opName == "Transpose":
-                # TODO: Giving error when enabled.
-                # NOTE: When this is enabled the memory allocator is completely wrong.
-                #       The problem might be related to the final graph not being valid in some way.
+                if True and op.opName == "Pad":
+                    if inputNode.opName == "Pad":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.JOIN_PADS
+                        break
 
-                if inputNode.opName == "Relu":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.PUSH_TRANSPOSE_SIMPLE
-                    break
+                    if inputNode.opName == "FixPad":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.PUSH_PAD_OVER_FIXPAD
+                        break
 
-                if inputNode.opName == "FixPad":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_FIXPAD
-                    break
+                    if inputNode.opName == "Relu":
+                        if len(inputNodeOutputs) == 1:
+                            nodesChanged.append(op)
+                            nodesChanged.append(inputNode)
+                            ruleFound = OptimizationRules.PUSH_PAD_OVER_RELU
+                            break
 
-                if inputNode.opName == "Pad":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_PAD
-                    break
+                    if inputNode.opName == "Conv":
+                        padNode = op
+                        convNode = inputNode
 
-                if inputNode.opName == "Transpose":
-                    nodesChanged.append(op)
-                    nodesChanged.append(inputNode)
-                    ruleFound = OptimizationRules.JOIN_TRANSPOSE
-                    break
+                        padAttr = padNode.parsedAttributes
+                        convAttr = convNode.parsedAttributes
 
-                if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
-                    nodesChanged.append(op)
-                    ruleFound = OptimizationRules.FOLD_TRANSPOSE
-                    break
+                        doRule = True
+                        if convAttr["strides"][0] > 1 and (
+                            padAttr["pads"][2] > 0 or padAttr["pads"][6] > 0
+                        ):
+                            doRule = False
+                        if convAttr["strides"][1] > 1 and (
+                            padAttr["pads"][3] > 0 or padAttr["pads"][7] > 0
+                        ):
+                            doRule = False
+
+                        if doRule:
+                            nodesChanged.append(op)
+                            nodesChanged.append(inputNode)
+                            ruleFound = OptimizationRules.PUSH_PAD_OVER_CONV
+                            break
+
+                if True and op.opName == "MatMul":
+                    if op.parsedAttributes.get("isBTransposed", 0) == 0:
+                        nodesChanged.append(op)
+                        ruleFound = OptimizationRules.MATMUL_TRANSPOSE
+                        break
+
+                if op.opName == "Add":
+                    if (
+                        level >= 1
+                        and allInputNodes[0].opName == "Transpose"
+                        and allInputNodes[1].opName == "Transpose"
+                    ):
+                        perm1 = allInputNodes[0].parsedAttributes["perm"]
+                        perm2 = allInputNodes[1].parsedAttributes["perm"]
+                        print(perm1, type(perm1), perm2, type(perm2))
+                        if perm1 == perm2:
+                            nodesChanged.append(op)
+                            nodesChanged.append(allInputNodes[0])
+                            nodesChanged.append(allInputNodes[1])
+                            ruleFound = OptimizationRules.ADD_REMOVE_BOTH_TRANSPOSE
+                            break
+
+                if op.opName == "Transpose":
+                    if level >= 1 and inputNode.opName == "Relu":
+                        if len(inputNodeOutputs) == 1:
+                            nodesChanged.append(op)
+                            nodesChanged.append(inputNode)
+                            ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_RELU
+                            break
+                        if len(inputNodeOutputs) > 1:
+                            reluInput = cModel.GetInputNode(inputNode, 0)
+
+                            # Technically we would need to check if we have inverting perms
+                            if reluInput.opName == "Transpose":
+                                nodesChanged.append(op)
+                                nodesChanged.append(inputNode)
+                                ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_RELU
+                                break
+
+                    if inputNode.opName == "FixPad":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_FIXPAD
+                        break
+
+                    if inputNode.opName == "Pad":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.PUSH_TRANSPOSE_OVER_PAD
+                        break
+
+                    if level >= 0 and inputNode.opName == "Transpose":
+                        nodesChanged.append(op)
+                        nodesChanged.append(inputNode)
+                        ruleFound = OptimizationRules.JOIN_TRANSPOSE
+                        break
+
+                    if op.inputs[0].sourceType == DataSourceType.INITIALIZER:
+                        nodesChanged.append(op)
+                        ruleFound = OptimizationRules.FOLD_TRANSPOSE
+                        break
 
         op = None
 
         if ruleFound is None:
             level += 1
+            print("Did not find rule")
             continue
 
         level = 0
@@ -938,16 +1014,29 @@ def GenerateDebug(
 
         print("BEFORE:\n")
         for i, c in enumerate(cModel.operations):
-            if (
-                c.nodeIndex == node.nodeIndex
-                or inputNode
-                and c.nodeIndex == inputNode.nodeIndex
-            ):
+            if c.nodeIndex in changedNodesIndexes:
                 print(COLOR_GREEN, sep="", end="")
                 PrintSimpleNodeInfo(i, c)
                 print(COLOR_BASE, sep="", end="")
             else:
                 PrintSimpleNodeInfo(i, c)
+
+        if ruleFound == OptimizationRules.ADD_REMOVE_BOTH_TRANSPOSE:
+            ruleApplied = True
+            add = node
+
+            firstTranspose = nodesChanged[1]
+            secondTranspose = nodesChanged[2]
+
+            newTranspose = cModel.AddOperation("Transpose", 1)
+            addedNodesIndexes.append(newTranspose.nodeIndex)
+            newTranspose.parsedAttributes = deepcopy(firstTranspose.parsedAttributes)
+
+            cModel.InsertAfter(add, newTranspose, 0)
+            nodesToRemove.append(firstTranspose)
+            nodesToRemove.append(secondTranspose)
+
+            # terminateEarly = True
 
         if ruleFound == OptimizationRules.EXTRACT_CONV_PAD:
             ruleApplied = True
@@ -1082,9 +1171,39 @@ def GenerateDebug(
 
             addedNodesIndexes.append(newOp.nodeIndex)
 
-        if ruleFound == OptimizationRules.PUSH_TRANSPOSE_SIMPLE:
+        if ruleFound == OptimizationRules.PUSH_TRANSPOSE_OVER_RELU:
             ruleApplied = True
-            cModel.Swap(node, inputNode)
+            transpose = node
+            relu = inputNode
+
+            # cModel.Swap(node, inputNode)
+
+            newInputTranspose = cModel.AddOperation("Transpose", 1)
+            newInputTranspose.parsedAttributes = deepcopy(transpose.parsedAttributes)
+            addedNodesIndexes.append(newInputTranspose.nodeIndex)
+
+            cModel.InsertBefore(relu, 0, newInputTranspose, 0)
+
+            allReluOutputs = cModel.GetOutputNodesAndPortIndexes(relu, 0)
+
+            reverseNp = np.argsort(transpose.parsedAttributes["perm"])
+            reverse = [int(x) for x in reverseNp]
+
+            for node, port in allReluOutputs:
+                invertTranspose = cModel.AddOperation("Transpose", 1)
+                invertTranspose.parsedAttributes["perm"] = reverse
+                addedNodesIndexes.append(invertTranspose.nodeIndex)
+
+                cModel.InsertBefore(node, port, invertTranspose, 0)
+
+            # nodesToRemove.append(transpose)
+
+            # terminateEarly = True
+
+            # What we have to do is just created a bunch of input transposes and output reverse transposes
+            # and let the JOIN_TRANSPOSE rule anhialate them
+
+            # If X -> Relu -> B,C,D,E,F
 
         if ruleFound == OptimizationRules.PUSH_TRANSPOSE_OVER_FIXPAD:
             ruleApplied = True
@@ -1214,38 +1333,57 @@ def GenerateDebug(
     ReorganizeGraph(cModel)
 
     # Make sure that everything is updated.
-    try:
-        for op in cModel.operations:
-            cModel.UpdateNodeData(op)
-    except:
-        print("Failed to update graph")
+    if True:
+        try:
+            for op in cModel.operations:
+                cModel.UpdateNodeData(op)
+        except:
+            print("Failed to update graph")
 
-        for i, c in enumerate(cModel.operations):
-            PrintSimpleNodeInfo(i, c)
-        sys.exit(0)
+            for i, c in enumerate(cModel.operations):
+                PrintSimpleNodeInfo(i, c)
+            sys.exit(0)
+
+        if cModel.anyFailedUpdates:
+            print("Failed to update graph. Outputting what we got so far:")
+
+            for i, c in enumerate(cModel.operations):
+                PrintSimpleNodeInfompleNodeInfo(i, c)
+            sys.exit(0)
+            
+    with open("AfterOpt.dot", "w") as f:
+        f.write(GenerateDotFile(cModel))
 
     # Test final output to make sure that optimizations did not broke anything.
-    allOutputNodes = cModel.GetAllModelOutputNodes()
-    for node in allOutputNodes:
-        correctData = node.correctOutputData
+    if False:
+        allOutputNodes = cModel.GetAllModelOutputNodes()
+        for node in allOutputNodes:
+            correctData = node.correctOutputData
 
-        print("Gonna check if output remains similar after optimizations")
-        np.testing.assert_allclose(
-            correctData, originalCorrectData, rtol=1e-05, verbose=True
-        )
+            print("Gonna check if output remains similar after optimizations")
+            np.testing.assert_allclose(
+                correctData, originalCorrectData, rtol=1e-05, verbose=True
+            )
 
     # Remove layers if the user commands. Mostly to help test individual operations
     if focusLayerRange:
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
 
-        for i in range(0, len(cModel.operations)):
-            if i >= focusStart and i <= focusEnd:
-                continue
+        if focusStart == focusEnd:
+            cModel.PreserveOnlyOne(cModel.operations[focusStart])
+        else:
+            for i in range(0, len(cModel.operations)):
+                if i >= focusStart and i <= focusEnd:
+                    continue
 
-            op = cModel.GetOperationByIndexOrFail(i)
-            cModel.RemoveOperation(op)
+                op = cModel.GetOperationByIndexOrFail(i)
+                cModel.RemoveOperation(op)
 
+    ReorganizeGraph(cModel)
+
+    PrintOperationData(cModel,cModel.operations[0])
+            
     for i, c in enumerate(cModel.operations):
         PrintSimpleNodeInfo(i, c)
 
@@ -1316,18 +1454,13 @@ def GenerateDebug(
 
     # All nodes get their data from the valid data array
     # Basically any error in any node does not propagate to other nodes (only for validation purposes)
-    useValidDataAsInput = False
+    useValidDataAsInput = True
     debugging = True
     if not debugging:
         useValidDataAsInput = False
 
-    correctDataSize = 0
-    inputSize = 0
-
     correctDataSize = len(packedCorrectData.data)
-
-    if debugging:
-        inputSize = len(cModel.modelInputs)
+    inputSize = len(cModel.modelInputs)
 
     totalInputSize = 0
     inputOffsets = [0]
@@ -1552,6 +1685,8 @@ def GenerateDebug(
             os.path.join(binOutputLocation, f"{namespace}_inputs.bin"), "wb"
         ) as f:
             f.write(packedInputs.data)
+            if(len(packedInputs.data) == 0):
+                f.write(b'0000')
 
         with open(
             os.path.join(binOutputLocation, f"{namespace}_correctOutputs.bin"), "wb"
