@@ -22,10 +22,72 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int *strideDims = VERSAT_ConvInfo_strideDims(info);
   int *padsDims = VERSAT_ConvInfo_padsDims(info);
 
+#define NHWC 1
+
+#if 0
+  versat_printf("%llx %llx %llx %llx\n",inputDims[0],inputDims[1],inputDims[2],inputDims[3]);
+  versat_printf("%llx %llx %llx %llx\n",outputDims[0],outputDims[1],outputDims[2],outputDims[3]);
+  versat_printf("%x %x %x %x\n",padsDims[0],padsDims[1],padsDims[2],padsDims[3]);
+  versat_printf("%x %x\n",kernelDims[0],kernelDims[1]);
+  versat_printf("%x %x\n",strideDims[0],strideDims[1]);
+
+  for(int i = 0; i < sizeof(ConvInfo); i++){
+    char* a = (char*) info;
+    versat_printf("%02x ",a[i]);
+  }
+  versat_printf("\n");
+#endif
+
+#if 0
+  {
+    versat_printf("CONV INPUT X\n");
+    int totalSize = inputDims[0] * inputDims[1] * inputDims[2] * inputDims[3];
+
+    float *asFloat = (float *)inputX;
+    for (int i = 0; i < totalSize; i++) {
+      versat_printf("%f\n", asFloat[i]);
+    }
+  }
+#endif
+
+#if 0
+  {
+    versat_printf("CONV INPUT W\n");
+    int totalSize = 4; // Need to put logic in here
+
+    float *asFloat = (float *)inputW;
+    for (int i = 0; i < totalSize; i++) {
+      versat_printf("%f\n", asFloat[i]);
+    }
+  }
+#endif
+
+#if 0
+  {
+    versat_printf("CONV INPUT B\n");
+    int totalSize = 64;
+
+    float *asFloat = (float *)inputB;
+    for (int i = 0; i < totalSize; i++) {
+      versat_printf("%f\n", asFloat[i]);
+    }
+  }
+#endif
+
   int batches = inputDims[0];
   int inChannels = inputDims[1];
-  int inW = inputDims[3];
   int inH = inputDims[2];
+  int inW = inputDims[3];
+
+#if NHWC
+  // inChannels = inputDims[3];
+  // inH = inputDims[1];
+  // inW = inputDims[2];
+#endif
+
+#if PRINT
+  versat_printf("IN(NCHW): %d %d %d %d\n", batches, inChannels, inH, inW);
+#endif
 
   int strideW = strideDims[1];
   int strideH = strideDims[0];
@@ -38,8 +100,25 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int group = info->group;
 
   int outChannels = outputDims[1]; // Should be equal to feature maps.
-  int outW = outputDims[3];
   int outH = outputDims[2];
+  int outW = outputDims[3];
+
+  /*
+    Important. As it stands the input dimensions of the convolution remain the
+    exact same, the channel appears first regardless of NCHW or NHWC. However
+    the output changes. This is because the onnx script is starting to break a
+    little after a bunch of changes and we are now riding it out as far as it
+    goes.
+   */
+#if NHWC
+  outChannels = outputDims[3];
+  outH = outputDims[1];
+  outW = outputDims[2];
+#endif
+
+#if PRINT
+  versat_printf("OUT(NCHW): %d %d %d %d\n", 1, outChannels, outH, outW);
+#endif
 
   float *input = (float *)inputX;
   float *kernel = (float *)inputW;
@@ -81,6 +160,12 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
     int outDim2Size = outDim1Size * outH;
     int outDim3Size = outDim2Size * outChannels;
 
+#if NHWC
+    outDim1Size = outChannels;
+    outDim2Size = outDim1Size * outW;
+    outDim3Size = outDim2Size * outH;
+#endif
+
     for (int batch = 0; batch < batches; batch++) {
       for (int g = 0; g < group; g++) {
         for (int outC = g * outChannelsPerGroup;
@@ -92,6 +177,17 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
             for (int outX = 0, inX = -extra.leftPadW; outX < outW;
                  outX++, inX += strideW) {
               // int inX = outX * strideW - extra.leftPadW;
+              int outPos = batch * outDim3Size + outC * outDim2Size +
+                           outY * outDim1Size + outX;
+
+#if NHWC
+              outPos = batch * outDim3Size + outY * outDim2Size +
+                       outX * outDim1Size + outC;
+#endif
+
+#if PRINT
+              versat_printf("Out: %d\n", outPos);
+#endif
 
               float accum = 0.0f;
               if (bias) {
@@ -119,7 +215,17 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
                          trueY) *
                             inW +
                         trueX;
+#if NHWC
+                    inputIn =
+                        ((batch * inH + trueY) * inW + trueX) * inChannels +
+                        (inC + g * inChannelsPerGroup);
+#endif
                     float feature = input[inputIn];
+
+#if PRINT
+                    versat_printf("%d %d %d %d: %d\n", batch, trueY, trueX, inC,
+                                  inputIn);
+#endif
 
                     int weightIn =
                         ((outC * inChannelsPerGroup + inC) * kernelH + kY) *
@@ -132,8 +238,6 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
                 }
               }
 
-              int outPos = batch * outDim3Size + outC * outDim2Size +
-                           outY * outDim1Size + outX;
               outView[outPos] = accum;
             }
           }
@@ -196,7 +300,17 @@ void *Software_ConvWithBias(void *inputX, void *inputW, void *inputB,
     versat_printf("T: %d\n", total);
   }
 
-  // PrintTime(start);
+#if 0
+  {
+    versat_printf("CONV OUTPUT\n");
+    int totalSize = outputDims[0] * outputDims[1] * outputDims[2] * outputDims[3];
+
+    float *asFloat = (float *)output;
+    for (int i = 0; i < totalSize; i++) {
+      versat_printf("%f\n", asFloat[i]);
+    }
+  }
+#endif
 
   return output;
 }
@@ -209,6 +323,11 @@ void *Software_Conv(void *inputX, void *inputW, void *output, int index,
 void *Software_Reshape(void *data, void *shape, void *output, int index,
                        ReshapeInfo *info) {
   int64_t *dims = VERSAT_ReshapeInfo_inputDims(info);
+
+  if (data == output) {
+    versat_printf("INPLACE Reshape\n");
+    return data;
+  }
 
   int64_t size = 1;
   for (int64_t i = 0; i < info->numberInputDims; i++) {
@@ -303,10 +422,10 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *view = (float *)inputX;
   float *out = (float *)output;
 
-  if(inputX == output){
+  if (inputX == output) {
     versat_printf("INPLACE RELU\n");
   }
-  
+
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
   int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
@@ -709,7 +828,7 @@ void *Software_Pad(void *inA, void *out, int index, PadInfo *info) {
 
   float *input = (float *)inA;
   float *output = (float *)out;
-  
+
   if (dims == 1) {
     for (int x = 0, inX = -pad[0]; x < outputDims[0]; x++, inX++) {
       if (inX < 0 || inX >= inputDims[0]) {
@@ -780,21 +899,129 @@ void *Software_Pad(void *inA, void *out, int index, PadInfo *info) {
 void *Software_FixPad(void *inA, void *out, int index, FixPadInfo *info) {
   int dims = info->dims;
 
-  if(inA == out){
-    versat_printf("INPLACE FIXPAD\n");
-  }
-  
   int64_t *outputDims = VERSAT_FixPadInfo_outputDims(info);
   int64_t *pad = VERSAT_FixPadInfo_pad(info);
 
   float *input = (float *)inA;
   float *output = (float *)out;
-  
-  // NOTE: We can be more efficient because right now we are iterating a lot of empty space.
-  
+
+  if (input == output) {
+    if (dims == 4) {
+      int wPaddedDims = outputDims[0] - pad[4];
+      int zPaddedDims = outputDims[1] - pad[5];
+      int yPaddedDims = outputDims[2] - pad[6];
+      int xPaddedDims = outputDims[3] - pad[7];
+
+      for (uint64_t w = 0; w < pad[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+      for (uint64_t w = wPaddedDims; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < pad[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = zPaddedDims; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < pad[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = yPaddedDims; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = 0; x < pad[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+      for (uint64_t w = 0; w < outputDims[0]; w++) {
+        for (uint64_t z = 0; z < outputDims[1]; z++) {
+          for (uint64_t y = 0; y < outputDims[2]; y++) {
+            for (uint64_t x = xPaddedDims; x < outputDims[3]; x++) {
+              int pos = ((w * outputDims[1] + z) * outputDims[2] + y) *
+                            outputDims[3] +
+                        x;
+              output[pos] = 0.0f;
+            }
+          }
+        }
+      }
+
+      return output;
+    }
+  }
+
+  // NOTE: We can be more efficient because right now we are iterating a lot of
+  // empty space.
+
   if (dims == 1) {
     for (int x = 0; x < outputDims[0]; x++) {
-      if(x < pad[0] || x > outputDims[0] - pad[1]){
+      if (x < pad[0] || x > outputDims[0] - pad[1]) {
         output[x] = 0.0f;
       } else {
         output[x] = input[x];
@@ -802,10 +1029,11 @@ void *Software_FixPad(void *inA, void *out, int index, FixPadInfo *info) {
     }
   }
   if (dims == 2) {
-    for(int y = 0; y < outputDims[0]; y++){
+    for (int y = 0; y < outputDims[0]; y++) {
       for (int x = 0; x < outputDims[1]; x++) {
         int pos = y * outputDims[1] + x;
-        if(y < pad[0] || y > outputDims[0] - pad[2] ||  x < pad[1] || x > outputDims[1] - pad[3]){
+        if (y < pad[0] || y > outputDims[0] - pad[2] || x < pad[1] ||
+            x > outputDims[1] - pad[3]) {
           output[pos] = 0.0f;
         } else {
           output[pos] = input[pos];
@@ -814,12 +1042,16 @@ void *Software_FixPad(void *inA, void *out, int index, FixPadInfo *info) {
     }
   }
   if (dims == 4) {
-    for(uint64_t w = 0; w < outputDims[0]; w++){
-      for(uint64_t z = 0; z < outputDims[1]; z++){
-        for(uint64_t y = 0; y < outputDims[2]; y++){
+    for (uint64_t w = 0; w < outputDims[0]; w++) {
+      for (uint64_t z = 0; z < outputDims[1]; z++) {
+        for (uint64_t y = 0; y < outputDims[2]; y++) {
           for (uint64_t x = 0; x < outputDims[3]; x++) {
-            int pos = ((w * outputDims[1] + z) * outputDims[2] + y) * outputDims[3] + x;
-            if(w < pad[0] || z < pad[1] || y < pad[2] || x < pad[3] || w >= outputDims[0] - pad[4] || z >= outputDims[1] - pad[5] || y >= outputDims[2] - pad[6] || x >= outputDims[3] - pad[7]){
+            int pos =
+                ((w * outputDims[1] + z) * outputDims[2] + y) * outputDims[3] +
+                x;
+            if (w < pad[0] || z < pad[1] || y < pad[2] || x < pad[3] ||
+                w >= outputDims[0] - pad[4] || z >= outputDims[1] - pad[5] ||
+                y >= outputDims[2] - pad[6] || x >= outputDims[3] - pad[7]) {
               output[pos] = 0.0f;
             } else {
               output[pos] = input[pos];

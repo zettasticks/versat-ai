@@ -160,10 +160,10 @@ module Top_Conv(){
       kernelStartX,kernelStartY,
       outCStart, // D is outC
       outStartX,outStartY,
-      inputImageW,inputImageC,
+      inputImageW,inputImagePerGroup,
       startC,
       kernelW,kernelH,
-      outputWidth,stride,outputChannels, strideW, strideH){
+      outputWidth,stride,outputChannels, strideW, strideH, groupOffset, groups){
 
       for outerY 0..outputH {
          for outerX 0..outputW {
@@ -171,8 +171,8 @@ module Top_Conv(){
                for inC 0..sizeC {
                   for ky 0..actualKernelH {
                      for kx 0..actualKernelW {
-                        features = inputX[(startY + ky + outerY * strideH) * inputImageW * inputImageC + (startX + kx + outerX * strideW) * inputImageC + (inC + startC)];
-                        weights = inputW[(outC + outCStart) * inputImageC * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
+                        features = inputX[(startY + ky + outerY * strideH) * inputImageW * inputImagePerGroup + (startX + kx + outerX * strideW) * inputImagePerGroup + (inC + startC)];
+                        weights = inputW[(outC + outCStart) * inputImagePerGroup * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
                      }
                   }
                }

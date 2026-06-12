@@ -38,6 +38,7 @@ def BroadCastShape(op0, op1):
         res.append(max(a, b))
     return res
 
+
 def MakeAttrBoundedString(allowedStringValues: list[str], default: str = None):
     return OnnxAttribute(OnnxAttributeType.BOUNDED_STRING, allowedStringValues, default)
 
@@ -159,7 +160,7 @@ def EmitMaxPool(emitter, op: Operation):
     padType = attr["auto_pad"]
 
     padAsEnum = PaddingType[padType]
-    
+
     emitter.I32(dims)
     emitter.I32(len(kernel))
     emitter.I32(len(stride))
@@ -194,7 +195,8 @@ convStructure = [
 def EmitConv(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 
-    dims = len(op.inputDimensions[0])
+    d = op.inputDimensions[0]
+    dims = len(d)
     kernel = attr["kernel_shape"]
     stride = attr["strides"]
     dilations = attr["dilations"]
@@ -202,8 +204,13 @@ def EmitConv(emitter, op: Operation):
     group = attr["group"]
     padType = attr["auto_pad"]
 
+    # NHWC -> NCHW
+    LEFT HERE - This needs to be inside the operator logic, not in the emitter.
+    newDims = [d[0],d[3],d[1],d[2]]
+    d = newDims
+
     padAsEnum = PaddingType[padType]
-    
+
     featureMaps = op.inputDimensions[1][0]
 
     emitter.I32(dims)
@@ -219,7 +226,7 @@ def EmitConv(emitter, op: Operation):
     emitter.I32Array(stride)
     emitter.I32Array(dilations)
     emitter.I32Array(pads)
-    emitter.I64Array(op.inputDimensions[0])
+    emitter.I64Array(d)
     emitter.I64Array(op.outputDimensions[0])
 
 
@@ -263,6 +270,9 @@ def EmitMatMul(emitter, op: Operation):
     op0 = op.inputDimensions[0]
     op1 = op.inputDimensions[1]
     res = op.outputDimensions[0]
+
+    LEFT HERE - This needs to be inside the operator logic, not in the emitter.
+    op1 = [op1[1],op1[0]]
 
     emitter.I32(isBTransposed)
 
@@ -425,6 +435,7 @@ padStructure = [
     ["pad", ["int64_t", "dims * 2"]],
 ]
 
+
 def EmitPad(emitter, op: Operation):
     dims = len(op.inputDimensions[0])
     attr = GetAttributesForOperator(op)
@@ -444,13 +455,14 @@ def EmitPad(emitter, op: Operation):
     emitter.I64Array(op.outputDimensions[0])
     emitter.I64Array(attr["pads"])
 
-    
+
 fixPadStructure = [
     ["dims", "int"],
     ["constant", "float"],
     ["outputDims", ["int64_t", "dims"]],
     ["pad", ["int64_t", "dims * 2"]],
 ]
+
 
 def EmitFixPad(emitter, op: Operation):
     dims = len(op.outputDimensions[0])
@@ -461,7 +473,6 @@ def EmitFixPad(emitter, op: Operation):
 
     emitter.I64Array(op.outputDimensions[0])
     emitter.I64Array(attr["pads"])
-    
 
 
 def IsOperatorRegistered(opName: str):
@@ -484,7 +495,9 @@ def EmitParameterList(emitter, op: Operation):
 
 
 convAttributes = {
-    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
+    "auto_pad": MakeAttrBoundedString(
+        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
+    ),
     "dilations": MakeAttrAxisList(1),
     "group": MakeAttrInteger(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -493,7 +506,9 @@ convAttributes = {
 }
 
 maxPoolAttributes = {
-    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
+    "auto_pad": MakeAttrBoundedString(
+        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
+    ),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),
@@ -503,7 +518,9 @@ maxPoolAttributes = {
 }
 
 averagePoolAttributes = {
-    "auto_pad": MakeAttrBoundedString(["NOTSET","SAME_UPPER","SAME_LOWER","VALID"], "NOTSET"),
+    "auto_pad": MakeAttrBoundedString(
+        ["NOTSET", "SAME_UPPER", "SAME_LOWER", "VALID"], "NOTSET"
+    ),
     # "ceil_mode": MakeAttrInteger(0),
     # "dilations": MakeAttrAxisList(1),
     "kernel_shape": MakeAttrIntegerList(None),

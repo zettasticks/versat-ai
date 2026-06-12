@@ -10,6 +10,9 @@
 //  Global configurations
 //
 
+#undef NHWC
+#define NHWC 1
+
 #if PC
 #undef VERSAT_AI_USE_TESTER
 #define VERSAT_AI_USE_TESTER 0

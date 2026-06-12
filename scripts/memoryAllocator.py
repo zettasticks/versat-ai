@@ -18,6 +18,8 @@ import itertools
 def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocation]):
     # TODO: We are making a very simple algorithm right now. We can always improve this in the future if needed.
     #       In fact, it is preferable since if we find a problem the problematic input can help us find out how best to approach this.
+    totalCycles = max([x.lastCycle for x in memoryAllocations])
+    layers: list[list[int | int]] = [[] for x in range(totalCycles)]
 
     def GetFirstValidPointAfter(layerIndex, pointToStart):
         def Collision(point, range):
@@ -35,6 +37,7 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
 
     def FindCollision(layerIndex, point, size):
         layer = layers[layerIndex]
+        # print(layerIndex,layer)
         for range in layer:
             if point < range[0] and point + size > range[0]:
                 return range[0]
@@ -51,8 +54,6 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
         return 0, []
 
     # Layers are just a list of ordered ranges. No point making a proper struct for such simple use case
-    totalCycles = max([x.lastCycle for x in memoryAllocations])
-    layers: list[list[int | int]] = [[] for x in range(totalCycles)]
     totalMemoryNeeded = 0
     for index, memAlloc in enumerate(memoryAllocations):
         size = memAlloc.amount
@@ -63,8 +64,10 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
             currentPoint = GetFirstValidPointAfter(memAlloc.firstCycle, currentPoint)
 
             canFit = True
-            for layer in range(memAlloc.firstCycle + 1, memAlloc.lastCycle):
+            for layer in range(memAlloc.firstCycle, memAlloc.lastCycle):
                 collisionPoint = FindCollision(layer, currentPoint, size)
+
+                # print(index,collisionPoint,currentPoint,size)
 
                 if collisionPoint:
                     bestValidPoint = GetFirstValidPointAfter(layer, collisionPoint)
@@ -79,19 +82,21 @@ def CalculateGreedyMemoryAllocationOffset(memoryAllocations: list[MemoryAllocati
 
     return totalMemoryNeeded
 
+
 def CalculateMemoryAllocations(cModel):
     # Certain operators can work directly on the input memory instead of
     # having to copy everything into an output region.
     # This only works if the input is not used by anyone else meaning that
     # there are restrictions. Also only certain ops use this.
-    useInplaceOptimization = False
+    useInplaceOptimization = True
 
     memoryAllocations = []
     indexesToMemoryAllocation = {}
     inplaceIndexes = []
-    for index, c in enumerate(cModel.operations):
-        outputPorts = cModel.GetOutputNodesAndPortIndexes(c,0)
+    for c in cModel.operations:
+        outputPorts = cModel.GetOutputNodesAndPortIndexes(c, 0)
         indexes = [x[0].nodeIndex for x in outputPorts]
+        nodeIndex = c.nodeIndex
 
         if len(indexes) == 0:
             continue
@@ -103,19 +108,25 @@ def CalculateMemoryAllocations(cModel):
 
         # If node supports inplace
         # TODO: More generic way of doing this. Need a "supportsInplace" in the operatorSpec.
-        if useInplaceOptimization and (c.opName == "Relu" or c.opName == "FixPad") and c.inputs[0].sourceType == DataSourceType.NODE_INPUT:
-            nodeIndex = c.inputs[0].index
+        if (
+            useInplaceOptimization
+            and (c.opName == "Relu" or c.opName == "FixPad" or c.opName == "Reshape")
+            and c.inputs[0].sourceType == DataSourceType.NODE_INPUT
+        ):
+            inputIndex = c.inputs[0].index
 
-            outputs = cModel.GetOutputNodesAndPortIndexes(cModel.operations[nodeIndex],0)
+            outputs = cModel.GetOutputNodesAndPortIndexes(
+                cModel.operations[inputIndex], 0
+            )
             # The logic is not complete but should suffice for now.
             # We need to get more complex graphs to experiment in here
             if len(outputs) == 1:
-                memoryAllocation = indexesToMemoryAllocation[nodeIndex]
-                memoryAllocation.lastCycle = max(memoryAllocation.lastCycle,lastCycle)
+                memoryAllocation = indexesToMemoryAllocation[inputIndex]
+                memoryAllocation.lastCycle = max(memoryAllocation.lastCycle, lastCycle)
 
-                indexesToMemoryAllocation[index] = memoryAllocation
-                inplaceIndexes.append(index)
-                
+                indexesToMemoryAllocation[nodeIndex] = memoryAllocation
+                inplaceIndexes.append(nodeIndex)
+
             continue
 
         # TODO: Support different tensor types and whatnot.
@@ -123,13 +134,24 @@ def CalculateMemoryAllocations(cModel):
         for dim in c.outputDimensions:
             memoryRequired *= TensorSize(dim)
 
-        mem = MemoryAllocation(index, lastCycle, memoryRequired)
-        indexesToMemoryAllocation[index] = mem
+        mem = MemoryAllocation(nodeIndex, lastCycle, memoryRequired)
+        indexesToMemoryAllocation[nodeIndex] = mem
         memoryAllocations.append(mem)
-        
-    totalTempMemoryNeeded = CalculateGreedyMemoryAllocationOffset(
-        memoryAllocations
-    )
+
+    # memoryAllocations = memoryAllocations[:3]
+
+    for x in memoryAllocations:
+        print(x)
+
+    totalTempMemoryNeeded = 0
+    if memoryAllocations:
+        totalTempMemoryNeeded = CalculateGreedyMemoryAllocationOffset(memoryAllocations)
+
+    print()
+    print()
+    print()
+    for x in memoryAllocations:
+        print(x)
 
     cModel.tempMemoryNeeded = totalTempMemoryNeeded
 
@@ -146,11 +168,11 @@ def CalculateMemoryAllocations(cModel):
         op = cModel.operations[index]
         mem = indexesToMemoryAllocation[index]
         op.outputMemoryAddress = MemoryLocation(mem.offset, MemoryType.TEMP)
-        
+
     totalOutputMemory = 0
     outputOffsets = []
     for index, c in enumerate(cModel.operations):
-        outputPorts = cModel.GetOutputNodesAndPortIndexes(c,0)
+        outputPorts = cModel.GetOutputNodesAndPortIndexes(c, 0)
         indexes = [x[0].nodeIndex for x in outputPorts]
 
         # Node is graph output
@@ -166,12 +188,22 @@ def CalculateMemoryAllocations(cModel):
         c.outputMemoryAddress = MemoryLocation(totalOutputMemory, MemoryType.OUTPUT)
         totalOutputMemory += memoryRequired
 
-    if 0:
+    if 1:
         for index, c in enumerate(cModel.operations):
             print(f"Node: {c.nodeIndex}, Type: {c.opName}")
-            for i,inp in enumerate(c.inputs):
+            for i, inp in enumerate(c.inputs):
                 if inp.sourceType == DataSourceType.NODE_INPUT:
-                    print(f"  Input {i} mem:",cModel.operations[inp.index].outputMemoryAddress.offset)
-            print(f"  Output mem:",c.outputMemoryAddress.offset)
-        
+                    print(
+                        f"  Input {i} mem {cModel.operations[inp.index].outputMemoryAddress.memType}:",
+                        cModel.operations[inp.index].outputMemoryAddress.offset,
+                    )
+
+            outputSize = 1
+            for dim in c.outputDimensions:
+                outputSize *= TensorSize(dim)
+
+            print(
+                f"  Output mem {c.outputMemoryAddress.memType}: {c.outputMemoryAddress.offset} ({outputSize})"
+            )
+
     cModel.outputMemoryNeeded = totalOutputMemory

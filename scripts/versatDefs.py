@@ -21,23 +21,31 @@ import onnxruntime as ort
 
 import numpy as np
 
+
 class OptimizationRules(Enum):
     # Pad stuff
-    EXTRACT_CONV_PAD = auto() # Conv(NotSetPadding) := Pad -> Conv(NoPadding)
-    PUSH_PAD_TOWARDS_INPUTS = auto() # N -> Pad := Pad -> N. For some N
-    PUSH_PAD_OVER_CONV = auto() # Conv -> Pad := Pad -> Conv -> FixPad
-    PUSH_PAD_OVER_FIXPAD = auto() # FixPad -> Pad := Pad -> FixPad
-    JOIN_PADS = auto() # Pad -> Pad := Pad
+    EXTRACT_CONV_PAD = auto()  # Conv(NotSetPadding) := Pad -> Conv(NoPadding)
+    PUSH_PAD_OVER_RELU = auto()  # N -> Pad := Pad -> N. For some N
+    PUSH_PAD_OVER_CONV = auto()  # Conv -> Pad := Pad -> Conv -> FixPad
+    PUSH_PAD_OVER_FIXPAD = auto()  # FixPad -> Pad := Pad -> FixPad
+    JOIN_PADS = auto()  # Pad -> Pad := Pad
     # FixPad stuff
     JOIN_FIXPADS = auto()
     # Transpose stuff
-    JOIN_TRANSPOSE = auto() # Transpose -> Transpose := Transpose
-    PUSH_TRANSPOSE_TOWARDS_INPUTS = auto() # N -> Transpose := Transpose -> N. For some N
-    FOLD_TRANSPOSE = auto() # Initializer -> Transpose := Initializer
+    JOIN_TRANSPOSE = auto()  # Transpose -> Transpose := Transpose
+    PUSH_TRANSPOSE_SIMPLE = (
+        auto()
+    )  # N -> Transpose := Transpose -> N. For some N that do not require special treatment
+    PUSH_TRANSPOSE_OVER_FIXPAD = auto()
+    PUSH_TRANSPOSE_OVER_PAD = auto()
+    FOLD_TRANSPOSE = auto()  # Initializer -> Transpose := Initializer
     # MatMul stuff
-    MATMUL_TRANSPOSE = auto() # Data,Data -> MatMul(bIsTransposed = False) :=
-                              # Data,(Data -> Transpose) -> MatMul(bIsTransposed = True)
-    
+    MATMUL_TRANSPOSE = auto()  # Data,Data -> MatMul(bIsTransposed = False) :=
+    # Data,(Data -> Transpose) -> MatMul(bIsTransposed = True)
+    # Conv Stuff
+    CONV_NCHW_TO_NHWC = auto()
+
+
 @dataclass
 class PackedArrays:
     data: bytes
@@ -51,6 +59,7 @@ class Endianess(Enum):
 
 
 class DataSourceType(Enum):
+    UNCONNECTED = auto()
     MODEL_INPUT = auto()
     NODE_INPUT = auto()
     INITIALIZER = auto()
@@ -120,6 +129,8 @@ class MemoryLocation:
     offset: int
     memType: MemoryType
 
+    computedSize: int = -1
+
 
 class OnnxAttributeType(Enum):
     INTEGER = auto()
@@ -164,6 +175,7 @@ class OnnxAttribute:
 #       Since inputs are the source of truth in relation to graph stuff, we might just remove
 #       inputDimensions and have everything work from inputs.
 
+
 @dataclass(slots=True)
 class Operation:
     # Data extracted from the model
@@ -185,7 +197,9 @@ class Operation:
         None  # Address at runtime. We precalculate it, we do not allocate memory at runtime.
     )
 
-Operation_NIL = Operation("","NIL",-1,[],"",[],[],{})
+
+Operation_NIL = Operation("", "NIL", -1, [], "", [], [], {})
+
 
 class BroadcastType(Enum):
     NO_BROADCAST = auto()
@@ -242,23 +256,26 @@ def ConvertOnnxPadToNumpyPad(onnxPad):
 
     return numpyPad
 
+
 def ReverseNpPad(inp: np.ndarray, padding):
     shape = inp.shape
 
     slices = []
-    for i,dim in enumerate(shape):
+    for i, dim in enumerate(shape):
         start = padding[i][0]
         end = dim - padding[i][1]
 
-        slices.append(slice(start,end))
+        slices.append(slice(start, end))
 
     reverse = inp[tuple(slices)]
     return reverse
 
-def IsSourceNode(inp: DataSource,nodeIndexToCheck: int):
+
+def IsSourceNode(inp: DataSource, nodeIndexToCheck: int):
     if inp.sourceType == DataSourceType.NODE_INPUT and inp.index == nodeIndexToCheck:
         return True
     return False
+
 
 # A more useful representation for our use cases than having to interact with the onnx model directly
 @dataclass
@@ -297,48 +314,56 @@ class Model:
         C.inputs[y] = CopyDataSource(B.inputs[x])
         B.inputs[x] = MakeNodeInput(B.inputs[x].name, C.nodeIndex)
 
-        self.UpdateNodeData(C)
-        self.UpdateNodeData(B)
- 
-    # If we have A -> Graph and want to insert C after (A -> C -> Graph)
-    def InsertAfter(self,A: Operation,C: Operation):
+        # self.UpdateNodeData(C)
+        # self.UpdateNodeData(B)
+
+    # If we have A -> Graph and want to insert C after (A -> C:y -> Graph)
+    def InsertAfter(self, A: Operation, C: Operation, y: int):
+        nodesAndPortIndexes = self.GetOutputNodesAndPortIndexes(A, 0)
+
+        # self.UpdateNodeData(A)
+
+        if len(nodesAndPortIndexes) == 0:
+            # There is no output node, we are in a model output
+            C.inputs[y] = MakeNodeInput("", A.nodeIndex)
+            # self.UpdateNodeData(C)
+
         for B in self.operations:
             if B == C or B == A:
                 continue
-            for inp in B.inputs:
-                if IsSourceNode(inp,A.nodeIndex):
-                    self.InsertBefore(B,0,C,0)
+            for index, inp in enumerate(B.inputs):
+                if IsSourceNode(inp, A.nodeIndex):
+                    self.InsertBefore(B, index, C, y)
 
     # Swap X -> A -> B -> Y to become X -> B -> A -> Y
     # Y is not guaranteed to exist. Only X,A and B
     # We only care about shape preserving operations right now.
-    def Swap(self,A: Operation,B: Operation):
+    def Swap(self, A: Operation, B: Operation):
         assert len(A.inputs) == 1
         assert len(B.inputs) == 1
 
-        # A is before B. 
-        if(not IsSourceNode(B.inputs[0],A.nodeIndex)):
-            if(IsSourceNode(A.inputs[0],B.nodeIndex)):
-                A,B = B,A
+        # A is before B.
+        if not IsSourceNode(B.inputs[0], A.nodeIndex):
+            if IsSourceNode(A.inputs[0], B.nodeIndex):
+                A, B = B, A
             else:
                 assert False and "B and A are not connected directly. Cannot Swap"
 
         XInput = deepcopy(A.inputs[0])
         AInput = deepcopy(B.inputs[0])
-        YList = self.GetOutputNodesAndPortIndexes(B,0)
-        
-        A.inputs = [MakeNodeInput("",B.nodeIndex)]
+        YList = self.GetOutputNodesAndPortIndexes(B, 0)
+
+        A.inputs = [MakeNodeInput("", B.nodeIndex)]
         B.inputs = [XInput]
-        
-        self.UpdateNodeData(B)
-        self.UpdateNodeData(A)
 
-        for node,portIndex in YList:
+        # self.UpdateNodeData(B)
+        # self.UpdateNodeData(A)
+
+        for node, portIndex in YList:
             node.inputs = deepcopy(node.inputs)
-            node.inputs[portIndex] = MakeNodeInput("",A.nodeIndex)
-            self.UpdateNodeData(node)
+            node.inputs[portIndex] = MakeNodeInput("", A.nodeIndex)
+            # self.UpdateNodeData(node)
 
-            
     # Returns X for X -> start:inputPort
     def GetInputNode(self, start: Operation, inputPort: int):
         if inputPort >= len(start.inputs):
@@ -346,7 +371,7 @@ class Model:
 
         dataSource = start.inputs[inputPort]
 
-        if(dataSource.sourceType != DataSourceType.NODE_INPUT):
+        if dataSource.sourceType != DataSourceType.NODE_INPUT:
             return Operation_NIL
 
         opIndex = dataSource.index
@@ -354,22 +379,31 @@ class Model:
         return node
 
     # Output mostly ignored for now
-    def GetOutputNodesAndPortIndexes(self,source: Operation, outputPort: int):
+    def GetOutputNodesAndPortIndexes(self, source: Operation, outputPort: int):
         res = []
         for op in self.operations:
-            for index,inp in enumerate(op.inputs):
-                if IsSourceNode(inp,source.nodeIndex):
-                    res.append([op,index])
+            for index, inp in enumerate(op.inputs):
+                if IsSourceNode(inp, source.nodeIndex):
+                    res.append([op, index])
                     break
 
         return res
-    
+
+    def GetAllModelOutputNodes(self):
+        modelOutput = []
+        for op in self.operations:
+            outputsNodes = self.GetOutputNodesAndPortIndexes(op, 0)
+            if len(outputsNodes) == 0:
+                modelOutput.append(op)
+
+        return modelOutput
+
     # TODO: Input size is stupid
     def AddOperation(self, opType, inputSize):
         opIndex = self.NextOperationIndex()
         name = f"ADDED_{opIndex}"
         outputName = f"GENERATED_OUTPUT_{opIndex}"
-        inputs = [None] * inputSize
+        inputs = [DataSource(DataSourceType.UNCONNECTED, "")] * inputSize
         inputDims = [None] * inputSize
         outputDims = [None] * inputSize
         newOp = Operation(
@@ -381,14 +415,15 @@ class Model:
 
     def RemoveOperation(self, toRemove: Operation):
         if len(toRemove.inputs) == 1 and len(toRemove.outputDimensions) == 1:
+            print("A")
             # A -> B -> C
             # When we remove B, we have to connect all the Cs to A.
             ASrc = toRemove.inputs[0]
-            allCNodes = self.GetOutputNodesAndPortIndexes(toRemove,0)
-            
-            for node,port in allCNodes:
-                node.inputs[port] = MakeNodeInput("",ASrc.index)
-                self.UpdateNodeData(node)
+            allCNodes = self.GetOutputNodesAndPortIndexes(toRemove, 0)
+
+            for node, port in allCNodes:
+                node.inputs[port] = ASrc
+                # self.UpdateNodeData(node)
         else:
             # How do we handle multiple edges?
             # For now do nothing. Worst case scenario we convert input into initializer
@@ -396,41 +431,41 @@ class Model:
             # we obviously do not want that. The final graph must depend on the inputs
             # the same way the original graph does. Convert to initializer is just a
             # very hacky way of trying to generate anything at all.
-            #assert False
-            
+            # assert False
+
             for op in self.operations:
                 for inp in op.inputs:
-                    if IsSourceNode(inp,toRemove.nodeIndex):
+                    if IsSourceNode(inp, toRemove.nodeIndex):
                         inp.sourceType = DataSourceType.INITIALIZER
                         inp.index = self.NextInitializerIndex()
                         inp.data = toRemove.correctOutputData
 
-                self.UpdateNodeData(op)
+                # self.UpdateNodeData(op)
 
         self.operations.remove(toRemove)
 
     # As long as the input data is correct, this should work.
     # Onnx suported operators are updated using onnxruntime
     # Our operators require custom code.
-    def UpdateNodeData(self,op: Operation):
+    def UpdateNodeData(self, op: Operation):
         opType = op.opName
 
         if opType == "NIL":
             return
-        
+
         # FixPad is a custom non onnx operator that we have.
         # Not supported by onnxruntime
         if opType == "FixPad":
             src = self.GetGenericDataSource(op.inputs[0])
-            pads = op.parsedAttributes['pads']
+            pads = op.parsedAttributes["pads"]
 
             npPads = ConvertOnnxPadToNumpyPad(pads)
 
             # We fixup padding by reversing and padding again.
             # Easiest way of doing this and we only care about correctness right now.
-            reversedPad = ReverseNpPad(src.data,npPads)
-            paddedAgain = np.pad(reversedPad,npPads)
-            
+            reversedPad = ReverseNpPad(src.data, npPads)
+            paddedAgain = np.pad(reversedPad, npPads)
+
             op.inputDimensions = [deepcopy(src.dims)]
             op.outputDimensions = [deepcopy(src.dims)]
             op.correctOutputData = paddedAgain
@@ -446,28 +481,39 @@ class Model:
 
                 inputData.append(genericForm)
 
+            finalData = deepcopy(inputData)
+
             # Since transposed matmul is not something that is suppported by onnx, need to
             # fake it. The output must remain the same meaning that we just need to invert
             # the transposition before passing it to onnxruntime
             parsedAttributes = deepcopy(op.parsedAttributes)
-            
-            if op.opName == "MatMul" and parsedAttributes.get("isBTransposed",False):
+
+            if op.opName == "MatMul" and parsedAttributes.get("isBTransposed", False):
                 inputData[1].data = np.transpose(inputData[1].data)
                 inputData[1].dims = [int(x) for x in inputData[1].data.shape]
                 del parsedAttributes["isBTransposed"]
-                
+
+            transposeOutput = False
+            if op.opName == "Conv" and parsedAttributes.get("isNHWC", False):
+                transposeOutput = True
+                # Input should be in NCHW format meaning that we have to make it NCHW
+
+                inputData[0].data = np.transpose(inputData[0].data, axes=(0, 3, 1, 2))
+                inputData[0].dims = [int(x) for x in inputData[0].data.shape]
+                del parsedAttributes["isNHWC"]
+
             tensors = []
             inputs = []
-            for i,data in enumerate(inputData):
+            for i, data in enumerate(inputData):
                 inputName = f"IN_{i}"
 
                 # TODO: Properly handle this. Need to add more stuff to the node specs.
                 tensorType = TensorProto.FLOAT
-                if(op.opName == "Reshape" and i == 1):
+                if op.opName == "Reshape" and i == 1:
                     tensorType = TensorProto.INT64
 
-                #print(op.opName,tensorType)
-                tensor = make_tensor_value_info(inputName,tensorType,data.dims)
+                # print(op.opName,tensorType)
+                tensor = make_tensor_value_info(inputName, tensorType, data.dims)
 
                 inputs.append(inputName)
                 tensors.append(tensor)
@@ -475,44 +521,52 @@ class Model:
             outputTensorDim = None
             if op.opName == "Reshape":
                 outputTensorDim = []
-                
-            outputTensor = make_tensor_value_info("OUT",TensorProto.FLOAT,outputTensorDim)
 
-            node = make_node(
-                op.opName,
-                inputs,
-                ["OUT"],
-                **parsedAttributes
+            outputTensor = make_tensor_value_info(
+                "OUT", TensorProto.FLOAT, outputTensorDim
             )
-            
-            graph = make_graph(
-                [node], "simpleTest", tensors, [outputTensor]
-            )
+
+            node = make_node(op.opName, inputs, ["OUT"], **parsedAttributes)
+
+            graph = make_graph([node], "simpleTest", tensors, [outputTensor])
             onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
             onnx_model = version_converter.convert_version(onnx_model, 7)
             shaped = onnx.shape_inference.infer_shapes(onnx_model)
-            check_model(shaped)
 
-            # Try to make sure that onnxruntime produces the same data for the same inputs.
-            # Otherwise even a small change could trigger our asserts.
-            sess_options = ort.SessionOptions()
-            sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-            sess_options.intra_op_num_threads = 1
-            sess_options.inter_op_num_threads = 1
-            sess_options.add_session_config_entry("session.disable_prepacking", "1")
-            
-            sess = ort.InferenceSession(shaped.SerializeToString(),sess_options)
-            modelInputs = {x.name: y.data for x, y in zip(sess.get_inputs(), inputData)}
-            modelOutput = sess.run(None, modelInputs)
-
-            # Also update input dimensions since they might go out of sync from inputs
-            op.inputDimensions = [deepcopy(x.dims) for x in inputData]
-            op.correctOutputData = modelOutput[0]
-
+            op.inputDimensions = [None for x in inputData]
             op.outputDimensions = [None]
-            op.outputDimensions[0] = [int(x) for x in op.correctOutputData.shape]
+            try:
+                check_model(shaped)
+                # Otherwise even a small change could trigger our asserts.
+                sess_options = ort.SessionOptions()
+                sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                sess_options.intra_op_num_threads = 1
+                sess_options.inter_op_num_threads = 1
+                sess_options.add_session_config_entry("session.disable_prepacking", "1")
 
-        
+                sess = ort.InferenceSession(shaped.SerializeToString(), sess_options)
+                modelInputs = {
+                    x.name: y.data for x, y in zip(sess.get_inputs(), inputData)
+                }
+                modelOutput = sess.run(None, modelInputs)
+
+                # Try to make sure that onnxruntime produces the same data for the same inputs.
+
+                if transposeOutput:
+                    modelOutput[0] = np.transpose(modelOutput[0], axes=(0, 2, 3, 1))
+
+                # Also update input dimensions since they might go out of sync from inputs
+                op.inputDimensions = [deepcopy(x.dims) for x in finalData]
+                op.correctOutputData = modelOutput[0]
+
+                op.outputDimensions = [None]
+                op.outputDimensions[0] = [int(x) for x in modelOutput[0].shape]
+            except:
+                print(f"Failed to update node of index: {op.nodeIndex} {op.opName}")
+                LEFT HERE - We do not actually want to ignore stuff completely.
+                Want the freedom to update nodes when I want but we also want to be able to fail and still
+                check the result of wathever succeeded
+
     def NextInitializerIndex(self):
         res = self.nextInitializerIndex
         self.nextInitializerIndex += 1
