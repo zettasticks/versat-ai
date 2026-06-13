@@ -2,6 +2,10 @@
 
 #include "versat_ai.h"
 
+// nocheckin: Remove this after solving bug
+#include <stdlib.h>
+#include <string.h>
+
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 
@@ -1316,7 +1320,6 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
   entry(asFloat[0], (float *)outputMemory);
 
   PrintTimeDiff(start);
-
 #endif
 
   InferenceState stateInst = {.outputMem = outputMemory,
@@ -1324,6 +1327,14 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
                               .inputs = inputs,
                               .modelMem = modelMemory,
                               .correctData = correctInput};
+
+  char *correctInputAsChar = (char *)correctInput;
+  char *savedCorrectMem = (char *)malloc(model->correctSize);
+  memcpy(savedCorrectMem, correctInputAsChar, model->correctSize);
+
+  char *correctModelMemory = (char *)modelMemory;
+  char *savedModelMemory = (char *)malloc(model->modelSize);
+  memcpy(savedModelMemory, correctModelMemory, model->modelSize);
 
 #define PRINT_HELP 1
 
@@ -1384,18 +1395,18 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     versat_printf("%d\n", ptr->outputSize);
 #endif
 
-#if 0
+#if 1
     // Currently disabled since it appears that we have a bug somewhere.
-    // 
+    //
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
-    float *asFloat = (float *) output;
+    float *asFloat = (float *)output;
     for (int i = 0; i < (ptr->outputSize / sizeof(float)); i++) {
       asFloat[i] = 123.321f;
     }
 #endif
 
-    // versat_clearCache(NULL, 0);
+    versat_clearCache(NULL, 0);
 
     VersatProfileReset();
 
@@ -1500,6 +1511,18 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     default: {
       versat_printf("Unknown operation type: %d\n", ptr->type);
     } break;
+    }
+
+    for (int i = 0; i < model->correctSize; i++) {
+      if (savedCorrectMem[i] != correctInputAsChar[i]) {
+        versat_printf("Correct input change!!!!!\n");
+      }
+    }
+
+    for (int i = 0; i < model->modelSize; i++) {
+      if (savedModelMemory[i] != correctModelMemory[i]) {
+        versat_printf("Model memory change!!!!!\n");
+      }
     }
 
 #if 0

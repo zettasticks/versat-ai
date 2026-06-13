@@ -130,7 +130,7 @@ def CalculateMemoryAllocations(cModel):
             continue
 
         # TODO: Support different tensor types and whatnot.
-        memoryRequired = 1
+        memoryRequired = 16
         for dim in c.outputDimensions:
             memoryRequired *= TensorSize(dim)
 
@@ -138,20 +138,9 @@ def CalculateMemoryAllocations(cModel):
         indexesToMemoryAllocation[nodeIndex] = mem
         memoryAllocations.append(mem)
 
-    # memoryAllocations = memoryAllocations[:3]
-
-    for x in memoryAllocations:
-        print(x)
-
     totalTempMemoryNeeded = 0
     if memoryAllocations:
         totalTempMemoryNeeded = CalculateGreedyMemoryAllocationOffset(memoryAllocations)
-
-    print()
-    print()
-    print()
-    for x in memoryAllocations:
-        print(x)
 
     cModel.tempMemoryNeeded = totalTempMemoryNeeded
 
@@ -180,7 +169,7 @@ def CalculateMemoryAllocations(cModel):
             continue
 
         # TODO: Support different tensor types and whatnot.
-        memoryRequired = 1
+        memoryRequired = 16
         for dim in c.outputDimensions:
             memoryRequired *= TensorSize(dim)
 
@@ -188,7 +177,7 @@ def CalculateMemoryAllocations(cModel):
         c.outputMemoryAddress = MemoryLocation(totalOutputMemory, MemoryType.OUTPUT)
         totalOutputMemory += memoryRequired
 
-    if 1:
+    if 0:
         for index, c in enumerate(cModel.operations):
             print(f"Node: {c.nodeIndex}, Type: {c.opName}")
             for i, inp in enumerate(c.inputs):
@@ -201,9 +190,5 @@ def CalculateMemoryAllocations(cModel):
             outputSize = 1
             for dim in c.outputDimensions:
                 outputSize *= TensorSize(dim)
-
-            print(
-                f"  Output mem {c.outputMemoryAddress.memType}: {c.outputMemoryAddress.offset} ({outputSize})"
-            )
 
     cModel.outputMemoryNeeded = totalOutputMemory

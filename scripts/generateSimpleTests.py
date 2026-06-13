@@ -1206,6 +1206,8 @@ def GenerateSimpleTest(config):
 
     if testAveragePool:
         # All padding posibilities, mostly to test the window generation
+        CreateAveragePool([1, 1, 2, 2], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
+
         # No padding                                               T  L  B  R
         CreateAveragePool([1, 1, 4, 4], [2, 2], [2, 2], "NOTSET", [0, 0, 0, 0])
         CreateAveragePool([1, 1, 3, 4], [2, 2], [2, 2], "NOTSET", [1, 0, 0, 0])

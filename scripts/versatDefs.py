@@ -79,6 +79,25 @@ class TypedArray:
     name: str = None
 
 
+def NpArrayToIdentifier(npArray):
+    ident = None
+    if npArray.dtype == np.float32:
+        ident = 0
+        for index in np.ndindex(npArray.shape):
+            ident += npArray[index]
+
+    if npArray.dtype == np.int64:
+        ident = 0
+        for index in np.ndindex(npArray.shape):
+            ident += npArray[index]
+
+    if ident is None:
+        print(npArray.dtype)
+        assert False
+
+    return str(npArray.shape) + "_" + str(ident)
+
+
 # A source of data. Initializer data is stored in here. ModelInputs data for validation are also stored.
 # Node data only contains the index of the outputting node. Valid data can be obtained by getting node
 # and getting the correctOutputData
@@ -92,16 +111,18 @@ class DataSource:
     tensorDims: list[int | str] | None = None  # Not always guaranteed to exist.
 
     def __repr__(self):
-        if self.sourceType == DataSourceType.MODEL_INPUT and self.data is not None:
-            return (
-                self.sourceType.name
-                + "_"
-                + str(self.index)
-                + "_"
-                + str(self.data.shape)
-            )
+        res = str(self.sourceType)
 
-        return self.sourceType.name + " " + str(self.index)
+        if self.index >= 0:
+            res += "_" + str(self.index)
+
+        if self.data is not None:
+            res += "_" + NpArrayToIdentifier(self.data)
+
+        if self.tensorDims is not None:
+            res += "_" + str(self.tensorDims)
+
+        return res
 
 
 def MakeNodeInput(name, nodeIndex: int):
@@ -178,7 +199,7 @@ class OnnxAttribute:
 #       inputDimensions and have everything work from inputs.
 
 
-@dataclass(slots=True)
+@dataclass(slots=False)
 class Operation:
     # Data extracted from the model
     nodeName: str
@@ -198,6 +219,16 @@ class Operation:
     outputMemoryAddress: MemoryLocation = (
         None  # Address at runtime. We precalculate it, we do not allocate memory at runtime.
     )
+
+    def __repr__(self):
+        dictCont = deepcopy(vars(self))
+
+        if dictCont["correctOutputData"] is not None:
+            dictCont["correctOutputData"] = NpArrayToIdentifier(
+                dictCont["correctOutputData"]
+            )
+
+        return str(dictCont)
 
 
 Operation_NIL = Operation("", "NIL", -1, [], "", [], [], {})
@@ -417,17 +448,29 @@ class Model:
 
         return newOp
 
-    def PreserveOnlyOne(self,toPreserve):
+    def PreserveOnlyOne(self, toPreserve):
         for inp in toPreserve.inputs:
             gen = self.GetGenericDataSource(inp)
-            
+
             inp.sourceType = DataSourceType.INITIALIZER
             inp.index = self.NextInitializerIndex()
             inp.data = deepcopy(gen.data)
 
         self.operations = [toPreserve]
-    
-    def RemoveOperation(self, toRemove: Operation):
+
+    def RemoveOperationKeepData(self, toRemove: Operation):
+        data = DataSource(DataSourceType.INITIALIZER, "", self.NextInitializerIndex())
+        data.data = deepcopy(toRemove.correctOutputData)
+
+        allOutputNodes = self.GetOutputNodesAndPortIndexes(toRemove, 0)
+
+        # print(allOutputNodes)
+        for node, port in allOutputNodes:
+            node.inputs[port] = deepcopy(data)
+
+        self.operations.remove(toRemove)
+
+    def RemoveOperationDoNotKeepData(self, toRemove: Operation):
         if len(toRemove.inputs) == 1:
             # A -> B -> C
             # When we remove B, we have to connect all the Cs to A.
@@ -438,30 +481,7 @@ class Model:
                 node.inputs[port] = ASrc
                 # self.UpdateNodeData(node)
         else:
-            # How do we handle multiple edges?
-            # For now do nothing. Worst case scenario we convert input into initializer
-            # but considering that we are trying to implement graph optimizations
-            # we obviously do not want that. The final graph must depend on the inputs
-            # the same way the original graph does. Convert to initializer is just a
-            # very hacky way of trying to generate anything at all.
-            # assert False
-
-            allOutputNodes = self.GetOutputNodesAndPortIndexes(toRemove,0)
-
-            #print(allOutputNodes)
-            for node,port in allOutputNodes:
-                node.inputs[port].sourceType = DataSourceType.INITIALIZER
-                node.inputs[port].index = self.NextInitializerIndex()
-                node.inputs[port].data = deepcopy(toRemove.correctOutputData)
-
-            #for op in self.operations:
-            #    for inp in op.inputs:
-            #        if IsSourceNode(inp, toRemove.nodeIndex):
-            #            inp.sourceType = DataSourceType.INITIALIZER
-            #            inp.index = self.NextInitializerIndex()
-            #            inp.data = toRemove.correctOutputData
-
-                # self.UpdateNodeData(op)
+            assert False
 
         self.operations.remove(toRemove)
 
@@ -553,7 +573,6 @@ class Model:
             onnx_model = make_model(graph, opset_imports=[make_opsetid("", 7)])
             onnx_model = version_converter.convert_version(onnx_model, 7)
             shaped = onnx.shape_inference.infer_shapes(onnx_model)
-            print(shaped)
 
             op.inputDimensions = [None for x in inputData]
             op.outputDimensions = [None]

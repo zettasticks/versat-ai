@@ -258,6 +258,7 @@ matMulAttributes = {
     "isBTransposed": MakeAttrInteger(0),
 }
 
+
 def EmitMatMul(emitter, op: Operation):
     attr = GetAttributesForOperator(op)
 

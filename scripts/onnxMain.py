@@ -505,19 +505,17 @@ def GenerateDotFile(cModel):
     return res
 
 
-def PrintOperationData(cModel,op,printInputs = True):
+def PrintOperationData(cModel, op, printInputs=True):
     if printInputs:
-        for index,inp in enumerate(op.inputs):
+        for index, inp in enumerate(op.inputs):
             gen = cModel.GetGenericDataSource(inp)
             print(f"Input {index}")
             for index in np.ndindex(gen.data.shape):
-                print(index,gen.data[index])
-        #average = np.average(op.inputs[0].data,axis=(2,3))
-        #print(average.shape,average)
+                print(index, gen.data[index])
 
     print("Output: ")
     for index in np.ndindex(op.correctOutputData.shape):
-        print(index,op.correctOutputData[index])
+        print(index, op.correctOutputData[index])
 
 
 # TODO: We are starting to accumulate a bunch of config flags and stuff is starting to get out of control
@@ -650,9 +648,6 @@ def GenerateDebug(
     for i, data in enumerate(correctData):
         cModel.operations[i].correctOutputData = data
 
-    #PrintOperationData(cModel,cModel.operations[20],True)
-    print(cModel.operations[19])
-    
     # For debugging purposes it might be useful to embed the inputs as initializers.
     # That way we can test certain optimizations.
     transformInputToInitializer = False
@@ -818,10 +813,19 @@ def GenerateDebug(
     # The closer it is to initializers and whatnot the easier it will
     # be to fold.
 
-    print("Before optimization:\n")
-    for i, c in enumerate(cModel.operations):
-        print(i, c.opName, c.inputDimensions)
-    print("\n\n")
+    # PrintOperationData(cModel,cModel.operations[19])
+
+    if 0:
+        print("Before optimization:\n")
+        for i, c in enumerate(cModel.operations):
+            print(i, c.opName, c.inputDimensions)
+        print("\n\n")
+
+    for x in cModel.operations:
+        print()
+        print()
+        print()
+        pprint(x)
 
     allOutputNodes = cModel.GetAllModelOutputNodes()
     originalCorrectData = None
@@ -1049,8 +1053,6 @@ def GenerateDebug(
             node.parsedAttributes["pads"] = [0] * len(attr["pads"])
 
             cModel.InsertBefore(node, 0, newOp, 0)
-
-            # print(cModel)
 
         if ruleFound == OptimizationRules.CONV_NCHW_TO_NHWC:
             ruleApplied = True
@@ -1333,7 +1335,7 @@ def GenerateDebug(
     ReorganizeGraph(cModel)
 
     # Make sure that everything is updated.
-    if True:
+    if False:
         try:
             for op in cModel.operations:
                 cModel.UpdateNodeData(op)
@@ -1350,7 +1352,7 @@ def GenerateDebug(
             for i, c in enumerate(cModel.operations):
                 PrintSimpleNodeInfompleNodeInfo(i, c)
             sys.exit(0)
-            
+
     with open("AfterOpt.dot", "w") as f:
         f.write(GenerateDotFile(cModel))
 
@@ -1366,6 +1368,7 @@ def GenerateDebug(
             )
 
     # Remove layers if the user commands. Mostly to help test individual operations
+
     if focusLayerRange:
         focusStart = focusLayerRange[0]
         focusEnd = focusLayerRange[1]
@@ -1378,14 +1381,13 @@ def GenerateDebug(
                     continue
 
                 op = cModel.GetOperationByIndexOrFail(i)
-                cModel.RemoveOperation(op)
+                cModel.RemoveOperationKeepData(op)
 
     ReorganizeGraph(cModel)
 
-    PrintOperationData(cModel,cModel.operations[0])
-            
-    for i, c in enumerate(cModel.operations):
-        PrintSimpleNodeInfo(i, c)
+    if True:
+        for i, c in enumerate(cModel.operations):
+            PrintSimpleNodeInfo(i, c)
 
     # Compress initializers
     initializerMaxIndex = 0
@@ -1407,6 +1409,8 @@ def GenerateDebug(
     # index and any superfluous data has been removed
 
     CalculateMemoryAllocations(cModel)
+
+    # PrintOperationData(cmodel,cModel.operations[19])
 
     # Pack inputs
     allInputData = [None] * len(cModel.modelInputs)
@@ -1448,9 +1452,6 @@ def GenerateDebug(
             compactCorrectData.append(np.zeros(1, dtype=np.float32))
 
     packedCorrectData = PackMultipleArrays(compactCorrectData)
-
-    for i, c in enumerate(cModel.operations):
-        PrintSimpleNodeInfo(i, c)
 
     # All nodes get their data from the valid data array
     # Basically any error in any node does not propagate to other nodes (only for validation purposes)
@@ -1685,8 +1686,8 @@ def GenerateDebug(
             os.path.join(binOutputLocation, f"{namespace}_inputs.bin"), "wb"
         ) as f:
             f.write(packedInputs.data)
-            if(len(packedInputs.data) == 0):
-                f.write(b'0000')
+            if len(packedInputs.data) == 0:
+                f.write(b"0000")
 
         with open(
             os.path.join(binOutputLocation, f"{namespace}_correctOutputs.bin"), "wb"
