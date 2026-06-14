@@ -1336,7 +1336,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
   char *savedModelMemory = (char *)malloc(model->modelSize);
   memcpy(savedModelMemory, correctModelMemory, model->modelSize);
 
-#define PRINT_HELP 1
+#define PRINT_HELP 0
 
   InferenceState *state = &stateInst;
 
@@ -1423,6 +1423,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
       if (useSoftware) {
         out = Software_Relu(input0, output, i, info);
       } else {
+        // out = Software_Relu(input0, output, i, info);
         out = Versat_Relu(input0, output, i, info);
       }
     } break;

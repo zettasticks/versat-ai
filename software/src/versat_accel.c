@@ -293,17 +293,6 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
   int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
-  float *asFloat = (float *)inputA;
-  for (int i = 0; i < 10; i++) {
-    versat_printf("%f\n", asFloat[i]);
-  }
-
-  versat_printf("%d\n", info->dims);
-  versat_printf("%p\n", inputDims);
-  versat_printf("%llx %llx %llx %llx\n", inputDims[0], inputDims[1],
-                inputDims[2], inputDims[3]);
-  versat_printf("%llx\n", totalSize);
-
 #if 0
   VersatVarSpec sizeSpec = {};
   sizeSpec.min = 1;
@@ -322,7 +311,7 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
 
     Top_Relu_Simple(&inputView[i], &outputView[i], size);
 
-    versat_printf("%llx %d\n", i, size);
+    // versat_printf("%llx %d\n", i, size);
     RunAccelerator(1);
   }
 
@@ -330,13 +319,6 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   RunAccelerator(2);
 
   versat_clearCache(NULL, 0);
-
-  {
-    float *asFloat = (float *)output;
-    for (int i = 0; i < 10; i++) {
-      versat_printf("%f\n", asFloat[i]);
-    }
-  }
 
   return output;
 }
@@ -462,14 +444,16 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
   int strideW = strideDims[1];
   int strideH = strideDims[0];
 
-  float* asFloat = (float*) output;
-  float* correctedOutputStart = asFloat + (w.outputY * outputImageW) + w.outputX;
-  
+  float *asFloat = (float *)output;
+  float *correctedOutputStart = asFloat +
+                                (channel * outputImageH * outputImageW) +
+                                (w.outputY * outputImageW) + w.outputX;
+
   Top_AveragePool_Features(input, w.inputX, w.inputY, cInStart, w.actualKernelW,
                            w.actualKernelH, inputImageW, w.outputW, w.outputH,
                            strideW, strideH);
-  Top_AveragePool_Output(correctedOutputStart, 0, 0, cOutStart, w.outputW,
-                         w.outputH, outputImageW, stride);
+  Top_AveragePool_Output(correctedOutputStart, 0, 0, 0, w.outputW, w.outputH,
+                         outputImageW, stride);
 
   config->averagePool_accum.strideMinusOne = stride - 1;
   config->invertedDivisor.constant = NoConvert(1.0f / (float)stride);
@@ -479,62 +463,33 @@ static inline void AveragePool_ProcessWindow(AdvancedWindow w, int channel,
 // Currently hardcoded for 2D kernels.
 void *Versat_AveragePool(void *inputX, void *output, int index,
                          AveragePoolInfo *info) {
-  //forceDoubleLoop = true;
+  // forceDoubleLoop = true;
 
-#if 0
-  int *asInt = (int *)accelConfig;
-  for (int i = 0; i < sizeof(TestConfig); i++) {
-    asInt = 0;
-  }
-
-  ResetAccelerator();
-#endif
-  
   volatile Top_AveragePoolConfig *config = &accelConfig->Top_AveragePool;
   ActivateMergedAccelerator(MergeType_Top_AveragePool);
 
   int64_t *inputDims = VERSAT_AveragePoolInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_AveragePoolInfo_outputDims(info);
-  int *kernelDims = VERSAT_AveragePoolInfo_kernelDims(info);
-  int *strideDims = VERSAT_AveragePoolInfo_strideDims(info);
-  int *padsDims = VERSAT_AveragePoolInfo_padsDims(info);
-
-  // MARK
-#if 0
-  for(int i = 0; i < Dimensions_TotalSize(CreateDimensions(inputDims,info->dims)); i++){
-    float* a = (float*) inputX;
-    versat_printf("I: %f\n",a[i]);
-  }
-#endif
 
   int channels = inputDims[1];
 
   ExtraInfo extra = CalculateExtraInfo_AveragePool(info);
 
   // Using NCHW
-  for (int c = 0; c < channels; c++) {
-    WindowGen genInst = StartWindowGen(&extra, false, false);
-    WindowGen *gen = &genInst;
+  // for (int c = 0; c < channels; c++) {
+  WindowGen genInst = StartWindowGen(&extra, true, false);
+  WindowGen *gen = &genInst;
 
-    for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
-      AdvancedWindow w = WindowGen_Get(gen);
-      //AdvancedWindow_Print(w);
-      AveragePool_ProcessWindow(w, c, inputX, output, info);
-    }
+  for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
+    AdvancedWindow w = WindowGen_Get(gen);
+    // AdvancedWindow_Print(w);
+    AveragePool_ProcessWindow(w, w.outputC, inputX, output, info);
   }
+  //}
 
   VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
   versat_clearCache(NULL, 0);
-
-  // MARK
-#if 0
-  for(int i = 0; i < Dimensions_TotalSize(CreateDimensions(inputDims,info->dims)); i++){
-    float* a = (float*) output;
-    versat_printf("O: %f\n",a[i]);
-  }
-#endif
 
   return output;
 }
@@ -543,833 +498,6 @@ void *Versat_AveragePool(void *inputX, void *output, int index,
 // the group already
 //
 
-#if 0
-
-void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
-                                void *inputW, void *outAddr, float *bias,
-                                ConvInfo *info, int inputC, int outputC) {
-  // ProfileScope(1, "Window gen begin");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  int inputImageW = inputDims[3] + extra.padW;
-  int inputImageC = inputC;
-
-  int outputImageW = outputDims[3];
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
-
-  int convChannelSize = inputImageC;
-
-  int convStartC = 0; // We must always process the entire input channels.
-
-  // ProfileScope(1, "Before main init function");
-  Top_Conv_FeaturesWeightsOutputs_SIMULATE(
-      inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
-      convChannelSize,
-
-      w.outputH, w.outputW, w.outputSizeC,
-
-      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, w.startC, w.outputX,
-      w.outputY,
-
-      inputImageW, inputImageC, convStartC, kernelW, kernelH,
-
-      outputImageW, stride, outputC,
-
-      strideDims[1], strideDims[0]);
-  // ProfileScope(1, "After main init function");
-
-  if (bias == NULL) {
-    static float bias = 0.0f;
-    Top_Conv_Bias(&bias, 1, 1, w.outputW, w.outputH);
-  } else {
-    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride, w.outputW, w.outputH);
-  }
-
-  config->myAccum.strideMinusOne = stride - 1;
-
-  // ProfileScope(1,"Gonna start accel");
-  StartAccelerator();
-  // ProfileScope(1, "Window gen end");
-}
-
-void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
-                  ConvInfo *info) {
-  Versat_ConvWithBias(inputX, inputW, NULL, output, index, info);
-}
-
-static bool PowerOf2(int val) {
-  if (val == 0) {
-    return false;
-  }
-
-  if ((val & (val - 1)) == 0) {
-    return true;
-  }
-
-  return false;
-}
-
-void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
-                          void *output, int index, ConvInfo *info) {
-  ProfileScope(0, "Start Of Conv");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  ArenaMark outerMark = MarkArena(arena);
-
-  ActivateMergedAccelerator(MergeType_Top_Conv);
-
-  ProfileScope(0, "After merge activate");
-
-  int batches = inputDims[0];
-  int inputChannels = inputDims[1];
-  int inputImageW = inputDims[3];
-  int inputImageH = inputDims[2];
-
-  int outputChannels = outputDims[1];
-  int outputImageH = outputDims[2];
-  int outputImageW = outputDims[3];
-
-  Tensor fullOutput = PushTensor(arena, outputDims, 4);
-
-  int inputSize = inputImageW * inputImageH * inputChannels;
-  int outputSize = outputImageW * outputImageH * outputChannels;
-  int group = info->group;
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  VersatVarSpec outputCSpec = {1, (outputChannels / group), 0};
-  VersatVarSpec outputWSpec = {1, outputImageW, 1};
-  VersatVarSpec outputHSpec = {1, outputImageH, 2};
-
-  // We calculate size based the size of the kernel, the amount of input
-  // channels and the value of the outputs.
-  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
-      kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
-      &outputCSpec);
-
-  ProfileScope(0, "After size calculations");
-
-  Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
-  inputTensor.data = inputX;
-
-  // Currently we divide on batches but for small convolutions we might need to
-  // be able to support this.
-  for (int batch = 0; batch < batches; batch++) {
-    ProfileScope(0, "Start batch loop");
-
-    ArenaMark mark = MarkArena(arena);
-
-    // TODO: This technically depends on batch because we have group related
-    // operations that change these values.
-    // If we remove them we can then push this outside the loop
-    ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
-    ProfileScope(0, "After calculate extra info");
-
-    int64_t imageWithPadH = inputDims[2] + extra.padH;
-    int64_t imageWithPadW = inputDims[3] + extra.padW;
-
-    int64_t NHWCDims[] = {inputDims[0], imageWithPadH, imageWithPadW,
-                          inputDims[1]};
-    Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
-    float *tempInput = tempInputTensor.data;
-
-    int kernelSmallSize = kernelDims[1] * kernelDims[0];
-
-    float *inputView = (float *)inputX;
-    inputView += batch * inputSize;
-
-    ProfileScope(0, "After tensor pushes");
-
-    int totalInputImageH = inputImageH + extra.rightPadH;
-    int totalInputImageW = inputImageW + extra.rightPadW;
-
-    // Convert NCHW to NHWC while also adding padding if needed.
-    ProfileScope(0, "Before NCHW conversion");
-    for (int y = -extra.leftPadH; y < totalInputImageH; y++) {
-      for (int x = -extra.leftPadW; x < totalInputImageW; x++) {
-        for (int c = 0; c < inputChannels; c++) {
-          int NCHW_Index =
-              c * (inputImageH * inputImageW) + y * inputImageW + x;
-          int NHWC_Index =
-              (y + extra.leftPadH) * (imageWithPadW * inputChannels) +
-              (x + extra.leftPadW) * inputChannels + c;
-
-          if (y < 0 || y >= inputImageH) {
-            tempInput[NHWC_Index] = 0.0f;
-            continue;
-          }
-          if (x < 0 || x >= inputImageW) {
-            tempInput[NHWC_Index] = 0.0f;
-            continue;
-          }
-
-          tempInput[NHWC_Index] = inputView[NCHW_Index];
-        }
-      }
-    }
-    ProfileScope(0, "After NCHW conversion");
-
-    Dimensions outDims = CreateDimensions(outputDims, 4);
-    outDims.data[1] /= group;
-
-    // TODO: Changing extra is kinda "problematic". We are doing a bunch of
-    // stuff that might not be needed anymore.
-    //       It might be possible to just push this logic to Versat and let it
-    //       handle it.
-    extra.inputImageC /= group;
-    extra.outputImageC /= group;
-
-    int index = 0;
-    for (int g = 0; g < group; g++) {
-      int inputC = extra.inputImageC;
-      int outputC = extra.outputImageC;
-
-      // We extract the input associated to the current group.
-      Tensor extracted =
-          Tensor_ExtractView(tempInputTensor, 3, g * inputC, inputC, arena);
-
-      WindowGen genInst =
-          StartAdvancedWindowGen(&extra, true, false, outputWSpec.value,
-                                 outputHSpec.value, outputCSpec.value);
-      WindowGen *gen = &genInst;
-
-      // We extract the bias input.
-      float *trueBias = (float *)inputB;
-      if (trueBias != NULL) {
-        trueBias += (g * extra.outputImageC);
-      }
-
-      // MARK
-      ProfileScope(0, "Before window gen");
-      int amountOfWindows = 0;
-      AdvancedWindow w = {};
-      for (; WindowGen_Valid(gen); WindowGen_AdvanceTruePadding(gen, w)) {
-        WindowGen_GetTruePadding(gen, &w);
-        amountOfWindows += 1;
-
-        ConvWithBias_ProcessWindow(
-            extra, w, extracted.data,
-            ((float *)inputW) +
-                g * (kernelSmallSize * (outputChannels / group) *
-                     (inputChannels / group)),
-            &fullOutput.data[index], trueBias, info, inputC, outputC);
-      }
-
-      index += outDims.data[1] * outDims.data[2] * outDims.data[3];
-    }
-
-    Tensor_CheckCanary(tempInputTensor);
-    Tensor_CheckCanary(fullOutput);
-
-    MarkPop(mark);
-    ProfileScope(0, "End of batch function");
-  }
-
-  VERSAT_DisableReadsAndWrites();
-  RunAccelerator(2);
-
-  // Convert back into NCHW
-  // =====================================================
-  {
-    int cOutSize = outputDims[1] / group;
-    int totalSizePerGroup = cOutSize * outputDims[2] * outputDims[3];
-
-    float *outputView = (float *)output;
-    int index = 0;
-    for (int g = 0; g < group; g++) {
-      float *groupData = fullOutput.data + (totalSizePerGroup * g);
-
-      for (int c = 0; c < cOutSize; c++) {
-        for (int y = 0; y < outputDims[2]; y++) {
-          for (int x = 0; x < outputDims[3]; x++) {
-            int NHWC_Index = y * (cOutSize * outputDims[3]) + x * cOutSize + c;
-
-            outputView[index] = groupData[NHWC_Index];
-            index += 1;
-          }
-        }
-      }
-    }
-  }
-
-  MarkPop(outerMark);
-
-  ProfileScope(0, "End Of Conv");
-
-  return output;
-}
-#endif
-
-#if 0
-void ConvWithBias_ProcessWindow(AdvancedWindow w, void *inputX, void *inputW,
-                                void *outAddr, float *bias, ConvInfo *info,
-                                int inputC, int outputC) {
-  ProfileScope(1, "Window gen begin");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  int inputImageW = inputDims[3];
-  int inputImageC = inputC;
-
-  int outputImageW = outputDims[3];
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
-
-  int convChannelSize = inputImageC;
-
-  int convStartC = 0; // We must always process the entire input channels.
-
-  ProfileScope(1, "Before main init function");
-  Top_Conv_FeaturesWeightsOutputs(
-      inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
-      convChannelSize,
-
-      w.outputH, w.outputW, w.outputSizeC,
-
-      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, 
-      w.startC, 
-      w.outputX,w.outputY,
-
-      inputImageW, inputImageC, convStartC, kernelW, kernelH,
-
-      outputImageW, stride, outputC);
-  ProfileScope(1, "After main init function");
-
-  if (bias == NULL) {
-    static float bias = 0.0f;
-    Top_Conv_Bias(&bias, 1, 1);
-  } else {
-    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride);
-  }
-
-  config->myAccum.strideMinusOne = stride - 1;
-
-  // ProfileScope(1,"Gonna start accel");
-  StartAccelerator();
-  ProfileScope(1, "Window gen end");
-}
-
-void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
-                  ConvInfo *info) {
-  Versat_ConvWithBias(inputX, inputW, NULL, output, index, info);
-}
-
-void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
-                          void *output, int index, ConvInfo *info) {
-  ProfileScope(0, "Start Of Conv");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  ArenaMark outerMark = MarkArena(arena);
-
-  ActivateMergedAccelerator(MergeType_Top_Conv);
-
-  int batches = inputDims[0];
-  int inputChannels = inputDims[1];
-  int inputImageW = inputDims[3];
-  int inputImageH = inputDims[2];
-
-  int outputChannels = outputDims[1];
-  int outputImageH = outputDims[2];
-  int outputImageW = outputDims[3];
-
-  int inputSize = inputImageW * inputImageH * inputChannels;
-  int outputSize = outputImageW * outputImageH * outputChannels;
-  int group = info->group;
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  VersatVarSpec outputHSpec = {1, outputImageH, 1};
-  VersatVarSpec outputWSpec = {1, outputImageW, 2};
-  VersatVarSpec outputCSpec = {1, outputChannels, 0};
-
-  // We calculate size based the size of the kernel, the amount of input
-  // channels and the value of the outputs.
-  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
-      kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
-      &outputCSpec);
-
-  Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
-  inputTensor.data = inputX;
-
-  // Currently we divide on batches but for small convolutions we might need to be able to support this.
-  for (int batch = 0; batch < batches; batch++) {
-    ArenaMark mark = MarkArena(arena);
-
-    // TODO: This technically depends on batch because we have group related
-    // operations that change these values.
-    // If we remove them we can then push this outside the loop
-    ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
-    int64_t NHWCDims[] = {inputDims[0], inputDims[2], inputDims[3],
-                          inputDims[1]};
-
-    Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
-    Tensor tempOutputTensor = PushTensor(arena, outputDims, 4);
-
-    int kernelSmallSize = kernelDims[1] * kernelDims[0];
-
-    int64_t kernelDims[] = {outputChannels, inputChannels / group,
-                            kernelDims[1], kernelDims[0]};
-
-    int kernelSize = Dimensions_TotalSize(CreateDimensions(kernelDims, 4));
-
-    float *tempInput = tempInputTensor.data;
-    float *tempOutput = tempOutputTensor.data;
-
-    float *inputView = (float *)inputX;
-    float *biasView = (float *)inputB;
-
-    inputView += batch * inputSize;
-
-    // Convert NCHW to NHWC while also adding padding if needed.
-    ProfileScope(0, "Before NCHW conversion");
-    for (int y = 0; y < inputImageH; y++) {
-      for (int x = 0; x < inputImageW; x++) {
-        for (int c = 0; c < inputChannels; c++) {
-          int NCHW_Index = c * (inputImageH * inputImageW) + y * inputImageW + x;
-          int NHWC_Index = y * (inputImageW * inputChannels) + x * inputChannels + c;
-
-          tempInput[NHWC_Index] = inputView[NCHW_Index];
-        }
-      }
-    }
-    ProfileScope(0, "After NCHW conversion");
-
-    // Extract the channel
-    Dimensions dims = CreateDimensions(inputDims, 4);
-    dims.data[1] /= group;
-
-    int size = Dimensions_TotalSize(dims);
-
-    Dimensions outDims = CreateDimensions(outputDims, 4);
-    outDims.data[1] /= group;
-
-    int64_t NHWCOutDims[4] = {outDims.data[0], outDims.data[2], outDims.data[3],
-                              outDims.data[1]};
-    Tensor tempGroupTensor = PushTensor(arena, NHWCOutDims, 4);
-    float *tempGroupOutput = tempGroupTensor.data;
-
-    // TODO: Changing extra is kinda "problematic". We are doing a bunch of
-    // stuff that might not be needed anymore.
-    //       It might be possible to just push this logic to Versat and let it
-    //       handle it.
-    extra.inputImageC /= group;
-    extra.outputImageC /= group;
-
-    int index = 0;
-    for (int g = 0; g < group; g++) {
-      int inputC = extra.inputImageC;
-      int outputC = extra.outputImageC;
-
-      // We extract the input associated to the current group.
-      Tensor extracted =
-          Tensor_ExtractView(tempInputTensor, 3, g * inputC, inputC, arena);
-
-      // We iterate over the "reduced" extra values.
-      WindowGen genInst = StartAdvancedWindowGen(
-          &extra, true, false, outputCSpec.value); // outputCSpec.value
-      WindowGen *gen = &genInst;
-
-      // We extract the bias input.
-      float *trueBias = biasView;
-      if (trueBias != NULL) {
-        trueBias += (g * extra.outputImageC);
-      }
-
-      // MARK
-      ProfileScope(0, "Before window gen");
-      int amountOfWindows = 0;
-      for (; WindowGen_Valid(gen); WindowGen_Advance(gen)) {
-        AdvancedWindow w = WindowGen_Get(gen);
-        amountOfWindows += 1;
-
-#if 0
-        AdvancedWindow_Print(w);
-        versat_printf("\n\n");
-#endif
-
-        if (w.entireWindowInsidePadding) {
-          // Assuming window is size 1x1.
-          float bias = 0.0f;
-          for (int c = 0; c < w.outputSizeC; c++) {
-            if (trueBias) {
-              bias = trueBias[w.outputC + c];
-            }
-
-            tempGroupOutput[w.outputY * extra.outputImageC * outputImageW +
-                            w.outputX * extra.outputImageC + w.outputC + c] =
-                bias;
-          }
-        } else {
-          ConvWithBias_ProcessWindow(
-              w, extracted.data,
-              ((float *)inputW) +
-                  g * (kernelSmallSize * (outputChannels / group) *
-                       (inputChannels / group)),
-              tempGroupOutput, trueBias, info, inputC, outputC);
-        }
-      }
-      ProfileScope(0, "After window gen");
-
-      // Flush the remaining data from the accelerator
-      // TODO: Not efficient but not worrying about it for now.
-      VERSAT_DisableReadsAndWrites();
-      RunAccelerator(2);
-
-      silent_clear_cache();
-
-      // We obtain the result in NHWC format and we need to "concatenate" this
-      // with the output that we are building.
-      // The output is also in NHWC format.
-      // The problem is that the concatenation assumes that we are in NCHW
-      // format.
-
-      // We then concatenate everything into one place.
-      // And make use of the fact that in NCHW we can just "append".
-      // So it is easier to transpose the small output patch than it is to
-      int transposeDims[] = {0, 3, 1, 2};
-      Tensor transposed =
-          Tensor_Transpose(tempGroupTensor, transposeDims, arena);
-
-      float *outputView = (float *)output;
-      outputView += batch * outputSize;
-      for (int i = 0; i < outputSize / group; i++) {
-        outputView[index++] = transposed.data[i];
-      }
-
-      Tensor_CheckCanary(extracted);
-      Tensor_CheckCanary(transposed);
-    }
-
-    Tensor_CheckCanary(tempGroupTensor);
-    Tensor_CheckCanary(tempInputTensor);
-    Tensor_CheckCanary(tempOutputTensor);
-
-    MarkPop(mark);
-  }
-
-  MarkPop(outerMark);
-
-  ProfileScope(0, "End Of Conv");
-
-  return output;
-}
-#endif
-
-#if 0
-void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
-                                void *inputW, void *outAddr, float *bias,
-                                ConvInfo *info, int inputC, int outputC) {
-  // ProfileScope(1, "Window gen begin");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  int inputImageW = inputDims[3] + extra.padW;
-  int inputImageC = inputC;
-
-  int outputImageW = outputDims[3];
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  int stride = w.actualKernelW * w.actualKernelH * inputImageC;
-
-  int convChannelSize = inputImageC;
-
-  int convStartC = 0; // We must always process the entire input channels.
-
-  // ProfileScope(1, "Before main init function");
-  Top_Conv_FeaturesWeightsOutputs(
-      inputX, inputW, outAddr, w.actualKernelW, w.actualKernelH,
-      convChannelSize,
-
-      w.outputH, w.outputW, w.outputSizeC,
-
-      w.inputX, w.inputY, w.kernelStartW, w.kernelStartH, w.startC, w.outputX,
-      w.outputY,
-
-      inputImageW, inputImageC, convStartC, kernelW, kernelH,
-
-      outputImageW, stride, outputC,
-
-      strideDims[1], strideDims[0]);
-  // ProfileScope(1, "After main init function");
-
-  if (bias == NULL) {
-    static float bias = 0.0f;
-    Top_Conv_Bias(&bias, 1, 1, w.outputW, w.outputH);
-  } else {
-    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride, w.outputW, w.outputH);
-  }
-
-  config->myAccum.strideMinusOne = stride - 1;
-
-  // ProfileScope(1,"Gonna start accel");
-  StartAccelerator();
-  // ProfileScope(1, "Window gen end");
-}
-
-void *Versat_Conv(void *inputX, void *inputW, void *output, int index,
-                  ConvInfo *info) {
-  Versat_ConvWithBias(inputX, inputW, NULL, output, index, info);
-}
-
-static bool PowerOf2(int val) {
-  if (val == 0) {
-    return false;
-  }
-
-  if ((val & (val - 1)) == 0) {
-    return true;
-  }
-
-  return false;
-}
-
-void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
-                          void *output, int index, ConvInfo *info) {
-  ProfileScope(0, "Start Of Conv");
-
-  volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
-
-  int64_t *inputDims = VERSAT_ConvInfo_inputDims(info);
-  int64_t *outputDims = VERSAT_ConvInfo_outputDims(info);
-  int *kernelDims = VERSAT_ConvInfo_kernelDims(info);
-  int *strideDims = VERSAT_ConvInfo_strideDims(info);
-  int *padsDims = VERSAT_ConvInfo_padsDims(info);
-
-  ArenaMark outerMark = MarkArena(arena);
-
-  ActivateMergedAccelerator(MergeType_Top_Conv);
-
-  ProfileScope(0, "After merge activate");
-
-  int batches = inputDims[0];
-  int inputChannels = inputDims[1];
-  int inputImageW = inputDims[3];
-  int inputImageH = inputDims[2];
-
-  int outputChannels = outputDims[1];
-  int outputImageH = outputDims[2];
-  int outputImageW = outputDims[3];
-
-  Tensor fullOutput = PushTensor(arena, outputDims, 4);
-
-  int inputSize = inputImageW * inputImageH * inputChannels;
-  int outputSize = outputImageW * outputImageH * outputChannels;
-  int group = info->group;
-
-  int kernelW = kernelDims[1];
-  int kernelH = kernelDims[0];
-
-  VersatVarSpec outputCSpec = {1, (outputChannels / group), 0};
-  VersatVarSpec outputWSpec = {1, outputImageW, 1};
-  VersatVarSpec outputHSpec = {1, outputImageH, 2};
-
-  // We calculate size based the size of the kernel, the amount of input
-  // channels and the value of the outputs.
-  int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
-      kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
-      &outputCSpec);
-
-  ProfileScope(0, "After size calculations");
-
-  Tensor inputTensor = CreateTensor_NoAllocate(inputDims, 4);
-  inputTensor.data = inputX;
-
-  // Currently we divide on batches but for small convolutions we might need to
-  // be able to support this.
-  for (int batch = 0; batch < batches; batch++) {
-    ProfileScope(0, "Start batch loop");
-
-    ArenaMark mark = MarkArena(arena);
-
-    // TODO: This technically depends on batch because we have group related
-    // operations that change these values.
-    // If we remove them we can then push this outside the loop
-    ExtraInfo extra = CalculateExtraInfo_Conv(info);
-
-    ProfileScope(0, "After calculate extra info");
-
-    int64_t imageWithPadH = inputDims[2] + extra.padH;
-    int64_t imageWithPadW = inputDims[3] + extra.padW;
-
-    int64_t NHWCDims[] = {inputDims[0], imageWithPadH, imageWithPadW,
-                          inputDims[1]};
-    Tensor tempInputTensor = PushTensor(arena, NHWCDims, 4);
-    float *tempInput = tempInputTensor.data;
-
-    int kernelSmallSize = kernelDims[1] * kernelDims[0];
-
-    float *inputView = (float *)inputX;
-    inputView += batch * inputSize;
-
-    ProfileScope(0, "After tensor pushes");
-
-    int totalInputImageH = inputImageH + extra.rightPadH;
-    int totalInputImageW = inputImageW + extra.rightPadW;
-
-    // Convert NCHW to NHWC while also adding padding if needed.
-    ProfileScope(0, "Before NCHW conversion");
-    for (int y = -extra.leftPadH; y < totalInputImageH; y++) {
-      for (int x = -extra.leftPadW; x < totalInputImageW; x++) {
-        for (int c = 0; c < inputChannels; c++) {
-          int NCHW_Index =
-              c * (inputImageH * inputImageW) + y * inputImageW + x;
-          int NHWC_Index =
-              (y + extra.leftPadH) * (imageWithPadW * inputChannels) +
-              (x + extra.leftPadW) * inputChannels + c;
-
-          if (y < 0 || y >= inputImageH) {
-            tempInput[NHWC_Index] = 0.0f;
-            continue;
-          }
-          if (x < 0 || x >= inputImageW) {
-            tempInput[NHWC_Index] = 0.0f;
-            continue;
-          }
-
-          tempInput[NHWC_Index] = inputView[NCHW_Index];
-        }
-      }
-    }
-    ProfileScope(0, "After NCHW conversion");
-
-    Dimensions outDims = CreateDimensions(outputDims, 4);
-    outDims.data[1] /= group;
-
-    // TODO: Changing extra is kinda "problematic". We are doing a bunch of
-    // stuff that might not be needed anymore.
-    //       It might be possible to just push this logic to Versat and let it
-    //       handle it.
-    extra.inputImageC /= group;
-    extra.outputImageC /= group;
-
-    int index = 0;
-    for (int g = 0; g < group; g++) {
-      int inputC = extra.inputImageC;
-      int outputC = extra.outputImageC;
-
-      // We extract the input associated to the current group.
-      Tensor extracted =
-          Tensor_ExtractView(tempInputTensor, 3, g * inputC, inputC, arena);
-
-      WindowGen genInst =
-          StartAdvancedWindowGen(&extra, true, false, outputWSpec.value,
-                                 outputHSpec.value, outputCSpec.value);
-      WindowGen *gen = &genInst;
-
-      // We extract the bias input.
-      float *trueBias = (float *)inputB;
-      if (trueBias != NULL) {
-        trueBias += (g * extra.outputImageC);
-      }
-
-      // MARK
-      ProfileScope(0, "Before window gen");
-      int amountOfWindows = 0;
-      AdvancedWindow w = {};
-      for (; WindowGen_Valid(gen); WindowGen_AdvanceTruePadding(gen, w)) {
-        WindowGen_GetTruePadding(gen, &w);
-        amountOfWindows += 1;
-
-        ConvWithBias_ProcessWindow(
-            extra, w, extracted.data,
-            ((float *)inputW) +
-                g * (kernelSmallSize * (outputChannels / group) *
-                     (inputChannels / group)),
-            &fullOutput.data[index], trueBias, info, inputC, outputC);
-      }
-
-      index += outDims.data[1] * outDims.data[2] * outDims.data[3];
-    }
-
-    Tensor_CheckCanary(tempInputTensor);
-    Tensor_CheckCanary(fullOutput);
-
-    MarkPop(mark);
-    ProfileScope(0, "End of batch function");
-  }
-
-  VERSAT_DisableReadsAndWrites();
-  RunAccelerator(2);
-
-  // Convert back into NCHW
-  // =====================================================
-  {
-    int cOutSize = outputDims[1] / group;
-    int totalSizePerGroup = cOutSize * outputDims[2] * outputDims[3];
-
-    float *outputView = (float *)output;
-    int index = 0;
-    for (int g = 0; g < group; g++) {
-      float *groupData = fullOutput.data + (totalSizePerGroup * g);
-
-      for (int c = 0; c < cOutSize; c++) {
-        for (int y = 0; y < outputDims[2]; y++) {
-          for (int x = 0; x < outputDims[3]; x++) {
-            int NHWC_Index = y * (cOutSize * outputDims[3]) + x * cOutSize + c;
-
-            outputView[index] = groupData[NHWC_Index];
-            index += 1;
-          }
-        }
-      }
-    }
-  }
-
-  MarkPop(outerMark);
-
-  ProfileScope(0, "End Of Conv");
-
-  return output;
-}
-#endif
-
-#if 1
 void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
                                 void *inputW, void *outAddr, float *bias,
                                 ConvInfo *info, int inputC, int outputC,
@@ -1476,8 +604,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   ProfileScope(0, "After merge activate");
 
-  versat_printf("%d\n", info->isNHWC);
-
   int batches = inputDims[0];
   int inputChannels = inputDims[1];
   int inputImageH = inputDims[2];
@@ -1510,8 +636,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   if (info->isNHWC && group == 1) {
     properOutput = (float *)output;
   }
-
-  versat_printf("ProperOut: %p\n", properOutput);
 
   int kernelW = kernelDims[1];
   int kernelH = kernelDims[0];
@@ -1563,8 +687,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       tempInputTensor = PushTensor(arena, NHWCDims, 4);
       tempInput = tempInputTensor.data;
     }
-
-    versat_printf("TempIn: %p\n", tempInput);
 
     int kernelSmallSize = kernelDims[1] * kernelDims[0];
 
@@ -1628,8 +750,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
         properInput = extracted.data;
       }
 
-      versat_printf("ProperIn: %p\n", properInput);
-
       WindowGen genInst =
           StartAdvancedWindowGen(&extra, true, false, outputWSpec.value,
                                  outputHSpec.value, outputCSpec.value);
@@ -1640,8 +760,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
       if (trueBias != NULL) {
         trueBias += (g * extra.outputImageC);
       }
-
-      versat_printf("VersatWrite: %p\n", &properOutput[index]);
 
 #if 1
       ProfileScope(0, "Before window gen");
@@ -1679,7 +797,8 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   VERSAT_DisableReadsAndWrites();
   RunAccelerator(2);
 
-  versat_printf("Output: %p\n", output);
+  versat_clearCache(NULL, 0);
+
   float *outputView = (float *)output;
 
 #if 1
@@ -1735,7 +854,6 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
 
   return output;
 }
-#endif
 
 void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
                     MatMulInfo *info) {
@@ -1907,11 +1025,6 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
   ResetAccelerator();
   ActivateMergedAccelerator(MergeType_Top_Exp);
 
-  for (int i = 0; i < 10; i++) {
-    float *a = (float *)input;
-    versat_printf("%f\n", a[i]);
-  }
-
   int64_t *inputDims = VERSAT_SoftmaxInfo_inputDims(info);
 
   Top_Exp_LoadExp(expTable, EXP_TABLE_SIZE);
@@ -1977,11 +1090,6 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
 
       out[index] = out[index] * invSum;
     }
-  }
-
-  for (int i = 0; i < 10; i++) {
-    float *a = (float *)output;
-    versat_printf("%f\n", a[i]);
   }
 
   return output;

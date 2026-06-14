@@ -1453,6 +1453,8 @@ def GenerateDebug(
 
     packedCorrectData = PackMultipleArrays(compactCorrectData)
 
+    # print(compactCorrectData[-1])
+
     # All nodes get their data from the valid data array
     # Basically any error in any node does not propagate to other nodes (only for validation purposes)
     useValidDataAsInput = True

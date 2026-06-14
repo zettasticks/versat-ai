@@ -647,10 +647,12 @@ void *Software_Softmax(void *input, void *output, int index,
 
   int64_t *inputDims = VERSAT_SoftmaxInfo_inputDims(info);
 
+#if 0
   for (int i = 0; i < 10; i++) {
     float *a = (float *)input;
     versat_printf("%f\n", a[i]);
   }
+#endif
 
   // Axis are normalized here, no need to handle negative axis after this point
   int axis = info->axis;
@@ -703,10 +705,12 @@ void *Software_Softmax(void *input, void *output, int index,
     }
   }
 
+#if 0
   for (int i = 0; i < 10; i++) {
     float *a = (float *)output;
     versat_printf("%f\n", a[i]);
   }
+#endif
 
   return output;
 }
