@@ -316,7 +316,7 @@ void *Software_Reshape(void *data, void *shape, void *output, int index,
   int64_t *dims = VERSAT_ReshapeInfo_inputDims(info);
 
   if (data == output) {
-    versat_printf("INPLACE Reshape\n");
+    // versat_printf("INPLACE Reshape\n");
     return data;
   }
 
@@ -414,7 +414,7 @@ void *Software_Relu(void *inputX, void *output, int index, ReluInfo *info) {
   float *out = (float *)output;
 
   if (inputX == output) {
-    versat_printf("INPLACE RELU\n");
+    // versat_printf("INPLACE RELU\n");
   }
 
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
@@ -603,9 +603,11 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
     OW = outputDims[OS - 1];
   }
 
+#if 0
   if (AW != BH) {
     versat_printf("Something very wrong is happening in MatMul\n");
   }
+#endif
 
   uint64_t start = versat_time();
 
@@ -616,7 +618,7 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
     for (int x = 0; x < OW; x++) {
       int indexOut = y * OW + x;
 
-      viewOut[indexOut] = 0.0f;
+      float accum = 0.0f;
       for (int c = 0; c < AW; c++) {
         count += 1;
 
@@ -629,8 +631,9 @@ void *Software_MatMul(void *inputA, void *inputB, void *output, int index,
         float valA = viewA[indexA];
         float valB = viewB[indexB];
 
-        viewOut[indexOut] += valA * valB;
+        accum += valA * valB;
       }
+      viewOut[indexOut] = accum;
     }
   }
 

@@ -894,11 +894,13 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
     BW = inputBDims[BS - 1];
   }
 
+#if 0
   if (info->isBTransposed) {
     int temp = BW;
     BW = BH;
     BH = temp;
   }
+#endif
 
   int totalBSize = BH * BW;
   float *tempB = viewB;

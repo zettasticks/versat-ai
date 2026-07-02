@@ -88,7 +88,7 @@ def CalculateMemoryAllocations(cModel):
     # having to copy everything into an output region.
     # This only works if the input is not used by anyone else meaning that
     # there are restrictions. Also only certain ops use this.
-    useInplaceOptimization = False
+    useInplaceOptimization = True
 
     memoryAllocations = []
     indexesToMemoryAllocation = {}

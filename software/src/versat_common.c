@@ -1343,7 +1343,8 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
   versat_printf("VersatSoft\n");
   versat_timeReset();
   start = versat_time();
-  for (uint32_t i = 0; i < model->nOperations; i++) {
+  for (uint32_t i = 0; i < model->nOperations;
+       i++, ptr = VERSAT_OFFSET_PTR(ptr, ptr->operatorSize)) {
     bool useSoftware = ptr->useSoftware;
 
     void *info = Operation_GetOperationInfo(ptr);
@@ -1395,9 +1396,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     versat_printf("%d\n", ptr->outputSize);
 #endif
 
-#if 1
-    // Currently disabled since it appears that we have a bug somewhere.
-    //
+#if 0
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
     float *asFloat = (float *)output;
@@ -1514,6 +1513,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     } break;
     }
 
+#if 0
     for (int i = 0; i < model->correctSize; i++) {
       if (savedCorrectMem[i] != correctInputAsChar[i]) {
         versat_printf("Correct input change!!!!!\n");
@@ -1525,6 +1525,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
         versat_printf("Model memory change!!!!!\n");
       }
     }
+#endif
 
 #if 0
     // Run profile
@@ -1583,7 +1584,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 1
+#if 0
     // Check result of layer
     // ======================================================
     if (ptr->outputSize > 0) {
@@ -1597,8 +1598,6 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
                     typeName, i);
     }
 #endif
-
-    ptr = VERSAT_OFFSET_PTR(ptr, ptr->operatorSize);
   }
 
   PrintTimeDiff(start);

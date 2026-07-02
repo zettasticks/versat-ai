@@ -1297,7 +1297,7 @@ def GenerateDebug(
         toRemoveIndexes = {x.nodeIndex for x in nodesToRemove}
 
         for node in nodesToRemove:
-            cModel.RemoveOperation(node)
+            cModel.RemoveOperationDoNotKeepData(node)
 
         oldIndexToNew = ReorganizeGraph(cModel)
 
@@ -1457,7 +1457,7 @@ def GenerateDebug(
 
     # All nodes get their data from the valid data array
     # Basically any error in any node does not propagate to other nodes (only for validation purposes)
-    useValidDataAsInput = True
+    useValidDataAsInput = False
     debugging = True
     if not debugging:
         useValidDataAsInput = False

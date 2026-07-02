@@ -183,10 +183,6 @@ module Top_Conv(){
       for y 0..outputH {
          for x 0..outputW {
             for inC 0..featuresAmount {
-               // YPos = (y + outStartY) * outputWidth * outputChannels
-               // XPos = (x + outStartX) * outputChannels
-               // CPos = c
-
                output = outAddr[((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + outCStart + inC) / stride];
             }
          }
@@ -391,7 +387,7 @@ module Pow(base,power){
 }
 
 module Top_Gemm(){
-   VRead #(.ADDR_W(17)) gemmLeftRow; // 15 bits of 32. Maximum size of 32768 elements (16384 if using pingpong.)
+   VRead #(.ADDR_W(17)) gemmLeftRow; 
    VRead #(.ADDR_W(17)) gemmRightRow;
    PipelineRegister leftPipe;
    PipelineRegister rightPipe;

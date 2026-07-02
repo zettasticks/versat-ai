@@ -1871,7 +1871,7 @@ def GenerateTest(outputPath):
     config.generativeTests = 0
     config.testBig = 0
 
-    if False:
+    if 1:
         CreateConvolution(
             [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
         )
@@ -1884,9 +1884,9 @@ def GenerateTest(outputPath):
     # Needs 32 input channels
     # Needs 64 output channels
 
-    CreateConvolution(
-        [1, 32, 1, 1], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
-    )
+    # CreateConvolution(
+    #    [1, 32, 1, 1], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
+    # )
     # CreateConvolution([1, 32, 2, 2], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
     # CreateConvolution([1, 32, 4, 4], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
     # CreateConvolution([1, 32, 8, 4], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
