@@ -490,4 +490,5 @@ module Top_LRN(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
+//merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul; // | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;

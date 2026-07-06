@@ -8,7 +8,7 @@ def setup(py_params: dict):
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32
-    data_w = 32
+    data_w = 64
 
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
@@ -131,18 +131,18 @@ def setup(py_params: dict):
                 # Cbus connected automatically
             },
         },
-        {
-            "core_name": "iob_versat",
-            "instance_name": "VERSAT0",
-            "instance_description": "Versat accelerator",
-            "is_peripheral": True,
-            "parameters": {},
-            "connect": {
-                "clk_en_rst_s": "clk_en_rst_s",
-                "axi_out_m": "versat_axi",
-                # Cbus connected automatically
-            },
-        },
+        #        {
+        #            "core_name": "iob_versat",
+        #            "instance_name": "VERSAT0",
+        #            "instance_description": "Versat accelerator",
+        #            "is_peripheral": True,
+        #            "parameters": {},
+        #            "connect": {
+        #                "clk_en_rst_s": "clk_en_rst_s",
+        #                "axi_out_m": "versat_axi",
+        #                # Cbus connected automatically
+        #            },
+        #        },
         {
             "core_name": "versat_axi_pipeline",
             "instance_name": "dbus_delay",
@@ -289,6 +289,22 @@ def setup(py_params: dict):
                 "val": f'"{name}_firmware"',  # NOTE: The '"' inside are on purpose
                 "min": "NA",
                 "max": "NA",
+            },
+            {
+                "name": "AXI_DATA_W",
+                "type": "P",
+                "val": data_w,
+                "min": "0",
+                "max": "256",
+                "descr": "Versat AXI datapath size",
+            },
+            {
+                "name": "DATA_W",
+                "type": "P",
+                "val": data_w,
+                "min": "0",
+                "max": "256",
+                "descr": "Versat AXI datapath size",
             },
         ],
         "ports": [

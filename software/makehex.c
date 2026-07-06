@@ -72,6 +72,18 @@ int main(int argc, char *argv[]) {
   pathBuffer[size - 3] = '3';
   FILE *out3 = fopen(pathBuffer, "w");
 
+  pathBuffer[size - 3] = '4';
+  FILE *out4 = fopen(pathBuffer, "w");
+
+  pathBuffer[size - 3] = '5';
+  FILE *out5 = fopen(pathBuffer, "w");
+
+  pathBuffer[size - 3] = '6';
+  FILE *out6 = fopen(pathBuffer, "w");
+
+  pathBuffer[size - 3] = '7';
+  FILE *out7 = fopen(pathBuffer, "w");
+
   FILE *out = fopen(outputFile, "w");
   long int inSize = GetFileSize(in);
 
@@ -82,7 +94,11 @@ int main(int argc, char *argv[]) {
 
     fread(buffer, sizeof(unsigned char), leftover, in);
 
-    for (int j = 0; j < leftover; j += 4) {
+    for (int j = 0; j < leftover; j += 8) {
+      fprintf(out, "%02x", buffer[j + 7]);
+      fprintf(out, "%02x", buffer[j + 6]);
+      fprintf(out, "%02x", buffer[j + 5]);
+      fprintf(out, "%02x", buffer[j + 4]);
       fprintf(out, "%02x", buffer[j + 3]);
       fprintf(out, "%02x", buffer[j + 2]);
       fprintf(out, "%02x", buffer[j + 1]);
@@ -92,6 +108,10 @@ int main(int argc, char *argv[]) {
       fprintf(out1, "%02x\n", buffer[j + 1]);
       fprintf(out2, "%02x\n", buffer[j + 2]);
       fprintf(out3, "%02x\n", buffer[j + 3]);
+      fprintf(out4, "%02x\n", buffer[j + 4]);
+      fprintf(out5, "%02x\n", buffer[j + 5]);
+      fprintf(out6, "%02x\n", buffer[j + 6]);
+      fprintf(out7, "%02x\n", buffer[j + 7]);
 
       fprintf(out, "\n");
     }
@@ -111,6 +131,10 @@ int main(int argc, char *argv[]) {
   fclose(out1);
   fclose(out2);
   fclose(out3);
+  fclose(out4);
+  fclose(out5);
+  fclose(out6);
+  fclose(out7);
 
   return 0;
 }
