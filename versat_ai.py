@@ -20,6 +20,7 @@ def setup(py_params: dict):
         "mem_addr_w": mem_addr_w,
         "cpu": "iob_vexriscv",
         "fw_addr_w": 24,
+        "bootrom_addr_w": 12,
         # Tester configuration
         "include_tester": False,
         "tester_use_ethernet": True,
@@ -81,19 +82,19 @@ def setup(py_params: dict):
             ],
         ),
         "use_bootrom": (
-            "bootrom_cbus",
+            "wide_bootrom_cbus",
             [
-                "{unused_m2_araddr_bits, bootrom_axi_araddr}",
-                "{unused_m2_awaddr_bits, bootrom_axi_awaddr}",
+                "{unused_m2_araddr_bits, wide_bootrom_axi_araddr}",
+                "{unused_m2_awaddr_bits, wide_bootrom_axi_awaddr}",
             ],
         ),
         "use_peripherals": (
-            "axi_periphs_cbus",
+            "wide_axi_periphs_cbus",
             [
-                "{unused_m3_araddr_bits, periphs_axi_araddr}",
-                "{unused_m3_awaddr_bits, periphs_axi_awaddr}",
-                "periphs_axi_awlock[0]",
-                "periphs_axi_arlock[0]",
+                "{unused_m3_araddr_bits, wide_periphs_axi_araddr}",
+                "{unused_m3_awaddr_bits, wide_periphs_axi_awaddr}",
+                "wide_periphs_axi_awlock[0]",
+                "wide_periphs_axi_arlock[0]",
             ],
         ),
     }
@@ -103,6 +104,7 @@ def setup(py_params: dict):
         xbar_subblock["connect"] |= {f"m{num_managers}_axi_m": interface_connection}
         num_managers += 1
     xbar_subblock["num_managers"] = num_managers
+    # xbar_sel_w = (num_managers - 1).bit_length()
 
     subblocks = [
         xbar_subblock,
@@ -131,17 +133,39 @@ def setup(py_params: dict):
                 # Cbus connected automatically
             },
         },
+        #        {
+        #            "core_name": "iob_versat",
+        #            "instance_name": "VERSAT0",
+        #            "instance_description": "Versat accelerator",
+        #            "is_peripheral": True,
+        #            "parameters": {},
+        #            "connect": {
+        #                "clk_en_rst_s": "clk_en_rst_s",
+        #                "axi_out_m": "versat_axi",
+        #                # Cbus connected automatically
+        #            },
+        #        },
+        # MARK
         {
-            "core_name": "iob_versat",
-            "instance_name": "VERSAT0",
-            "instance_description": "Versat accelerator",
-            "is_peripheral": True,
-            "parameters": {},
-            "connect": {
-                "clk_en_rst_s": "clk_en_rst_s",
-                "axi_out_m": "versat_axi",
-                # Cbus connected automatically
-            },
+        "core_name": "axi_adapter_direct",
+        "instance_name": "bootrom_adapter",
+        "parameters": {
+            "AXI_ADDR_W": addr_w,
+        },
+        "connect": {
+            "clk_en_rst_s": "clk_en_rst_s",
+            "axi_s": "wide_bootrom_cbus",
+            "axi_m": "bootrom_cbus",
+        },
+        },
+        {
+        "core_name": "axi_adapter_direct",
+        "instance_name": "pheriph_adapter",
+        "connect": {
+            "clk_en_rst_s": "clk_en_rst_s",
+            "axi_s": "wide_axi_periphs_cbus",
+            "axi_m": "axi_periphs_cbus",
+        },
         },
         {
             "core_name": "versat_axi_pipeline",
@@ -159,6 +183,45 @@ def setup(py_params: dict):
                 "clk_en_rst_s": "clk_en_rst_s",
                 "axi_s": "cpu_ibus",
                 "axi_m": "delayed_cpu_i",
+            },
+        },
+        # MARK
+        {
+            "core_name": py_params["cpu"],
+            "name": name + "_" + py_params["cpu"],
+            "instance_name": "cpu",
+            "instance_description": "RISC-V CPU instance",
+            # Reset address and uncached range are filled automatically
+            # "reset_addr": 0x00000000,
+            # "uncached_start_addr": 0x00000000,
+            # "uncached_size": 2**32,
+            "parameters": {
+                "AXI_ID_W": "1",
+                "AXI_ADDR_W": addr_w,
+                "AXI_DATA_W": 32,
+                "AXI_LEN_W": "AXI_LEN_W",
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "rst_i": "rst",
+                "i_bus_m": (
+                    "cpu_ibus",
+                    [
+                        "cpu_i_axi_arid[0]",
+                        "cpu_i_axi_rid[0]",
+                        "cpu_i_axi_awid[0]",
+                        "cpu_i_axi_bid[0]",
+                    ],
+                ),
+                "d_bus_m": (
+                    "cpu_dbus",
+                    [
+                        "cpu_d_axi_arid[0]",
+                        "cpu_d_axi_rid[0]",
+                        "cpu_d_axi_awid[0]",
+                        "cpu_d_axi_bid[0]",
+                    ],
+                ),
             },
         },
     ]
@@ -323,6 +386,32 @@ def setup(py_params: dict):
                     "DATA_W": data_w,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
+                },
+            },
+            # MARK
+            {
+                "name": "wide_bootrom_cbus",
+                "descr": "iob-system boot controller data interface",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "wide_bootrom_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": py_params["bootrom_addr_w"] + 1,  # +1 for csrs
+                    "DATA_W": "AXI_DATA_W",
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "wide_axi_periphs_cbus",
+                "descr": "AXI bus for peripheral CSRs",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "wide_periphs_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w - xbar_sel_w,
+                    "DATA_W": "AXI_DATA_W",
+                    "LEN_W": "AXI_LEN_W",
                 },
             },
             {

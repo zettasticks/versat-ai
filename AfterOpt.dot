@@ -1,0 +1,6 @@
+digraph view {
+            node [fontcolor=white,style=filled,color="160,60,176"];
+            label="Graph";
+    "0" [color=dark label="0 [Conv]"];
+"1" [color=dark label="1 [Conv]"];
+}

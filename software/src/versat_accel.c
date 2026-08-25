@@ -243,7 +243,7 @@ void *Versat_Add(void *inputA, void *inputB, void *output, int index,
 
   // TODO: Eventually this will depend on the size of Versat memories
   //       The bigger the more efficient we can be
-  int maxLineSupported = 1024;
+  int maxLineSupported = 64;
 
   AddressGen inA = StartAddress(o, l, info->maxDims);
   AddressGen inB = StartAddress(o, r, info->maxDims);
@@ -293,20 +293,15 @@ void *Versat_Relu(void *inputA, void *output, int index, ReluInfo *info) {
   int64_t *inputDims = VERSAT_ReluInfo_inputDims(info);
   int64_t totalSize = CalculateSizeOfDim(inputDims, info->dims);
 
-#if 0
-  VersatVarSpec sizeSpec = {};
-  sizeSpec.min = 1;
-  sizeSpec.max = totalSize;
-  Top_Relu_Simple_Size(&sizeSpec);
-#endif
-
   // TODO: Replace with versat calculated limit
-  int64_t maxAtATime = MIN(totalSize, 1024); // sizeSpec.value / 2;
+  int64_t maxAtATime = MIN(totalSize, 64); // sizeSpec.value / 2;
 
   float *inputView = (float *)inputA;
   float *outputView = (float *)output;
 
   for (int64_t i = 0; i < totalSize; i += maxAtATime) {
+    ProfileScope(0, "Relu config");
+
     int size = MIN(maxAtATime, totalSize - i);
 
     Top_Relu_Simple(&inputView[i], &outputView[i], size);
@@ -502,7 +497,7 @@ void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
                                 void *inputW, void *outAddr, float *bias,
                                 ConvInfo *info, int inputC, int outputC,
                                 int g) {
-  // ProfileScope(1, "Window gen begin");
+  ProfileScope(1, "Window gen begin");
 
   volatile Top_ConvConfig *config = &accelConfig->Top_Conv;
 
@@ -537,6 +532,9 @@ void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
 
   int inChannelsPerGroup = inputChannels / info->group;
   int groupOffset = g * inChannelsPerGroup;
+
+  // versat_printf("%d %d %d %d %d %d\n",w.actualKernelW,
+  // w.actualKernelH,convChannelSize,w.outputH, w.outputW, w.outputSizeC);
 
   // ProfileScope(1, "Before main init function");
   Top_Conv_FeaturesWeightsOutputs(
@@ -640,15 +638,32 @@ void *Versat_ConvWithBias(void *inputX, void *inputW, void *inputB,
   int kernelW = kernelDims[1];
   int kernelH = kernelDims[0];
 
+#if 1
   VersatVarSpec outputCSpec = {1, (outputChannels / group), 0};
   VersatVarSpec outputWSpec = {1, outputImageW, 1};
   VersatVarSpec outputHSpec = {1, outputImageH, 2};
+#endif
+
+#if 0
+  VersatVarSpec outputCSpec = {1, 1, 0};
+  VersatVarSpec outputWSpec = {1, 1, 1};
+  VersatVarSpec outputHSpec = {1, 1, 2};
+#endif
 
   // We calculate size based the size of the kernel, the amount of input
   // channels and the value of the outputs.
   int bytesUsed = Top_Conv_FeaturesWeightsOutputs_Size(
       kernelW, kernelH, inputChannels, &outputHSpec, &outputWSpec,
       &outputCSpec);
+
+#if 0
+  outputCSpec.value = 1;
+  outputWSpec.value = 1;
+  outputHSpec.value = 1;
+#endif
+
+  versat_printf("Conv: %d %d %d %d\n", bytesUsed, outputCSpec.value,
+                outputWSpec.value, outputHSpec.value);
 
   ProfileScope(0, "After size calculations");
 
@@ -953,8 +968,10 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
   AddressGen addrB = StartAddressFromDims(dimB, dimsToIterateB);
   AddressGen addrO = StartAddressFromDims(dimO, dimsToIterateO);
 
-  VersatVarSpec lineSpec = {1, OW, 0};
-  Top_MatMul_Simple_Size(AW, &lineSpec);
+  VersatVarSpec lineSpec = {1, 2, 0};
+  int bytesUsed = Top_MatMul_Simple_Size(AW, &lineSpec);
+  lineSpec.value = 1;
+  versat_printf("MatMul: %d %d %d\n", bytesUsed, AW, lineSpec.value);
 
   while (Address_IsValid(&addrA) || Address_IsValid(&addrB) ||
          Address_IsValid(&addrO)) {
@@ -988,7 +1005,7 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
 
     silent_clear_cache();
 
-    int rightLinesToProcess = 24;
+    int rightLinesToProcess = lineSpec.value;
     for (int y = 0; y < OH; y++) {
       for (int x = 0; x < OW; x += rightLinesToProcess) {
         int trueLines = MIN(rightLinesToProcess, OW - x);
@@ -997,6 +1014,8 @@ void *Versat_MatMul(void *inputA, void *inputB, void *output, int index,
         float *lineBStart = &dataSource[x * AW];
 
         float *out = &viewOut[y * OW + x + valO];
+
+        // versat_printf("%d %d\n",AW,trueLines);
 
         Top_MatMul_Simple(lineAStart, lineBStart, AW, trueLines);
         Top_MatMul_Output(out, trueLines, AW);
@@ -1037,7 +1056,9 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
   VersatVarSpec width = {};
   width.min = 1;
   width.max = MIN(size, 256); // [7]
-  Top_Exp_Simple_Size(&width);
+  int bytesUsed = Top_Exp_Simple_Size(&width);
+  versat_printf("Soft: %d\n", bytesUsed);
+
   int increment = width.value;
 
   int axis = info->axis;

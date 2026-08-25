@@ -27,6 +27,7 @@ void clear_cache() {
 }
 
 #ifdef USE_ETHERNET
+#define ETH_DEBUG_PRINT
 #include "iob_eth.h"
 
 uint32_t uart_request_ethernet_recvfile(const char *file_name) {
@@ -239,6 +240,7 @@ int main() {
   eth_frame_ptr = (volatile char *)0x5fff0000;
 
 #ifdef IOB_SYSTEM_TESTER_USE_ETHERNET
+  uart_puts("Gonna init ethernet\n");
   // Init ethernet
   eth_init(ETH0_BASE, &clear_cache);
   // Wait for PHY reset to finish

@@ -1527,7 +1527,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 0
+#if 1
     // Run profile
     // ================================================================
     versat_printf("L:%d\n", i);
@@ -1567,7 +1567,9 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
       versat_printf("ConfigurationsSet while running:");
       PrintU64(p.configurationsSetWhileRunning);
       versat_printf("\n");
+    }
 
+    {
       ProfileResult res = Profile_Get();
 
       versat_printf("Profile samples: %d\n", res.amount);
@@ -1584,7 +1586,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 0
+#if 1
     // Check result of layer
     // ======================================================
     if (ptr->outputSize > 0) {

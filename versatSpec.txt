@@ -1,7 +1,7 @@
 module Top_Add(){
-   VRead inputs_0;
-   VRead inputs_1;
-   VWrite output;
+   VRead #(.ADDR_W(14)) inputs_0;
+   VRead #(.ADDR_W(14)) inputs_1;
+   VWrite #(.ADDR_W(14)) output;
    F_Add adder;
 #
    {inputs_0,inputs_1} -> adder:0..1;
@@ -27,8 +27,8 @@ module Top_Add(){
 }
 
 module Top_Relu(){
-   VRead input;
-   VWrite output;
+   VRead #(.ADDR_W(14)) input;
+   VWrite #(.ADDR_W(14)) output;
    Relu relu;
 #
    input -> relu;
@@ -43,9 +43,9 @@ module Top_Relu(){
 }
 
 module Top_Maxpool(){
-   VRead features;
+   VRead #(.ADDR_W(14)) features;
    F_AccumMax accum;
-   VWrite output;
+   VWrite #(.ADDR_W(14)) output;
 #   
    features -> accum;
    accum -> output;
@@ -72,11 +72,11 @@ module Top_Maxpool(){
 }
 
 module Top_AveragePool(){
-   VRead features;
+   VRead #(.ADDR_W(14)) features;
    MyFloatAccum averagePool_accum;
    F_Mul inversedDiv; // Easier to multiply by (1/divisor) than to bring a div unit.
    Const invertedDivisor;
-   VWrite output;
+   VWrite #(.ADDR_W(14)) output;
 #   
    features -> averagePool_accum;
    {averagePool_accum,invertedDivisor} -> inversedDiv:0..1;
@@ -104,9 +104,9 @@ module Top_AveragePool(){
 }
 
 module Top_Conv(){
-   VRead #(.ADDR_W(17)) features;
-   VRead #(.ADDR_W(17)) weights;
-   VRead bias;
+   VRead #(.ADDR_W(14)) features;
+   VRead #(.ADDR_W(14)) weights;
+   VRead #(.ADDR_W(14)) bias;
 
    PipelineRegister featuresReg;
    PipelineRegister weightsReg;
@@ -115,7 +115,7 @@ module Top_Conv(){
    F_Mul muller;
    F_Add addBias;
    MyFloatAccum myAccum;
-   VWrite output;
+   VWrite #(.ADDR_W(14)) output;
 #   
    features -> featuresReg;
    weights -> weightsReg;
@@ -201,11 +201,11 @@ module Top_Conv(){
 }
 
 module Top_MatMul(){
-   VRead leftRow;
-   VRead rightRow;
+   VRead #(.ADDR_W(14)) leftRow;
+   VRead #(.ADDR_W(14)) rightRow;
    F_Mul mat_muller;
    MyFloatAccum myAccum;
-   VWrite output;
+   VWrite #(.ADDR_W(14)) output;
 #
    {leftRow,rightRow} -> mat_muller:0..1;
    mat_muller -> myAccum;
@@ -228,8 +228,8 @@ module Top_MatMul(){
 }
 
 module Top_BatchNormalization(){
-   VRead x;
-   VWrite o;
+   VRead #(.ADDR_W(14)) x;
+   VWrite #(.ADDR_W(14)) o;
 
    Const A;
    Const B;
@@ -336,7 +336,7 @@ module Top_Exp(){
   
    Exp exp;
 
-   VWrite output;
+   VWrite #(.ADDR_W(14)) output;
 #
    in -> exp;
 
@@ -387,13 +387,13 @@ module Pow(base,power){
 }
 
 module Top_Gemm(){
-   VRead #(.ADDR_W(17)) gemmLeftRow; 
-   VRead #(.ADDR_W(17)) gemmRightRow;
+   VRead #(.ADDR_W(14)) gemmLeftRow; 
+   VRead #(.ADDR_W(14)) gemmRightRow;
    PipelineRegister leftPipe;
    PipelineRegister rightPipe;
    F_Mul mat_muller;
    MyFloatAccum myAccum;
-   VWrite #(.ADDR_W(17)) output;
+   VWrite #(.ADDR_W(14)) output;
 
    Const alpha;
    F_Mul alphaMul;
@@ -490,4 +490,4 @@ module Top_LRN(){
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
+merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp; // | Top_LRN;

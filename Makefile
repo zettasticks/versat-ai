@@ -47,7 +47,8 @@ ALL_GENERATED_TESTS:=./tests/alexnet/model.onnx ./tests/generated_heavy ./tests/
 ./tests/softmax: $(PYTHON_ENV)
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py Softmax"
 
-
+py2-setup-only: $(PYTHON_ENV) $(VERSAT_ACCEL)
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM)' $(EXTRA_ARGS);"
 
 $(PYTHON_ENV):
 	./scripts/makePythonEnv.sh
@@ -72,6 +73,8 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
 	-cp ./scripts/console.py ../versat_ai_V$(VERSION)/tester/scripts
 	cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/console_ethernet.py ../versat_ai_V$(VERSION)/tester/scripts
+	cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/scripts
+	-cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/tester/scripts
 	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
 	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
@@ -131,6 +134,7 @@ fast-pc-soft: fast-versat
 	make -C ../versat_ai_V$(VERSION)/ pc-emul-run
 
 fast-pc-hard: fast-versat
+	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r hardware ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/
@@ -165,6 +169,7 @@ fast-fpga-tester:
 	cp -r resources ../versat_ai_V$(VERSION)/
 	cp -r software ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_system_tester/software ../versat_ai_V$(VERSION)/tester
+	cp -r submodules/iob_system_tester/custom_config_build.mk ../versat_ai_V$(VERSION)/tester
 	make -C ../$(CORE)_V$(VERSION)/tester fpga-sw-build BOARD=$(BOARD)
 	make -C ../$(CORE)_V$(VERSION)/tester fpga-run BOARD=$(BOARD)
 
