@@ -10,6 +10,12 @@ def setup(py_params: dict):
     addr_w = 32
     data_w = 32
 
+    dataAdapter = "axi_adapter_direct"
+    cpuAdapter = "axi_adapter_direct"
+    if data_w != 32:
+        dataAdapter = "axi_adapter_narrow"
+        cpuAdapter = "axi_adapter_wider"
+
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
     iob_system_default_overrides = {
@@ -53,8 +59,8 @@ def setup(py_params: dict):
         "connect": {
             "clk_en_rst_s": "clk_en_rst_s",
             "rst_i": "rst",
-            "s0_axi_s": "delayed_cpu_d",
-            "s1_axi_s": "delayed_cpu_i",
+            "s0_axi_s": "wide_cpu_d",
+            "s1_axi_s": "wide_cpu_i",
             "s2_axi_s": "versat_axi",
             # Manager interfaces connected below
         },
@@ -104,7 +110,7 @@ def setup(py_params: dict):
         xbar_subblock["connect"] |= {f"m{num_managers}_axi_m": interface_connection}
         num_managers += 1
     xbar_subblock["num_managers"] = num_managers
-    # xbar_sel_w = (num_managers - 1).bit_length()
+    xbar_sel_w = (num_managers - 1).bit_length()
 
     subblocks = [
         xbar_subblock,
@@ -147,25 +153,28 @@ def setup(py_params: dict):
         #        },
         # MARK
         {
-        "core_name": "axi_adapter_direct",
-        "instance_name": "bootrom_adapter",
-        "parameters": {
-            "AXI_ADDR_W": addr_w,
-        },
-        "connect": {
-            "clk_en_rst_s": "clk_en_rst_s",
-            "axi_s": "wide_bootrom_cbus",
-            "axi_m": "bootrom_cbus",
-        },
+            "core_name": dataAdapter,
+            "instance_name": "bootrom_adapter",
+            "parameters": {
+                "ADDR_WIDTH": addr_w,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": "wide_bootrom_cbus",
+                "axi_m": "bootrom_cbus",
+            },
         },
         {
-        "core_name": "axi_adapter_direct",
-        "instance_name": "pheriph_adapter",
-        "connect": {
-            "clk_en_rst_s": "clk_en_rst_s",
-            "axi_s": "wide_axi_periphs_cbus",
-            "axi_m": "axi_periphs_cbus",
-        },
+            "core_name": dataAdapter,
+            "instance_name": "pheriph_adapter",
+            "parameters": {
+                "ADDR_WIDTH": addr_w,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": "wide_axi_periphs_cbus",
+                "axi_m": "axi_periphs_cbus",
+            },
         },
         {
             "core_name": "versat_axi_pipeline",
@@ -183,6 +192,30 @@ def setup(py_params: dict):
                 "clk_en_rst_s": "clk_en_rst_s",
                 "axi_s": "cpu_ibus",
                 "axi_m": "delayed_cpu_i",
+            },
+        },
+        {
+            "core_name": cpuAdapter,
+            "instance_name": "cpu_i_adapter",
+            "parameters": {
+                "ADDR_WIDTH": addr_w,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": "delayed_cpu_i",
+                "axi_m": "wide_cpu_i",
+            },
+        },
+        {
+            "core_name": cpuAdapter,
+            "instance_name": "cpu_d_adapter",
+            "parameters": {
+                "ADDR_WIDTH": addr_w,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": "delayed_cpu_d",
+                "axi_m": "wide_cpu_d",
             },
         },
         # MARK
@@ -422,7 +455,7 @@ def setup(py_params: dict):
                     "prefix": "delay_d_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": addr_w,
-                    "DATA_W": data_w,
+                    "DATA_W": 32,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
                 },
@@ -433,6 +466,32 @@ def setup(py_params: dict):
                 "signals": {
                     "type": "axi",
                     "prefix": "delay_i_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": 32,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "wide_cpu_d",
+                "descr": "CPU_D wide",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "wide_d_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "wide_cpu_i",
+                "descr": "CPU_I wide",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "wide_i_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": addr_w,
                     "DATA_W": data_w,
