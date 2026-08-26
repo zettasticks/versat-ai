@@ -196,7 +196,7 @@ axi_adapter_wr_direct #(
 )
 axi_adapter_wr_inst (
     .clk(clk_i),
-    .rst(rst_i),
+    .rst(arst_i | rst_i),
 
     /*
      * AXI slave interface
@@ -272,7 +272,7 @@ axi_adapter_rd_direct #(
 )
 axi_adapter_rd_inst (
     .clk(clk_i),
-    .rst(rst_i),
+    .rst(arst_i | rst_i),
 
     /*
      * AXI slave interface

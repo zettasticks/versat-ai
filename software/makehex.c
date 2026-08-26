@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 
   printf("%s\n", pathBuffer);
 
-  int hexfiles = 4;
+  int hexfiles = 8;
   FILE *filesArray[MAX_HEX_FILES];
 
   for (int i = 0; i < hexfiles; i++) {

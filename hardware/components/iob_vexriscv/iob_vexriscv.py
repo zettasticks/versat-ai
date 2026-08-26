@@ -49,7 +49,7 @@ def setup(py_params_dict):
                 "type": "P",
                 "val": 0,
                 "min": 0,
-                "max": 32,
+                "max": 512,
             },
             {
                 "name": "AXI_LEN_W",

@@ -6,7 +6,7 @@
 def setup(py_params_dict):
     params = py_params_dict["iob_system_params"]
 
-    data_w = 32
+    data_w = 64
 
     # Size of RAM for ethernet's dma
     ETH_RAM_ADDR_W = 14

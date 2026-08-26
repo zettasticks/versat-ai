@@ -16,7 +16,7 @@ def setup(py_params_dict):
                 "type": "P",
                 "val": "32",
                 "min": "1",
-                "max": "32",
+                "max": "512",
             },
             {
                 "name": "M_DATA_WIDTH",
@@ -24,7 +24,7 @@ def setup(py_params_dict):
                 "type": "P",
                 "val": "32",
                 "min": "1",
-                "max": "32",
+                "max": "512",
             },
         ],
         "ports": [

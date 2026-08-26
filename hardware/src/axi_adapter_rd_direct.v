@@ -30,6 +30,9 @@ THE SOFTWARE.
 // Test1
 `default_nettype none
 
+`undef WIDER
+`undef NARROWER
+
 //`define WIDER
 //`define NARROWER
 

@@ -8,7 +8,7 @@ def setup(py_params: dict):
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32
-    data_w = 32
+    data_w = 64
 
     dataAdapter = "axi_adapter_direct"
     cpuAdapter = "axi_adapter_direct"
@@ -107,6 +107,7 @@ def setup(py_params: dict):
     # Connect xbar manager interfaces
     num_managers = 0
     for interface_connection in xbar_manager_interfaces.values():
+        print(interface_connection)
         xbar_subblock["connect"] |= {f"m{num_managers}_axi_m": interface_connection}
         num_managers += 1
     xbar_subblock["num_managers"] = num_managers
@@ -157,6 +158,8 @@ def setup(py_params: dict):
             "instance_name": "bootrom_adapter",
             "parameters": {
                 "ADDR_WIDTH": addr_w,
+                "S_DATA_WIDTH": data_w,
+                "M_DATA_WIDTH": 32,
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
@@ -169,6 +172,8 @@ def setup(py_params: dict):
             "instance_name": "pheriph_adapter",
             "parameters": {
                 "ADDR_WIDTH": addr_w,
+                "S_DATA_WIDTH": data_w,
+                "M_DATA_WIDTH": 32,
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
@@ -176,33 +181,35 @@ def setup(py_params: dict):
                 "axi_m": "axi_periphs_cbus",
             },
         },
-        {
-            "core_name": "versat_axi_pipeline",
-            "instance_name": "dbus_delay",
-            "connect": {
-                "clk_en_rst_s": "clk_en_rst_s",
-                "axi_s": "cpu_dbus",
-                "axi_m": "delayed_cpu_d",
-            },
-        },
-        {
-            "core_name": "versat_axi_pipeline",
-            "instance_name": "ibus_delay",
-            "connect": {
-                "clk_en_rst_s": "clk_en_rst_s",
-                "axi_s": "cpu_ibus",
-                "axi_m": "delayed_cpu_i",
-            },
-        },
+        #        {
+        #            "core_name": "versat_axi_pipeline",
+        #            "instance_name": "dbus_delay",
+        #            "connect": {
+        #                "clk_en_rst_s": "clk_en_rst_s",
+        #                "axi_s": "cpu_dbus",
+        #                "axi_m": "delayed_cpu_d",
+        #            },
+        #        },
+        #        {
+        #            "core_name": "versat_axi_pipeline",
+        #            "instance_name": "ibus_delay",
+        #            "connect": {
+        #                "clk_en_rst_s": "clk_en_rst_s",
+        #                "axi_s": "cpu_ibus",
+        #                "axi_m": "delayed_cpu_i",
+        #            },
+        #        },
         {
             "core_name": cpuAdapter,
             "instance_name": "cpu_i_adapter",
             "parameters": {
                 "ADDR_WIDTH": addr_w,
+                "S_DATA_WIDTH": 32,
+                "M_DATA_WIDTH": data_w,
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
-                "axi_s": "delayed_cpu_i",
+                "axi_s": "cpu_ibus",
                 "axi_m": "wide_cpu_i",
             },
         },
@@ -211,10 +218,12 @@ def setup(py_params: dict):
             "instance_name": "cpu_d_adapter",
             "parameters": {
                 "ADDR_WIDTH": addr_w,
+                "S_DATA_WIDTH": 32,
+                "M_DATA_WIDTH": data_w,
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
-                "axi_s": "delayed_cpu_d",
+                "axi_s": "cpu_dbus",
                 "axi_m": "wide_cpu_d",
             },
         },
