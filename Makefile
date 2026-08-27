@@ -76,7 +76,9 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
 	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
 	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
-	
+	cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/scripts
+	-cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/tester/scripts
+
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
 pc-emul-run: test-setup
