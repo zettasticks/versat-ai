@@ -19,6 +19,9 @@ def setup(py_params_dict):
 
     addAdapter = True
 
+    uutSourceName = "uut_axi"
+    uutAxiName = "axi_merged"
+
     # Size of RAM for ethernet's dma
     ETH_RAM_ADDR_W = 14
 
@@ -118,6 +121,34 @@ def setup(py_params_dict):
             ],
         },
         {
+            "name": "versat_axi",
+            "descr": "Versat axi wires",
+            "signals": {
+                "type": "axi",
+                "prefix": "versat_",
+                "DATA_W": data_w,
+                # "ID_W": "AXI_ID_W",
+                # "ADDR_W": addr_w,
+                # "DATA_W": data_w,
+                # "LEN_W": "AXI_LEN_W",
+                # "LOCK_W": "1",
+            },
+        },
+        {
+            "name": "axi_merged",
+            "descr": "Merged axi wires",
+            "signals": {
+                "type": "axi",
+                "prefix": "merged_",
+                "DATA_W": data_w,
+                # "ID_W": "AXI_ID_W",
+                # "ADDR_W": addr_w,
+                # "DATA_W": data_w,
+                # "LEN_W": "AXI_LEN_W",
+                # "LOCK_W": "1",
+            },
+        },
+        {
             "name": "rs232",
             "descr": "rs232 bus",
             "signals": {
@@ -150,10 +181,11 @@ def setup(py_params_dict):
     if params["use_extmem"]:
         attributes_dict["wires"] += [
             {
-                "name": "uut_axi",
+                "name": uutSourceName,
                 "descr": "AXI bus to connect SoC to interconnect",
                 "signals": {
                     "type": "axi",
+                    "prefix": "uut_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
                     "DATA_W": 32,
@@ -176,9 +208,68 @@ def setup(py_params_dict):
     #
     # Blocks
     #
-    # MARK: UUT
+    attributes_dict["subblocks"] = []
 
-    attributes_dict["subblocks"] = [
+    # MARK: UUT
+    # MARK
+    if addAdapter:
+        uutAxiName = "axi_merged_to_wide"
+        attributes_dict["wires"] += [
+            {
+                "name": uutAxiName,
+                "descr": "AXI bus to connect SoC to interconnect",
+                "signals": {
+                    "prefix": "wider_",
+                    "type": "axi",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": "AXI_ADDR_W",
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": 1,
+                },
+            },
+            {
+                "name": "merged_axi",
+                "descr": "AXI bus to connect SoC to interconnect",
+                "signals": {
+                    "prefix": "merged_",
+                    "type": "axi",
+                    "DATA_W": data_w,
+                },
+            },
+        ]
+
+        attributes_dict["subblocks"] += [
+            {
+                "core_name": dataAdapter,
+                "instance_name": "uut_to_mem",
+                "parameters": {
+                    "ADDR_WIDTH": addr_w,
+                    "S_DATA_WIDTH": 32,
+                    "M_DATA_WIDTH": data_w,
+                },
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "axi_s": uutSourceName,
+                    "axi_m": uutAxiName,
+                },
+            },
+        ]
+
+    attributes_dict["subblocks"] += [
+        {
+            "name": "iob_axi_merge",
+            "core_name": "iob_axi_merge",
+            "instance_name": "versat_uut_merge",
+            "num_subordinates": 2,
+            "data_w": data_w,
+            "parameters": {"LEN_W": 8},
+            "connect": {
+                "s_0_s": uutAxiName,
+                "s_1_s": "versat_axi",
+                "m_m": "merged_axi",
+            },
+        },
         {
             "core_name": py_params_dict["issuer"]["original_name"],
             "instance_name": py_params_dict["issuer"]["original_name"],
@@ -193,13 +284,12 @@ def setup(py_params_dict):
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
                 "rs232_m": "rs232",
+                "versat_axi_m": "versat_axi",
+                "axi_m": uutSourceName,
             },
             "dest_dir": "hardware/common_src",
         },
     ]
-
-    if params["use_extmem"]:
-        attributes_dict["subblocks"][-1]["connect"].update({"axi_m": "uut_axi"})
 
     # Connect ethernet and its RAM to pbus
     attributes_dict["subblocks"] += [
@@ -222,43 +312,6 @@ def setup(py_params_dict):
             {"csrs_cbus_s": ("tb_s", ["iob_addr_i[3:0]"])}
         )
 
-    # MARK
-    uutAxiName = "uut_axi"
-    if addAdapter:
-        uutAxiName = "uut_axi_to_wide"
-        attributes_dict["wires"] += [
-            {
-                "name": uutAxiName,
-                "descr": "AXI bus to connect SoC to interconnect",
-                "signals": {
-                    "prefix": "narrow_",
-                    "type": "axi",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": 1,
-                },
-            },
-        ]
-
-        attributes_dict["subblocks"] += [
-            {
-                "core_name": dataAdapter,
-                "instance_name": "uut_to_mem",
-                "parameters": {
-                    "ADDR_WIDTH": addr_w,
-                    "S_DATA_WIDTH": 32,
-                    "M_DATA_WIDTH": data_w,
-                },
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    "axi_s": "uut_axi",
-                    "axi_m": uutAxiName,
-                },
-            },
-        ]
-
     if params["use_extmem"]:
         attributes_dict["subblocks"] += [
             {
@@ -274,7 +327,7 @@ def setup(py_params_dict):
                     "clk_i": "clk",
                     "rst_i": "rst",
                     "axi_s": (
-                        uutAxiName,
+                        "merged_axi",
                         [
                             "{1'b0, axi_arlock}",
                             "{1'b0, axi_awlock}",

@@ -54,13 +54,13 @@ def setup(py_params: dict):
             "rst_i": "rst",
             "s0_axi_s": "delayed_cpu_d",
             "s1_axi_s": "delayed_cpu_i",
-            "s2_axi_s": "versat_axi",
+            # "s2_axi_s": "versat_axi_m",
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
         "data_w": data_w,
         "lock_w": 1,
-        "num_subordinates": 3,
+        "num_subordinates": 2,
     }
     # Add ethernet connections in xbar subblock if needed
     if py_params["use_ethernet"]:
@@ -139,7 +139,7 @@ def setup(py_params: dict):
             "parameters": {},
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
-                "axi_out_m": "versat_axi",
+                "axi_out_m": "versat_axi_m",
                 # Cbus connected automatically
             },
         },
@@ -301,19 +301,7 @@ def setup(py_params: dict):
                 },
             },
             {
-                "name": "csrs_cbus_s",
-                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
-                "signals": {
-                    "type": "iob",
-                    "ADDR_W": 3,
-                    "DATA_W": data_w,
-                },
-            },
-            # NOTE: Add other ports here.
-        ],
-        "wires": [
-            {
-                "name": "versat_axi",
+                "name": "versat_axi_m",
                 "descr": "Versat axi wires",
                 "signals": {
                     "type": "axi",
@@ -325,6 +313,31 @@ def setup(py_params: dict):
                     "LOCK_W": "1",
                 },
             },
+            {
+                "name": "csrs_cbus_s",
+                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
+                "signals": {
+                    "type": "iob",
+                    "ADDR_W": 3,
+                    "DATA_W": data_w,
+                },
+            },
+            # NOTE: Add other ports here.
+        ],
+        "wires": [
+            #            {
+            #                "name": "versat_axi",
+            #                "descr": "Versat axi wires",
+            #                "signals": {
+            #                    "type": "axi",
+            #                    "prefix": "versat_",
+            #                    "ID_W": "AXI_ID_W",
+            #                    "ADDR_W": addr_w,
+            #                    "DATA_W": data_w,
+            #                    "LEN_W": "AXI_LEN_W",
+            #                    "LOCK_W": "1",
+            #                },
+            #            },
             {
                 "name": "delayed_cpu_d",
                 "descr": "CPU_D delay",
