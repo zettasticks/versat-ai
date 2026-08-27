@@ -10,8 +10,8 @@ def setup(py_params_dict):
     data_w = 32
     offset = 2
 
-    #data_w = 64
-    #offset = 3
+    # data_w = 64
+    # offset = 3
 
     dataAdapter = "axi_adapter_direct"
     if data_w != 32:
