@@ -9,7 +9,7 @@ def setup(py_params: dict):
     name = "versat_ai"
     addr_w = 32
 
-    axi_data_w = 64
+    axi_data_w = 32
 
     dataAdapter = "axi_adapter_direct"
     if axi_data_w != 32:
@@ -24,7 +24,6 @@ def setup(py_params: dict):
         "use_ethernet": False,
         "mem_addr_w": mem_addr_w,
         "cpu": "iob_vexriscv",
-        "A": 20,
         "fw_addr_w": 24,
         # Tester configuration
         "include_tester": False,
@@ -473,7 +472,6 @@ def setup(py_params: dict):
             "core_name": "iob_system",
             "system_attributes": attributes_dict,
             **py_params,
-            "A": 30,
         },
     }
 
