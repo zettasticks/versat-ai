@@ -15,7 +15,7 @@ def setup(py_params_dict):
         int(py_params_dict["num_managers"]) if "num_managers" in py_params_dict else 1
     )
 
-    data_w = 64
+    data_w = 32
 
     attributes_dict = {
         "generate_hw": True,
