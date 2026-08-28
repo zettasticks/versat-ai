@@ -177,18 +177,6 @@ def setup(py_params_dict):
                 },
             },
             {
-                "name": "versat_axi",
-                "descr": "Interface to connect Versat to memory",
-                "signals": {
-                    "prefix": "versat_",
-                    "type": "axi",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                },
-            },
-            {
                 "name": "intercon_clk_rst",
                 "descr": "AXI interconnect clock and reset inputs",
                 "signals": [
@@ -336,9 +324,6 @@ def setup(py_params_dict):
         attributes_dict["subblocks"][-1]["connect"].update({"phy_rstn_o": "phy_rstn"})
     if params["use_extmem"]:
         attributes_dict["subblocks"][-1]["connect"].update({"axi_m": "soc_axi"})
-        attributes_dict["subblocks"][-1]["connect"].update(
-            {"versat_axi_m": "versat_axi"}
-        )
         # DDR4 controller
         attributes_dict["subblocks"] += [
             {
@@ -357,8 +342,6 @@ def setup(py_params_dict):
                     "m0_axi_m": "memory_axi",
                     "s0_clk_rst_io": "intercon_s0_clk_rst",
                     "s0_axi_s": "soc_axi",
-                    # "s1_clk_rst_io": "intercon_s1_clk_rst",
-                    # "s1_axi_s": "versat_axi",
                 },
                 "num_subordinates": 1,
             },

@@ -63,7 +63,6 @@ def setup(py_params: dict):
             "rst_i": "rst",
             "s0_axi_s": "delayed_cpu_d",
             "s1_axi_s": "delayed_cpu_i",
-            # "s2_axi_s": "versat_axi_m",
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
@@ -116,6 +115,19 @@ def setup(py_params: dict):
     subblocks = [
         xbar_subblock,
         {
+            "name": "iob_axi_merge",
+            "core_name": "iob_axi_merge",
+            "instance_name": "versat_uut_merge",
+            "num_subordinates": 2,
+            "data_w": data_w,
+            "parameters": {"LEN_W": 8},
+            "connect": {
+                "s_0_s": "proper_axi",
+                "s_1_s": "versat_axi",
+                "m_m": "axi_m",
+            },
+        },
+        {
             "core_name": dataAdapter,
             "instance_name": "narrow_to_wide",
             "parameters": {
@@ -126,7 +138,7 @@ def setup(py_params: dict):
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
                 "axi_s": "narrow_axi",
-                "axi_m": "axi_m",
+                "axi_m": "proper_axi",
             },
         },
         {
@@ -162,7 +174,7 @@ def setup(py_params: dict):
             "parameters": {},
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
-                "axi_out_m": "versat_axi_m",
+                "axi_out_m": "versat_axi",
                 # Cbus connected automatically
             },
         },
@@ -324,19 +336,6 @@ def setup(py_params: dict):
                 },
             },
             {
-                "name": "versat_axi_m",
-                "descr": "Versat axi wires",
-                "signals": {
-                    "type": "axi",
-                    "prefix": "versat_",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": addr_w,
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": "1",
-                },
-            },
-            {
                 "name": "axi_m",
                 "descr": "AXI manager interface for DDR memory",
                 "signals": {
@@ -384,6 +383,32 @@ def setup(py_params: dict):
                     "DATA_W": 32,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "versat_axi",
+                "descr": "Versat axi wires",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "versat_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
+            {
+                "name": "proper_axi",
+                "descr": "AXI bus to connect SoC to interconnect",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "proper_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": "AXI_ADDR_W",
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": 1,
                 },
             },
             {

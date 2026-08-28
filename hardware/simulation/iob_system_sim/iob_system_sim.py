@@ -124,20 +124,6 @@ def setup(py_params_dict):
             ],
         },
         {
-            "name": "versat_axi",
-            "descr": "Versat axi wires",
-            "signals": {
-                "type": "axi",
-                "prefix": "versat_",
-                "DATA_W": data_w,
-                # "ID_W": "AXI_ID_W",
-                # "ADDR_W": addr_w,
-                # "DATA_W": data_w,
-                # "LEN_W": "AXI_LEN_W",
-                # "LOCK_W": "1",
-            },
-        },
-        {
             "name": "rs232",
             "descr": "rs232 bus",
             "signals": {
@@ -183,19 +169,6 @@ def setup(py_params_dict):
                 },
             },
             {
-                "name": "merged_axi",
-                "descr": "AXI bus to connect SoC to interconnect",
-                "signals": {
-                    "type": "axi",
-                    "prefix": "merged_",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": 1,
-                },
-            },
-            {
                 "name": "axi_ram_mem",
                 "descr": "Connect axi_ram to 'iob_ram_t2p_be' memory",
                 "signals": {
@@ -212,19 +185,6 @@ def setup(py_params_dict):
     #
     attributes_dict["subblocks"] = [
         {
-            "name": "iob_axi_merge",
-            "core_name": "iob_axi_merge",
-            "instance_name": "versat_uut_merge",
-            "num_subordinates": 2,
-            "data_w": data_w,
-            "parameters": {"LEN_W": 8},
-            "connect": {
-                "s_0_s": "uut_axi",
-                "s_1_s": "versat_axi",
-                "m_m": "merged_axi",
-            },
-        },
-        {
             "core_name": py_params_dict["issuer"]["original_name"],
             "instance_name": py_params_dict["issuer"]["original_name"],
             "instance_description": "IOb-SoC memory wrapper",
@@ -238,7 +198,6 @@ def setup(py_params_dict):
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
                 "rs232_m": "rs232",
-                "versat_axi_m": "versat_axi",
                 "axi_m": "uut_axi",
             },
             "dest_dir": "hardware/common_src",
@@ -281,10 +240,10 @@ def setup(py_params_dict):
                     "clk_i": "clk",
                     "rst_i": "rst",
                     "axi_s": (
-                        "merged_axi",
+                        "uut_axi",
                         [
-                            "{1'b0, axi_arlock}",
-                            "{1'b0, axi_awlock}",
+                            "{1'b0, uut_axi_arlock}",
+                            "{1'b0, uut_axi_awlock}",
                         ],
                     ),
                     "external_mem_bus_m": "axi_ram_mem",
