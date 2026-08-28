@@ -86,7 +86,7 @@ def setup(py_params_dict):
                     "ID_W": "AXI_ID_W",
                     "LEN_W": "AXI_LEN_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": 32,
+                    "DATA_W": "AXI_DATA_W",
                 },
                 "descr": f"Subordinate {i} interface",
             },

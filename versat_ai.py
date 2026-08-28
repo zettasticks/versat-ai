@@ -9,7 +9,7 @@ def setup(py_params: dict):
     name = "versat_ai"
     addr_w = 32
 
-    axi_data_w = 32
+    axi_data_w = 64
 
     dataAdapter = "axi_adapter_direct"
     if axi_data_w != 32:
@@ -25,6 +25,7 @@ def setup(py_params: dict):
         "mem_addr_w": mem_addr_w,
         "cpu": "iob_vexriscv",
         "fw_addr_w": 24,
+        "bootrom_addr_w": 12,
         # Tester configuration
         "include_tester": False,
         "tester_use_ethernet": True,
@@ -77,13 +78,7 @@ def setup(py_params: dict):
             )
         }
     xbar_manager_interfaces = {
-        "use_extmem": (
-            "narrow_axi",
-            [
-                "{unused_m1_araddr_bits, narrow_axi_araddr}",
-                "{unused_m1_awaddr_bits, narrow_axi_awaddr}",
-            ],
-        ),
+        "use_extmem": "narrow_axi",
         "use_bootrom": (
             "bootrom_cbus",
             [
@@ -101,6 +96,8 @@ def setup(py_params: dict):
             ],
         ),
     }
+    xbar_sel_w = (3 - 1).bit_length()
+
     # Connect xbar manager interfaces
     num_managers = 0
     for interface_connection in xbar_manager_interfaces.values():
@@ -111,16 +108,45 @@ def setup(py_params: dict):
     subblocks = [
         xbar_subblock,
         {
+            "core_name": "iob_axi2iob",
+            "instance_name": "periphs_axi2iob",
+            "instance_description": "Convert AXI to AXI lite for CLINT",
+            "parameters": {
+                "AXI_ID_WIDTH": "AXI_ID_W",
+                "AXI_LEN_WIDTH": "AXI_LEN_W",
+                "ADDR_WIDTH": 32 - xbar_sel_w,
+                "DATA_WIDTH": 32,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": (
+                    "axi_periphs_cbus",
+                    [
+                        "periphs_axi_arlock[0]",
+                        "periphs_axi_awlock[0]",
+                    ],
+                ),
+                "iob_m": "iob_periphs_cbus",
+            },
+        },
+        {
             "name": "iob_axi_merge",
             "core_name": "iob_axi_merge",
             "instance_name": "versat_uut_merge",
             "num_subordinates": 2,
             "data_w": axi_data_w,
+            "addr_w": 32,
             "parameters": {"LEN_W": 8},
             "connect": {
                 "s_0_s": "proper_axi",
                 "s_1_s": "versat_axi",
-                "m_m": "axi_m",
+                "m_m": (
+                    "axi_m",
+                    [
+                        "{unused_wires_0, axi_araddr_o}",
+                        "{unused_wires_1, axi_awaddr_o}",
+                    ],
+                ),
             },
         },
         {
@@ -351,31 +377,69 @@ def setup(py_params: dict):
                     "LOCK_W": 1,
                 },
             },
-            {
-                "name": "csrs_cbus_s",
-                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
-                "signals": {
-                    "type": "iob",
-                    "ADDR_W": 3,
-                    "DATA_W": "AXI_DATA_W",
-                },
-            },
+            #            {
+            #                "name": "csrs_cbus_s",
+            #                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
+            #                "signals": {
+            #                    "type": "iob",
+            #                    "ADDR_W": 3,
+            #                    "DATA_W": "AXI_DATA_W",
+            #                },
+            #            },
             # NOTE: Add other ports here.
         ],
         "wires": [
-            #            {
-            #                "name": "versat_axi",
-            #                "descr": "Versat axi wires",
-            #                "signals": {
-            #                    "type": "axi",
-            #                    "prefix": "versat_",
-            #                    "ID_W": "AXI_ID_W",
-            #                    "ADDR_W": addr_w,
-            #                    "DATA_W": data_w,
-            #                    "LEN_W": "AXI_LEN_W",
-            #                    "LOCK_W": "1",
-            #                },
-            #            },
+            {
+                "name": "axi_periphs_cbus",
+                "descr": "AXI bus for peripheral CSRs",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "periphs_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": 32 - xbar_sel_w,
+                    "DATA_W": 32,
+                    "LEN_W": "AXI_LEN_W",
+                },
+            },
+            {
+                "name": "unused_interconnect_bits",
+                "descr": "Wires to connect to unused output bits of interconnect",
+                "signals": [
+                    {
+                        "name": "unused_wires_0",
+                        "width": 2,
+                    },
+                    {
+                        "name": "unused_wires_1",
+                        "width": 2,
+                    },
+                ],
+            },
+            {
+                "name": "iob_periphs_cbus",
+                "descr": "AXI-Lite bus for peripheral CSRs",
+                "signals": {
+                    "type": "iob",
+                    "prefix": "periphs_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": 32 - xbar_sel_w,
+                    "DATA_W": 32,
+                    "LEN_W": "AXI_LEN_W",
+                },
+            },
+            {
+                "name": "bootrom_cbus",
+                "descr": "iob-system boot controller data interface",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "bootrom_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": py_params["bootrom_addr_w"] + 1,  # +1 for csrs
+                    "DATA_W": 32,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
             {
                 "name": "narrow_axi",
                 "descr": "Narrow axi wires",
@@ -409,7 +473,7 @@ def setup(py_params: dict):
                     "type": "axi",
                     "prefix": "proper_",
                     "ID_W": "AXI_ID_W",
-                    "ADDR_W": "AXI_ADDR_W",
+                    "ADDR_W": 32,
                     "DATA_W": "AXI_DATA_W",
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": 1,

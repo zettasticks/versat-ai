@@ -58,7 +58,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
 if __name__ == "__main__":
     try:
         output = RunVersat(
-            "./versatSpec.txt", "Test", None, "./submodules/iob_versat", 32, None
+            "./versatSpec.txt", "Test", None, "./submodules/iob_versat", 64, None
         )
     except Exception as e:
         print("Failed to generate Versat:")

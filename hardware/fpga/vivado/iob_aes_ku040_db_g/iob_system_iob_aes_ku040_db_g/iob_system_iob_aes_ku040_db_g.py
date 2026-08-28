@@ -201,14 +201,6 @@ def setup(py_params_dict):
                     {"name": "intercon_s0_arstn", "width": "1"},
                 ],
             },
-            #            {
-            #                "name": "intercon_s1_clk_rst",
-            #                "descr": "Interconnect subordinate 1 clock reset interface",
-            #                "signals": [
-            #                    {"name": "clk"},
-            #                    {"name": "intercon_s1_arstn", "width": "1"},
-            #                ],
-            #            },
             {
                 "name": "intercon_m0_clk_rst",
                 "descr": "Interconnect manager 0 clock and reset",
@@ -316,7 +308,7 @@ def setup(py_params_dict):
                 "AXI_ID_W": "AXI_ID_W",
                 "AXI_LEN_W": "AXI_LEN_W",
                 "AXI_ADDR_W": "AXI_ADDR_W",
-                "AXI_DATA_W": 32,
+                "AXI_DATA_W": axi_data_w,
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst",
