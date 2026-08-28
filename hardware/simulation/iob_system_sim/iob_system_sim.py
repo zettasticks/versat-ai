@@ -13,15 +13,6 @@ def setup(py_params_dict):
     # data_w = 64
     # offset = 3
 
-    dataAdapter = "axi_adapter_direct"
-    if data_w != 32:
-        dataAdapter = "axi_adapter_wider"
-
-    addAdapter = True
-
-    uutSourceName = "uut_axi"
-    uutAxiName = "axi_merged"
-
     # Size of RAM for ethernet's dma
     ETH_RAM_ADDR_W = 14
 
@@ -93,6 +84,18 @@ def setup(py_params_dict):
             },
         },
         {
+            "name": "axi_m",
+            "descr": "AXI manager interface for DDR memory",
+            "signals": {
+                "type": "axi",
+                "ID_W": "AXI_ID_W",
+                "ADDR_W": "AXI_ADDR_W",
+                "DATA_W": data_w,
+                "LEN_W": "AXI_LEN_W",
+                "LOCK_W": 1,
+            },
+        },
+        {
             "name": "tb_s",
             "descr": "Testbench iob interface",
             "signals": {
@@ -135,20 +138,6 @@ def setup(py_params_dict):
             },
         },
         {
-            "name": "axi_merged",
-            "descr": "Merged axi wires",
-            "signals": {
-                "type": "axi",
-                "prefix": "merged_",
-                "DATA_W": data_w,
-                # "ID_W": "AXI_ID_W",
-                # "ADDR_W": addr_w,
-                # "DATA_W": data_w,
-                # "LEN_W": "AXI_LEN_W",
-                # "LOCK_W": "1",
-            },
-        },
-        {
             "name": "rs232",
             "descr": "rs232 bus",
             "signals": {
@@ -181,14 +170,27 @@ def setup(py_params_dict):
     if params["use_extmem"]:
         attributes_dict["wires"] += [
             {
-                "name": uutSourceName,
+                "name": "uut_axi",
                 "descr": "AXI bus to connect SoC to interconnect",
                 "signals": {
                     "type": "axi",
                     "prefix": "uut_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": 32,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": 1,
+                },
+            },
+            {
+                "name": "merged_axi",
+                "descr": "AXI bus to connect SoC to interconnect",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "merged_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": "AXI_ADDR_W",
+                    "DATA_W": data_w,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": 1,
                 },
@@ -208,55 +210,7 @@ def setup(py_params_dict):
     #
     # Blocks
     #
-    attributes_dict["subblocks"] = []
-
-    # MARK: UUT
-    # MARK
-    if addAdapter:
-        uutAxiName = "axi_merged_to_wide"
-        attributes_dict["wires"] += [
-            {
-                "name": uutAxiName,
-                "descr": "AXI bus to connect SoC to interconnect",
-                "signals": {
-                    "prefix": "wider_",
-                    "type": "axi",
-                    "ID_W": "AXI_ID_W",
-                    "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
-                    "LEN_W": "AXI_LEN_W",
-                    "LOCK_W": 1,
-                },
-            },
-            {
-                "name": "merged_axi",
-                "descr": "AXI bus to connect SoC to interconnect",
-                "signals": {
-                    "prefix": "merged_",
-                    "type": "axi",
-                    "DATA_W": data_w,
-                },
-            },
-        ]
-
-        attributes_dict["subblocks"] += [
-            {
-                "core_name": dataAdapter,
-                "instance_name": "uut_to_mem",
-                "parameters": {
-                    "ADDR_WIDTH": addr_w,
-                    "S_DATA_WIDTH": 32,
-                    "M_DATA_WIDTH": data_w,
-                },
-                "connect": {
-                    "clk_en_rst_s": "clk_en_rst_s",
-                    "axi_s": uutSourceName,
-                    "axi_m": uutAxiName,
-                },
-            },
-        ]
-
-    attributes_dict["subblocks"] += [
+    attributes_dict["subblocks"] = [
         {
             "name": "iob_axi_merge",
             "core_name": "iob_axi_merge",
@@ -265,7 +219,7 @@ def setup(py_params_dict):
             "data_w": data_w,
             "parameters": {"LEN_W": 8},
             "connect": {
-                "s_0_s": uutAxiName,
+                "s_0_s": "uut_axi",
                 "s_1_s": "versat_axi",
                 "m_m": "merged_axi",
             },
@@ -285,7 +239,7 @@ def setup(py_params_dict):
                 "clk_en_rst_s": "clk_en_rst_s",
                 "rs232_m": "rs232",
                 "versat_axi_m": "versat_axi",
-                "axi_m": uutSourceName,
+                "axi_m": "uut_axi",
             },
             "dest_dir": "hardware/common_src",
         },

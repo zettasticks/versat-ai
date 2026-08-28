@@ -10,6 +10,15 @@ def setup(py_params: dict):
     addr_w = 32
     data_w = 32
 
+    dataAdapter = "axi_adapter_direct"
+    if data_w != 32:
+        dataAdapter = "axi_adapter_wider"
+
+    addAdapter = True
+
+    uutSourceName = ""
+    uutAxiName = ""
+
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
     iob_system_default_overrides = {
@@ -74,10 +83,10 @@ def setup(py_params: dict):
         }
     xbar_manager_interfaces = {
         "use_extmem": (
-            "axi_m",
+            "narrow_axi",
             [
-                "{unused_m1_araddr_bits, axi_araddr_o}",
-                "{unused_m1_awaddr_bits, axi_awaddr_o}",
+                "{unused_m1_araddr_bits, narrow_axi_araddr}",
+                "{unused_m1_awaddr_bits, narrow_axi_awaddr}",
             ],
         ),
         "use_bootrom": (
@@ -106,6 +115,20 @@ def setup(py_params: dict):
 
     subblocks = [
         xbar_subblock,
+        {
+            "core_name": dataAdapter,
+            "instance_name": "narrow_to_wide",
+            "parameters": {
+                "ADDR_WIDTH": addr_w,
+                "S_DATA_WIDTH": 32,
+                "M_DATA_WIDTH": data_w,
+            },
+            "connect": {
+                "clk_en_rst_s": "clk_en_rst_s",
+                "axi_s": "narrow_axi",
+                "axi_m": "axi_m",
+            },
+        },
         {
             # Instantiate a UART core from: https://github.com/IObundle/py2hwsw/tree/main/py2hwsw/lib/hardware/iob_uart
             "core_name": "iob_uart",
@@ -314,6 +337,18 @@ def setup(py_params: dict):
                 },
             },
             {
+                "name": "axi_m",
+                "descr": "AXI manager interface for DDR memory",
+                "signals": {
+                    "type": "axi",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": "AXI_ADDR_W",
+                    "DATA_W": "AXI_DATA_W",
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": 1,
+                },
+            },
+            {
                 "name": "csrs_cbus_s",
                 "descr": "Control/Status Registers of versat-ai system (using regfileif).",
                 "signals": {
@@ -338,6 +373,19 @@ def setup(py_params: dict):
             #                    "LOCK_W": "1",
             #                },
             #            },
+            {
+                "name": "narrow_axi",
+                "descr": "Narrow axi wires",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "narrow_",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": addr_w,
+                    "DATA_W": 32,
+                    "LEN_W": "AXI_LEN_W",
+                    "LOCK_W": "1",
+                },
+            },
             {
                 "name": "delayed_cpu_d",
                 "descr": "CPU_D delay",

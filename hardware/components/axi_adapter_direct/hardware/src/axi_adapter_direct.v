@@ -78,7 +78,6 @@ module axi_adapter_direct #
     input wire cke_i,
     input wire clk_i,
     input wire arst_i,
-    input wire rst_i,
 
     /*
      * AXI slave interface
@@ -196,7 +195,7 @@ axi_adapter_wr_direct #(
 )
 axi_adapter_wr_inst (
     .clk(clk_i),
-    .rst(arst_i | rst_i),
+    .rst(arst_i),
 
     /*
      * AXI slave interface
@@ -272,7 +271,7 @@ axi_adapter_rd_direct #(
 )
 axi_adapter_rd_inst (
     .clk(clk_i),
-    .rst(arst_i | rst_i),
+    .rst(arst_i),
 
     /*
      * AXI slave interface
