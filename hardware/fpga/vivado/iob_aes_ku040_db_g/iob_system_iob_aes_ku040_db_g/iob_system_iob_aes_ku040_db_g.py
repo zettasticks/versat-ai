@@ -9,7 +9,7 @@ def setup(py_params_dict):
     # user-passed parameters
     params = py_params_dict["iob_system_params"]
 
-    data_w = 64
+    data_w = 32
 
     attributes_dict = {
         "name": params["name"] + "_iob_aes_ku040_db_g",
@@ -168,11 +168,23 @@ def setup(py_params_dict):
                 "name": "soc_axi",
                 "descr": "AXI interface to connect SoC to memory",
                 "signals": {
-                    "prefix": "soc_axi",
+                    "prefix": "soc_",
                     "type": "axi",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": 32,
+                    "DATA_W": data_w,
+                    "LEN_W": "AXI_LEN_W",
+                },
+            },
+            {
+                "name": "versat_axi",
+                "descr": "Interface to connect Versat to memory",
+                "signals": {
+                    "prefix": "versat_",
+                    "type": "axi",
+                    "ID_W": "AXI_ID_W",
+                    "ADDR_W": "AXI_ADDR_W",
+                    "DATA_W": data_w,
                     "LEN_W": "AXI_LEN_W",
                 },
             },
@@ -195,6 +207,14 @@ def setup(py_params_dict):
                     {"name": "intercon_s0_arstn", "width": "1"},
                 ],
             },
+            #            {
+            #                "name": "intercon_s1_clk_rst",
+            #                "descr": "Interconnect subordinate 1 clock reset interface",
+            #                "signals": [
+            #                    {"name": "clk"},
+            #                    {"name": "intercon_s1_arstn", "width": "1"},
+            #                ],
+            #            },
             {
                 "name": "intercon_m0_clk_rst",
                 "descr": "Interconnect manager 0 clock and reset",
@@ -316,6 +336,9 @@ def setup(py_params_dict):
         attributes_dict["subblocks"][-1]["connect"].update({"phy_rstn_o": "phy_rstn"})
     if params["use_extmem"]:
         attributes_dict["subblocks"][-1]["connect"].update({"axi_m": "soc_axi"})
+        attributes_dict["subblocks"][-1]["connect"].update(
+            {"versat_axi_m": "versat_axi"}
+        )
         # DDR4 controller
         attributes_dict["subblocks"] += [
             {
@@ -334,6 +357,8 @@ def setup(py_params_dict):
                     "m0_axi_m": "memory_axi",
                     "s0_clk_rst_io": "intercon_s0_clk_rst",
                     "s0_axi_s": "soc_axi",
+                    # "s1_clk_rst_io": "intercon_s1_clk_rst",
+                    # "s1_axi_s": "versat_axi",
                 },
                 "num_subordinates": 1,
             },

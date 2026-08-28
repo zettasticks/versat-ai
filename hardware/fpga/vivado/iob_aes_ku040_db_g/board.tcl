@@ -34,8 +34,8 @@ if { $USE_EXTMEM > 0 } {
         set_property CONFIG.NUM_SLAVE_PORTS 1 [get_ips axi_interconnect_0]
         set_property CONFIG.AXI_ADDR_WIDTH 30 [get_ips axi_interconnect_0]
         set_property CONFIG.ACLK_PERIOD 5000 [get_ips axi_interconnect_0]
-        set_property CONFIG.INTERCONNECT_DATA_WIDTH 64 [get_ips axi_interconnect_0]
-        set_property CONFIG.M00_AXI_DATA_WIDTH 64 [get_ips axi_interconnect_0]
+        set_property CONFIG.INTERCONNECT_DATA_WIDTH 32 [get_ips axi_interconnect_0]
+        set_property CONFIG.M00_AXI_DATA_WIDTH 32 [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_IS_ACLK_ASYNC 1 [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_WRITE_FIFO_DEPTH 32 [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_READ_FIFO_DEPTH 32 [get_ips axi_interconnect_0]
@@ -71,7 +71,7 @@ if { $USE_EXTMEM > 0 } {
              CONFIG.C0.DDR4_AxiSelection {true} \
              CONFIG.C0.DDR4_CasLatency {11} \
              CONFIG.C0.DDR4_CasWriteLatency {11} \
-             CONFIG.C0.DDR4_AxiDataWidth {64} \
+             CONFIG.C0.DDR4_AxiDataWidth {32} \
              CONFIG.C0.DDR4_AxiAddressWidth {30} \
              CONFIG.ADDN_UI_CLKOUT1_FREQ_HZ {100} \
              CONFIG.C0.BANK_GROUP_WIDTH {1}] [get_ips ddr4_0]
