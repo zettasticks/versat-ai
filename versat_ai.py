@@ -8,16 +8,12 @@ def setup(py_params: dict):
     system_w = mem_addr_w
     name = "versat_ai"
     addr_w = 32
-    data_w = 32
+
+    axi_data_w = 64
 
     dataAdapter = "axi_adapter_direct"
-    if data_w != 32:
+    if axi_data_w != 32:
         dataAdapter = "axi_adapter_wider"
-
-    addAdapter = True
-
-    uutSourceName = ""
-    uutAxiName = ""
 
     # Set new default values for python parameters of iob_system (parent module)
     # List of iob_system python parameters available at: https://github.com/IObundle/py2hwsw/blob/main/py2hwsw/lib/iob_system/iob_system.py
@@ -28,6 +24,7 @@ def setup(py_params: dict):
         "use_ethernet": False,
         "mem_addr_w": mem_addr_w,
         "cpu": "iob_vexriscv",
+        "A": 20,
         "fw_addr_w": 24,
         # Tester configuration
         "include_tester": False,
@@ -66,7 +63,7 @@ def setup(py_params: dict):
             # Manager interfaces connected below
         },
         "addr_w": addr_w,
-        "data_w": data_w,
+        "data_w": 32,
         "lock_w": 1,
         "num_subordinates": 2,
     }
@@ -119,7 +116,7 @@ def setup(py_params: dict):
             "core_name": "iob_axi_merge",
             "instance_name": "versat_uut_merge",
             "num_subordinates": 2,
-            "data_w": data_w,
+            "data_w": axi_data_w,
             "parameters": {"LEN_W": 8},
             "connect": {
                 "s_0_s": "proper_axi",
@@ -133,7 +130,7 @@ def setup(py_params: dict):
             "parameters": {
                 "ADDR_WIDTH": addr_w,
                 "S_DATA_WIDTH": 32,
-                "M_DATA_WIDTH": data_w,
+                "M_DATA_WIDTH": "AXI_DATA_W",
             },
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
@@ -318,6 +315,14 @@ def setup(py_params: dict):
                 "max": "NA",
             },
             {
+                "name": "AXI_DATA_W",
+                "descr": "Axi data width",
+                "type": "P",
+                "val": axi_data_w,
+                "min": "1",
+                "max": "1024",
+            },
+            {
                 "name": "EXT_MEM_HEXFILE",
                 "descr": "Firmware file name",
                 "type": "D",
@@ -353,7 +358,7 @@ def setup(py_params: dict):
                 "signals": {
                     "type": "iob",
                     "ADDR_W": 3,
-                    "DATA_W": data_w,
+                    "DATA_W": "AXI_DATA_W",
                 },
             },
             # NOTE: Add other ports here.
@@ -393,7 +398,7 @@ def setup(py_params: dict):
                     "prefix": "versat_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": addr_w,
-                    "DATA_W": data_w,
+                    "DATA_W": "AXI_DATA_W",
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
                 },
@@ -406,7 +411,7 @@ def setup(py_params: dict):
                     "prefix": "proper_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
+                    "DATA_W": "AXI_DATA_W",
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": 1,
                 },
@@ -419,7 +424,7 @@ def setup(py_params: dict):
                     "prefix": "delay_d_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": addr_w,
-                    "DATA_W": data_w,
+                    "DATA_W": 32,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
                 },
@@ -432,7 +437,7 @@ def setup(py_params: dict):
                     "prefix": "delay_i_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": addr_w,
-                    "DATA_W": data_w,
+                    "DATA_W": 32,
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": "1",
                 },
@@ -468,6 +473,7 @@ def setup(py_params: dict):
             "core_name": "iob_system",
             "system_attributes": attributes_dict,
             **py_params,
+            "A": 30,
         },
     }
 

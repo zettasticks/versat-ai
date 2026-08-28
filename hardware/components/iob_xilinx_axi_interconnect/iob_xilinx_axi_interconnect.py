@@ -15,8 +15,6 @@ def setup(py_params_dict):
         int(py_params_dict["num_managers"]) if "num_managers" in py_params_dict else 1
     )
 
-    data_w = 32
-
     attributes_dict = {
         "generate_hw": True,
         #
@@ -52,7 +50,7 @@ def setup(py_params_dict):
                 "type": "P",
                 "val": 1,
                 "min": 1,
-                "max": 64,
+                "max": 1024,
                 "descr": "AXI data bus width",
             },
         ],
@@ -111,7 +109,7 @@ def setup(py_params_dict):
                     "ID_W": "AXI_ID_W",
                     "LEN_W": "AXI_LEN_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
+                    "DATA_W": "AXI_DATA_W",
                     "LOCK_W": 1,
                 },
                 "descr": f"Manager {i} axi interface",

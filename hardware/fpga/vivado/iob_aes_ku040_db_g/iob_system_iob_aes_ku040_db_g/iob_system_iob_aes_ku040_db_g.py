@@ -9,7 +9,13 @@ def setup(py_params_dict):
     # user-passed parameters
     params = py_params_dict["iob_system_params"]
 
-    data_w = 32
+    axi_data_w = 0
+    for conf in params["system_attributes"]["confs"]:
+        if conf.get("name", "") == "AXI_DATA_W":
+            axi_data_w = conf.get("val", 0)
+            break
+
+    assert axi_data_w > 0
 
     attributes_dict = {
         "name": params["name"] + "_iob_aes_ku040_db_g",
@@ -46,9 +52,9 @@ def setup(py_params_dict):
                 "name": "AXI_DATA_W",
                 "descr": "AXI data bus width",
                 "type": "D",
-                "val": data_w,
+                "val": axi_data_w,
                 "min": "1",
-                "max": "64",
+                "max": "1024",
             },
             {
                 "name": "BAUD",
@@ -172,7 +178,7 @@ def setup(py_params_dict):
                     "type": "axi",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
+                    "DATA_W": axi_data_w,
                     "LEN_W": "AXI_LEN_W",
                 },
             },
@@ -220,7 +226,7 @@ def setup(py_params_dict):
                     "ID_W": "AXI_ID_W",
                     "LEN_W": "AXI_LEN_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
+                    "DATA_W": axi_data_w,
                     "LOCK_W": 1 if params["use_extmem"] else 2,
                 },
             },
@@ -334,7 +340,7 @@ def setup(py_params_dict):
                     "AXI_ID_W": "AXI_ID_W",
                     "AXI_LEN_W": "AXI_LEN_W",
                     "AXI_ADDR_W": "AXI_ADDR_W",
-                    "AXI_DATA_W": data_w,
+                    "AXI_DATA_W": axi_data_w,
                 },
                 "connect": {
                     "clk_rst_s": "intercon_clk_rst",
@@ -353,7 +359,7 @@ def setup(py_params_dict):
                     "AXI_ID_W": "AXI_ID_W",
                     "AXI_LEN_W": "AXI_LEN_W",
                     "AXI_ADDR_W": "AXI_ADDR_W",
-                    "AXI_DATA_W": data_w,
+                    "AXI_DATA_W": axi_data_w,
                 },
                 "connect": {
                     "clk_rst_i": "clk_rst_i",

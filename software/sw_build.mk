@@ -20,7 +20,7 @@ GET_MACRO = $(shell grep "define $(1)" $(2) | rev | cut -d" " -f1 | rev)
 #Function to obtain parameter named $(1) from versat_ai_conf.vh
 GET_VERSAT_AI_CONF_MACRO = $(call GET_MACRO,VERSAT_AI_$(1),$(ROOT_DIR)/hardware/src/versat_ai_conf.vh)
 
-../../scripts/makeHex: ../../software/makehex.c
+../../scripts/makeHex: ../../software/makehex.c $(ROOT_DIR)/hardware/src/versat_ai_conf.vh
 	gcc -o ../../scripts/makeHex ../../software/makehex.c
 
 versat_ai_bootrom.hex: ../../software/versat_ai_preboot.bin ../../software/versat_ai_boot.bin

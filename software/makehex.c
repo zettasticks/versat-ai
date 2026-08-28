@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+#include "src/versat_ai_conf.h"
+
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 
 long int GetFileSize(FILE *file) {
@@ -63,7 +65,7 @@ int main(int argc, char *argv[]) {
 
   printf("%s\n", pathBuffer);
 
-  int hexfiles = 4;
+  int hexfiles = (VERSAT_AI_AXI_DATA_W / 8);
   FILE *filesArray[MAX_HEX_FILES];
 
   for (int i = 0; i < hexfiles; i++) {

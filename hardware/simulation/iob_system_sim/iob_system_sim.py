@@ -5,13 +5,29 @@
 
 def setup(py_params_dict):
     params = py_params_dict["iob_system_params"]
-
     addr_w = params["mem_addr_w"]
-    data_w = 32
-    offset = 2
 
-    # data_w = 64
-    # offset = 3
+    axi_data_w = 0
+    for conf in params["system_attributes"]["confs"]:
+        if conf.get("name", "") == "AXI_DATA_W":
+            axi_data_w = conf.get("val", 0)
+            break
+
+    assert axi_data_w > 0
+
+    axi_offset = 0
+    if axi_data_w == 32:
+        axi_offset = 2
+    if axi_data_w == 64:
+        axi_offset = 3
+    if axi_data_w == 128:
+        axi_offset = 4
+    if axi_data_w == 256:
+        axi_offset = 5
+    if axi_data_w == 512:
+        axi_offset = 6
+
+    assert axi_offset > 0
 
     # Size of RAM for ethernet's dma
     ETH_RAM_ADDR_W = 14
@@ -49,7 +65,7 @@ def setup(py_params_dict):
                 "name": "AXI_DATA_W",
                 "descr": "AXI data bus width",
                 "type": "D",
-                "val": data_w,
+                "val": axi_data_w,
             },
             {
                 "name": "BAUD",
@@ -90,7 +106,7 @@ def setup(py_params_dict):
                 "type": "axi",
                 "ID_W": "AXI_ID_W",
                 "ADDR_W": "AXI_ADDR_W",
-                "DATA_W": data_w,
+                "DATA_W": "AXI_DATA_W",
                 "LEN_W": "AXI_LEN_W",
                 "LOCK_W": 1,
             },
@@ -163,7 +179,7 @@ def setup(py_params_dict):
                     "prefix": "uut_",
                     "ID_W": "AXI_ID_W",
                     "ADDR_W": "AXI_ADDR_W",
-                    "DATA_W": data_w,
+                    "DATA_W": "AXI_DATA_W",
                     "LEN_W": "AXI_LEN_W",
                     "LOCK_W": 1,
                 },
@@ -174,8 +190,8 @@ def setup(py_params_dict):
                 "signals": {
                     "type": "ram_t2p_be",
                     "prefix": "ext_mem_",
-                    "ADDR_W": "AXI_ADDR_W - 2",
-                    "DATA_W": data_w,
+                    "ADDR_W": f"AXI_ADDR_W - {axi_offset}",
+                    "DATA_W": "AXI_DATA_W",
                 },
             },
         ]
@@ -192,7 +208,7 @@ def setup(py_params_dict):
                 "AXI_ID_W": "AXI_ID_W",
                 "AXI_LEN_W": "AXI_LEN_W",
                 "AXI_ADDR_W": "AXI_ADDR_W",
-                "AXI_DATA_W": 32,
+                "AXI_DATA_W": axi_data_w,
                 "SIMULATION": "SIMULATION",
             },
             "connect": {
@@ -234,7 +250,7 @@ def setup(py_params_dict):
                 "parameters": {
                     "ID_WIDTH": "AXI_ID_W",
                     "ADDR_WIDTH": "AXI_ADDR_W",
-                    "DATA_WIDTH": data_w,
+                    "DATA_WIDTH": "AXI_DATA_W",
                 },
                 "connect": {
                     "clk_i": "clk",
@@ -253,8 +269,8 @@ def setup(py_params_dict):
                 "core_name": "iob_ram_t2p_be",
                 "instance_name": "iob_ram_t2p_be_inst",
                 "parameters": {
-                    "ADDR_W": f"AXI_ADDR_W - {offset}",
-                    "DATA_W": data_w,
+                    "ADDR_W": f"AXI_ADDR_W - {axi_offset}",
+                    "DATA_W": "AXI_DATA_W",
                 },
                 "connect": {
                     "ram_t2p_be_s": "axi_ram_mem",
