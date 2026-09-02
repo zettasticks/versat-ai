@@ -56,9 +56,15 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
 
 
 if __name__ == "__main__":
+    axi_data_w = 64
     try:
         output = RunVersat(
-            "./versatSpec.txt", "Test", None, "./submodules/iob_versat", 64, None
+            "./versatSpec.txt",
+            "Test",
+            None,
+            "./submodules/iob_versat",
+            axi_data_w,
+            None,
         )
     except Exception as e:
         print("Failed to generate Versat:")
@@ -81,20 +87,12 @@ if __name__ == "__main__":
             "generate_hw": True,
             "confs": [
                 {
-                    "name": "DATA_W",
+                    "name": "AXI_DATA_W",
                     "type": "P",
-                    "val": "32",
+                    "val": axi_data_w,
                     "min": "NA",
                     "max": "NA",
                     "descr": "Data bus width",
-                },
-                {
-                    "name": "WDATA_W",
-                    "type": "P",
-                    "val": "1",
-                    "min": "NA",
-                    "max": "8",
-                    "descr": "",
                 },
             ],
             "ports": [
@@ -109,7 +107,7 @@ if __name__ == "__main__":
                         "type": "axi",
                         "ID_W": "AXI_ID_W",
                         "ADDR_W": "AXI_ADDR_W",
-                        "DATA_W": "AXI_DATA_W",
+                        "DATA_W": axi_data_w,
                         "LEN_W": "AXI_LEN_W",
                         "LOCK_W": 1,
                     },
@@ -170,8 +168,10 @@ import os
 
 
 def setup(py_params_dict):
+    expected_axi_data_w = {axi_data_w}
+
     attributes_dict = {attributes_dict.__repr__()}
 {copy_coverage}
-
+    
     return attributes_dict"""
         )

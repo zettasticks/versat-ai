@@ -65,7 +65,7 @@ module Top_Maxpool(){
    config Output(addr: Address,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
       for y 0..sizeH {
          for x 0..sizeW {
-            output = addr[((y + startY) * outputImageW + (x + startX) + startOffset) / stride];
+            output = addr[Duty(((y + startY) * outputImageW + (x + startX) + startOffset),stride)];
          }
       }
    }
@@ -97,7 +97,7 @@ module Top_AveragePool(){
    config Output(addr: Address,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
       for y 0..sizeH {
          for x 0..sizeW {
-            output = addr[((y + startY) * outputImageW + (x + startX) + startOffset) / stride];
+            output = addr[Duty(((y + startY) * outputImageW + (x + startX) + startOffset),stride)];
          }
       }
    }
@@ -183,7 +183,7 @@ module Top_Conv(){
       for y 0..outputH {
          for x 0..outputW {
             for inC 0..featuresAmount {
-               output = outAddr[((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + outCStart + inC) / stride];
+               output = outAddr[Duty(((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + outCStart + inC),stride)];
             }
          }
       }
@@ -193,7 +193,7 @@ module Top_Conv(){
       for outerY 0..outerYSize {
          for outerX 0..outerXSize {
             for x 0..size {
-               bias = addr[x / stride];
+               bias = addr[Duty(x,stride)];
             }
          }
       }
@@ -222,7 +222,7 @@ module Top_MatMul(){
 
    config Output(addr: Address,size,stride){
       for x 0..size {
-         output = addr[x / stride];
+         output = addr[Duty(x,stride)];
       }
    }
 }
@@ -430,7 +430,7 @@ module Top_Gemm(){
 
    config Output(addr: Address,size,stride){
       for x 0..size {
-         output = addr[x / stride];
+         output = addr[Duty(x,stride)];
       }
    }
 }

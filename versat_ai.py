@@ -193,7 +193,7 @@ def setup(py_params: dict):
             "instance_name": "VERSAT0",
             "instance_description": "Versat accelerator",
             "is_peripheral": True,
-            "parameters": {},
+            "parameters": {"AXI_DATA_W": axi_data_w},
             "connect": {
                 "clk_en_rst_s": "clk_en_rst_s",
                 "axi_out_m": "versat_axi",
