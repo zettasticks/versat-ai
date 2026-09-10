@@ -350,7 +350,7 @@ void *Versat_Reshape(void *data, void *shape, void *output, int index,
 static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
                                          void *input, void *output,
                                          MaxPoolInfo *info) {
-#if 0
+#if 1
   volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
 
   int64_t *inputDims = VERSAT_MaxPoolInfo_inputDims(info);
@@ -388,7 +388,7 @@ static inline void MaxPool_ProcessWindow(AdvancedWindow w, int channel,
 // Currently hardcoded for 2D kernels.
 void *Versat_MaxPool(void *inputX, void *output, int index, MaxPoolInfo *info) {
   // forceDoubleLoop = true;
-#if 0
+#if 1
   volatile Top_MaxpoolConfig *config = &accelConfig->Top_Maxpool;
   ActivateMergedAccelerator(MergeType_Top_Maxpool);
 
@@ -1100,7 +1100,7 @@ void *Versat_Softmax(void *input, void *output, int index, SoftmaxInfo *info) {
 void *Versat_BatchNormalization(void *inputX, void *scale, void *inputB,
                                 void *mean, void *var, void *output, int index,
                                 BatchNormalizationInfo *info) {
-#if 0
+#if 1
   ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_BatchNormalization);
@@ -1196,7 +1196,7 @@ void *Versat_Dropout(void *input, void *out, int index, DropoutInfo *info) {
 }
 
 void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
-#if 0
+#if 1
   ArenaMark outerMark = MarkArena(arena);
 
   int64_t *inputDims = VERSAT_LRNInfo_inputDims(info);
@@ -1294,7 +1294,7 @@ void *Versat_LRN(void *input, void *out, int index, LRNInfo *info) {
 
 void *Versat_Gemm(void *inA, void *inB, void *inC, void *out, int index,
                   GemmInfo *info) {
-#if 0
+#if 1
   ArenaMark outerMark = MarkArena(arena);
 
   ActivateMergedAccelerator(MergeType_Top_Gemm);

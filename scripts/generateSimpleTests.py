@@ -1852,17 +1852,17 @@ def GenerateLite(outputPath):
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
-    config.testAdd = 0
-    config.testRelu = 0
-    config.testReshape = 0
-    config.testTranspose = 0
-    config.testMaxPool = 0
-    config.testAveragePool = 0
-    config.testMatMul = 0
-    config.testDropout = 0
-    config.testGemm = 0
-    config.testBatchNormalization = 0
-    config.testSoftmax = 0
+    config.testAdd = 1
+    config.testRelu = 1
+    config.testReshape = 1
+    config.testTranspose = 1
+    config.testMaxPool = 1
+    config.testAveragePool = 1
+    config.testMatMul = 1
+    config.testDropout = 1
+    config.testGemm = 1
+    config.testBatchNormalization = 1
+    config.testSoftmax = 1
     config.testLRN = 0
     config.testPad = 0
 
