@@ -1,27 +1,35 @@
-module Top_Add(){
-   VRead inputs_0;
-   VRead inputs_1;
-   VWrite output;
-   F_Add adder;
+module Top_Add #(X=1) (){
+   VRead inputs_0[X];
+   VRead inputs_1[X];
+   VWrite output[X];
+   F_Add adder[X];
 #
-   {inputs_0,inputs_1} -> adder:0..1;
-   adder -> output;
+   for i 0..X {
+      {inputs_0[i],inputs_1[i]} -> adder[i]:0..1;
+      adder[i] -> output[i];
+   }
 ##
-   config Linear(addr: Address,size: Dyn){
-      for x 0..size {
-         inputs_0 = addr[x];
+   config Linear(addr: Buffer,size: Dyn){
+      gen i 0..X{
+         for x RangeLow(0,size,X,i)..RangeHigh(0,size,X,i) {
+            inputs_0[i] = addr[x];
+         }
       }
    }
 
-   config Broadcast(addr: Address,size: Dyn,enable){
-      for x 0..size { 
-         inputs_1 = addr[x * enable];
+   config Broadcast(addr: Buffer,size: Dyn,enable){
+      gen i 0..X{
+         for x RangeLow(0,size,X,i)..RangeHigh(0,size,X,i) {
+            inputs_1[i] = addr[x * enable];
+         }
       }
    }
 
-   config Output(addr: Address,size){
-      for x 0..size {
-         output = addr[x];
+   config Output(addr: Buffer,size){
+      gen i 0..X{
+         for x RangeLow(0,size,X,i)..RangeHigh(0,size,X,i) {
+            output[i] = addr[x];
+         }
       }
    }
 }
@@ -34,7 +42,7 @@ module Top_Relu(){
    input -> relu;
    relu -> output;
 ##
-   config Simple(inAddr: Address,outAddr: Address,size: Dyn){
+   config Simple(inAddr: Buffer,outAddr: Buffer,size: Dyn){
       for x 0..size {
          input = inAddr[x];
          output = outAddr[x];
@@ -50,7 +58,7 @@ module Top_Maxpool(){
    features -> accum;
    accum -> output;
 ##
-   config Features(addr: Address,startX,startY,startOffset,kernelW,kernelH,imageWidth,sizeW,sizeH,strideW,strideH){
+   config Features(addr: Buffer,startX,startY,startOffset,kernelW,kernelH,imageWidth,sizeW,sizeH,strideW,strideH){
       for y  0..sizeH {
          for x  0..sizeW {
             for ky 0..kernelH {
@@ -62,7 +70,7 @@ module Top_Maxpool(){
       }
    }
 
-   config Output(addr: Address,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
+   config Output(addr: Buffer,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
       for y 0..sizeH {
          for x 0..sizeW {
             output = addr[Duty(((y + startY) * outputImageW + (x + startX) + startOffset),stride)];
@@ -82,7 +90,7 @@ module Top_AveragePool(){
    {averagePool_accum,invertedDivisor} -> inversedDiv:0..1;
    inversedDiv -> output;
 ##
-   config Features(addr: Address,startX,startY,startOffset,kernelW,kernelH,imageWidth,sizeW,sizeH,strideW,strideH){
+   config Features(addr: Buffer,startX,startY,startOffset,kernelW,kernelH,imageWidth,sizeW,sizeH,strideW,strideH){
       for y  0..sizeH {
          for x  0..sizeW {
             for ky 0..kernelH {
@@ -94,7 +102,7 @@ module Top_AveragePool(){
       }
    }
 
-   config Output(addr: Address,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
+   config Output(addr: Buffer,startX,startY,startOffset,sizeW,sizeH,outputImageW,stride){
       for y 0..sizeH {
          for x 0..sizeW {
             output = addr[Duty(((y + startY) * outputImageW + (x + startX) + startOffset),stride)];
@@ -152,7 +160,7 @@ module Top_Conv(){
 
    // Input image W is only used to calculate the position 
 
-   config FeaturesWeightsOutputs(inputX : Address,inputW : Address,outAddr : Address,
+   config FeaturesWeightsOutputs(inputX : Buffer,inputW : Buffer,outAddr : Buffer,
       actualKernelW : Fixed,actualKernelH : Fixed,sizeC : Fixed,
       outputH : Dyn,outputW : Dyn,featuresAmount : Dyn,
 
@@ -189,7 +197,7 @@ module Top_Conv(){
       }
    }
 
-   config Bias(addr : Address,size,stride,outerXSize,outerYSize){
+   config Bias(addr : Buffer,size,stride,outerXSize,outerYSize){
       for outerY 0..outerYSize {
          for outerX 0..outerXSize {
             for x 0..size {
@@ -211,7 +219,7 @@ module Top_MatMul(){
    mat_muller -> myAccum;
    myAccum -> output;
 ##
-   config Simple(leftAddr: Address,rightAddr: Address,size: Fixed,linesToProcess: Dyn){
+   config Simple(leftAddr: Buffer,rightAddr: Buffer,size: Fixed,linesToProcess: Dyn){
       for y 0..linesToProcess{
          for x 0..size {
             leftRow = leftAddr[x];
@@ -220,7 +228,7 @@ module Top_MatMul(){
       }
    }   
 
-   config Output(addr: Address,size,stride){
+   config Output(addr: Buffer,size,stride){
       for x 0..size {
          output = addr[Duty(x,stride)];
       }
@@ -242,7 +250,7 @@ module Top_BatchNormalization(){
 
    add -> o;
 ##
-   config Simple(input : Address,output : Address,index,size : Dyn,aVal,bVal) {
+   config Simple(input : Buffer,output : Buffer,index,size : Dyn,aVal,bVal) {
       A.constant = aVal;
       B.constant = bVal;
       for i 0..size {
@@ -277,7 +285,7 @@ module Log(in){
       log2Value.constant = log2Val;
    }
 
-   mem LoadMantissa(addr: Address, width){
+   mem LoadMantissa(addr: Buffer, width){
       for x 0..width {
          mantissaLookup[x] = addr[x];
       }
@@ -318,13 +326,13 @@ module Exp(in){
 
    mul -> out;   
 ##
-   mem LoadExp(addr: Address, width){
+   mem LoadExp(addr: Buffer, width){
       for x 0..width {
          expLookup[x] = addr[x];
       }
    }   
 
-   mem LoadFrac(addr: Address, width){
+   mem LoadFrac(addr: Buffer, width){
       for x 0..width {
          fracLookup[x] = addr[x];
       }
@@ -342,18 +350,18 @@ module Top_Exp(){
 
    exp -> output;
 ##
-   config Simple(addr: Address,addr2: Address, width: Dyn){
+   config Simple(addr: Buffer,addr2: Buffer, width: Dyn){
       for x 0..width {
          in = addr[x];
          output = addr2[x];
       }
    }
 
-   mem LoadExp(addr: Address, width){
+   mem LoadExp(addr: Buffer, width){
       exp.LoadExp(addr,width);
    }
 
-   mem LoadFrac(addr: Address, width){
+   mem LoadFrac(addr: Buffer, width){
       exp.LoadFrac(addr,width);
    }
 }
@@ -375,13 +383,13 @@ module Pow(base,power){
       log.LoadLog2(log2Val);
    }
 
-   mem LoadMantissa(addr: Address, width){
+   mem LoadMantissa(addr: Buffer, width){
       log.LoadMantissa(addr,width);
    }
-   mem LoadExp(addr: Address,width){
+   mem LoadExp(addr: Buffer,width){
       exp.LoadExp(addr,width);
    }
-   mem LoadFrac(addr: Address,width){
+   mem LoadFrac(addr: Buffer,width){
       exp.LoadFrac(addr,width);
    }
 }
@@ -421,14 +429,14 @@ module Top_Gemm(){
       cValue.constant = val;
    }
 
-   config Simple(leftAddr: Address,rightAddr: Address,size: Dyn){
+   config Simple(leftAddr: Buffer,rightAddr: Buffer,size: Dyn){
       for x 0..size {
          gemmLeftRow = leftAddr[x];
          gemmRightRow = rightAddr[x];
       }
    }
 
-   config Output(addr: Address,size,stride){
+   config Output(addr: Buffer,size,stride){
       for x 0..size {
          output = addr[Duty(x,stride)];
       }
@@ -468,7 +476,7 @@ module Top_LRN(){
       pow.Init(log2Val);
    }
 
-   config Simple(inAddr: Address,outAddr: Address,lowerBound,width){
+   config Simple(inAddr: Buffer,outAddr: Buffer,lowerBound,width){
       accum.strideMinusOne = width - 1;
       for x 0..width{
          in = inAddr[lowerBound + x];
@@ -479,15 +487,28 @@ module Top_LRN(){
       output.extra_delay = width - 1;
    }
 
-   mem LoadMantissa(addr: Address, width){
+   mem LoadMantissa(addr: Buffer, width){
       pow.LoadMantissa(addr,width);
    }
-   mem LoadExp(addr: Address,width){
+   mem LoadExp(addr: Buffer,width){
       pow.LoadExp(addr,width);
    }
-   mem LoadFrac(addr: Address,width){
+   mem LoadFrac(addr: Buffer,width){
       pow.LoadFrac(addr,width);
    }
 }
 
-merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
+//merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
+
+merge Test{
+   Top_Add<X=10> add;
+   Top_Relu relu;
+   Top_Maxpool max;
+   Top_Conv conv;
+   Top_AveragePool average;
+   Top_MatMul matMul;
+   Top_BatchNormalization norm;
+   Top_Gemm gemm;
+   Top_Exp expr;
+   Top_LRN lrn;
+}

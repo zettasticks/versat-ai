@@ -1039,23 +1039,24 @@ def GenerateSimpleTest(config):
         CreateBinaryOpTest("Add", [3, 2], [3, 2])
         CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
 
-        # Simplest tests, no broadcast or abusing dimensions
-        CreateBinaryOpTest("Add", [1], [1])
-        CreateBinaryOpTest("Add", [4], [4])
-        CreateBinaryOpTest("Add", [2, 4], [2, 4])
-        CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
-        CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
+        if True:
+            # Simplest tests, no broadcast or abusing dimensions
+            CreateBinaryOpTest("Add", [1], [1])
+            CreateBinaryOpTest("Add", [4], [4])
+            CreateBinaryOpTest("Add", [2, 4], [2, 4])
+            CreateBinaryOpTest("Add", [2, 4, 6], [2, 4, 6])
+            CreateBinaryOpTest("Add", [2, 4, 6, 8], [2, 4, 6, 8])
 
-        # Broadcasting
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
-        CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
-        CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
-        CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
-        CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
+            # Broadcasting
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [1])
+            CreateBinaryOpTest("Add", [2, 3, 4, 5], [5])
+            CreateBinaryOpTest("Add", [4, 5], [2, 3, 4, 5])
+            CreateBinaryOpTest("Add", [1, 4, 5], [2, 3, 1, 1])
+            CreateBinaryOpTest("Add", [3, 4, 5], [2, 1, 1, 1])
 
-        if testBig:
-            CreateBinaryOpTest("Add", [10240], [10240])
-            CreateBinaryOpTest("Add", [10240], [1])
+            if testBig:
+                CreateBinaryOpTest("Add", [10240], [10240])
+                CreateBinaryOpTest("Add", [10240], [1])
 
     if testRelu:
         CreateUnaryOpTest("Relu", [1])
@@ -1852,7 +1853,7 @@ def GenerateLite(outputPath):
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
-    config.testAdd = 0
+    config.testAdd = 1
     config.testRelu = 0
     config.testReshape = 0
     config.testTranspose = 0
@@ -1871,7 +1872,7 @@ def GenerateTest(outputPath):
     config.generativeTests = 0
     config.testBig = 0
 
-    if 1:
+    if 0:
         CreateConvolution(
             [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
         )
