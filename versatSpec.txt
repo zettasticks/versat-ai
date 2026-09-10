@@ -116,48 +116,17 @@ module Top_Conv(){
    VRead #(.ADDR_W(17)) weights;
    VRead bias;
 
-   PipelineRegister featuresReg;
-   PipelineRegister weightsReg;
-   PipelineRegister biasReg;
-
    F_Mul muller;
    F_Add addBias;
    MyFloatAccum myAccum;
    VWrite output;
 #   
-   features -> featuresReg;
-   weights -> weightsReg;
-   bias -> biasReg;
-
-   {weightsReg,featuresReg} -> muller:0..1;
+   {weights,features} -> muller:0..1;
    muller -> myAccum;
 
-   {myAccum,biasReg} -> addBias:0..1;
+   {myAccum,bias} -> addBias:0..1;
    addBias -> output;
 ##
-
-   /*
-
-      Since we are already converting between NCHW and NHWC, might as well add the padding directly and simplify stuff.
-
-   config FullFeatures(){
-      for outC 0..featuresAmount{
-         for inC 0..sizeC{ // This most be everything, right?
-            for y inputImageY..inputImageY + height {
-               for x inputImageX..inputImageX + width {
-                  for ky 0..actualKernelH {
-                     for kx 0..actualKernelW {
-
-                     }
-                  }
-               }
-            }
-         }
-      }
-   }
-
-   */
-
    // Input image W is only used to calculate the position 
 
    config FeaturesWeightsOutputs(inputX : Buffer,inputW : Buffer,outAddr : Buffer,
@@ -501,7 +470,7 @@ module Top_LRN(){
 //merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
 
 merge Test{
-   Top_Add<X=10> add;
+   Top_Add<X=1> add;
    Top_Relu relu;
    Top_Maxpool max;
    Top_Conv conv;
