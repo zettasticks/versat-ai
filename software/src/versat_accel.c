@@ -530,7 +530,6 @@ void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
   int kernelH = kernelDims[0];
 
   int stride = w.actualKernelW * w.actualKernelH * inputImageC;
-
   int convChannelSize = inputImageC;
 
   int convStartC = 0; // We must always process the entire input channels.
@@ -561,8 +560,6 @@ void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
   } else {
     Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride, w.outputW, w.outputH);
   }
-
-  config->myAccum.strideMinusOne = stride - 1;
 
   // ProfileScope(1,"Gonna start accel");
   StartAccelerator();

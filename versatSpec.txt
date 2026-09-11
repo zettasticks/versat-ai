@@ -142,6 +142,8 @@ module Top_Conv(){
       kernelW,kernelH,
       outputWidth,stride,outputChannels, strideW, strideH){
 
+      myAccum.strideMinusOne = stride - 1;
+
       for outerY 0..outputH {
          for outerX 0..outputW {
             for outC 0..featuresAmount {

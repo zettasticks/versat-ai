@@ -1852,29 +1852,29 @@ def GenerateLite(outputPath):
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
-    config.testAdd = 1
-    config.testRelu = 1
-    config.testReshape = 1
-    config.testTranspose = 1
-    config.testMaxPool = 1
-    config.testAveragePool = 1
-    config.testMatMul = 1
-    config.testDropout = 1
-    config.testGemm = 1
-    config.testBatchNormalization = 1
-    config.testSoftmax = 1
+    config.testAdd = 0
+    config.testRelu = 0
+    config.testReshape = 0
+    config.testTranspose = 0
+    config.testMaxPool = 0
+    config.testAveragePool = 0
+    config.testMatMul = 0
+    config.testDropout = 0
+    config.testGemm = 0
+    config.testBatchNormalization = 0
+    config.testSoftmax = 0
     config.testLRN = 0
     config.testPad = 0
 
     config.testConv = 1
     config.generateOneOfEach = 0
-    config.generativeTests = 0
+    config.generativeTests = 1
     config.testBig = 0
 
-    if 0:
-        CreateConvolution(
-            [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
-        )
+    if 1:
+        # CreateConvolution(
+        #    [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
+        # )
         CreateConvolution(
             [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
         )

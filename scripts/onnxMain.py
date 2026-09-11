@@ -838,7 +838,7 @@ def GenerateDebug(
     # Everytime a rule fires level resets to zero. Meaning that we always run level 0 rules before any rule 1
     # even if new rules of level 0 are created they always run first before any rule 1
     level = 0
-    maxLevel = 2
+    maxLevel = 1
     while doOptimizations and level < maxLevel:
         nodesChanged = []
         ruleFound = None
@@ -876,14 +876,14 @@ def GenerateDebug(
                         nodesChanged.append(op)
                         break
 
-                if True and op.opName == "FixPad":
+                if False and op.opName == "FixPad":
                     if inputNode.opName == "FixPad":
                         nodesChanged.append(op)
                         nodesChanged.append(inputNode)
                         ruleFound = OptimizationRules.JOIN_FIXPADS
                         break
 
-                if True and op.opName == "Pad":
+                if False and op.opName == "Pad":
                     if inputNode.opName == "Pad":
                         nodesChanged.append(op)
                         nodesChanged.append(inputNode)
@@ -926,13 +926,13 @@ def GenerateDebug(
                             ruleFound = OptimizationRules.PUSH_PAD_OVER_CONV
                             break
 
-                if True and op.opName == "MatMul":
+                if False and op.opName == "MatMul":
                     if op.parsedAttributes.get("isBTransposed", 0) == 0:
                         nodesChanged.append(op)
                         ruleFound = OptimizationRules.MATMUL_TRANSPOSE
                         break
 
-                if op.opName == "Add":
+                if False and op.opName == "Add":
                     if (
                         level >= 1
                         and allInputNodes[0].opName == "Transpose"
@@ -948,7 +948,7 @@ def GenerateDebug(
                             ruleFound = OptimizationRules.ADD_REMOVE_BOTH_TRANSPOSE
                             break
 
-                if op.opName == "Transpose":
+                if False and op.opName == "Transpose":
                     if level >= 1 and inputNode.opName == "Relu":
                         if len(inputNodeOutputs) == 1:
                             nodesChanged.append(op)
