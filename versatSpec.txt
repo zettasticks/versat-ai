@@ -129,7 +129,7 @@ module Top_Conv(){
 ##
    // Input image W is only used to calculate the position 
 
-   config debug FeaturesWeightsOutputs(inputX : Buffer,inputW : Buffer,outAddr : Buffer,
+   config FeaturesWeightsOutputs(inputX : Buffer,inputW : Buffer,outAddr : Buffer,
       actualKernelW : Fixed,actualKernelH : Fixed,sizeC : Fixed,
       outputH : Dyn,outputW : Dyn,featuresAmount : Dyn,
 

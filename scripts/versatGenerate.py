@@ -56,7 +56,7 @@ def RunVersat(versat_spec, versat_top, versat_extra, build_dir, axi_data_w, debu
 
 
 if __name__ == "__main__":
-    axi_data_w = 64
+    axi_data_w = 32
     try:
         output = RunVersat(
             "./versatSpec.txt",
