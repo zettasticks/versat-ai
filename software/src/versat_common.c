@@ -1584,7 +1584,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 0
+#if 1
     // Check result of layer
     // ======================================================
     if (ptr->outputSize > 0) {

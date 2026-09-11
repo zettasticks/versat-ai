@@ -1866,9 +1866,9 @@ def GenerateTest(outputPath):
     config.testLRN = 0
     config.testPad = 0
 
-    config.testConv = 0
+    config.testConv = 1
     config.generateOneOfEach = 0
-    config.generativeTests = 0
+    config.generativeTests = 1
     config.testBig = 0
 
     if 1:
