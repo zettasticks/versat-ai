@@ -1353,7 +1353,7 @@ def GenerateDebug(
                 PrintSimpleNodeInfompleNodeInfo(i, c)
             sys.exit(0)
 
-    #with open("AfterOpt.dot", "w") as f:
+    # with open("AfterOpt.dot", "w") as f:
     #    f.write(GenerateDotFile(cModel))
 
     # Test final output to make sure that optimizations did not broke anything.
