@@ -111,7 +111,7 @@ module Top_AveragePool(){
    }
 }
 
-module Top_Conv #(X = 2,Y = 2) (){
+module Top_Conv #(X = 1,Y = 1) (){
    VRead #(.ADDR_W(17)) featuresConv[Y][X];
    VRead #(.ADDR_W(17)) weightsConv[Y][X];
    VRead bias;
@@ -128,9 +128,6 @@ module Top_Conv #(X = 2,Y = 2) (){
    }
    reduced = Reduce(muller[0..Y][0..X],F_Add);
    reduced -> myAccum;
-
-   //{weightsConv,featuresConv} -> muller:0..1;
-   //muller -> myAccum;
 
    {myAccum,bias} -> addBias:0..1;
    addBias -> outputConv;
@@ -160,14 +157,13 @@ module Top_Conv #(X = 2,Y = 2) (){
                      for inC 0..sizeC {
                         for ky RangeLow(0,actualKernelH,Y,y)..RangeHigh(0,actualKernelH,Y,y) {
                            for kx RangeLow(0,actualKernelW,X,x)..RangeHigh(0,actualKernelW,X,x) {
-                              featuresConv[y][x] = inputX[
-                                 Duty((startY + ky + outerY * strideH) * inputImageW * inputImagePerGroup + (startX + kx + outerX * strideW) * inputImagePerGroup + (inC + startC),
-                                 (RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0)) / (RangeSize(0,actualKernelH,Y,y) * RangeSize(0,actualKernelW,X,x))
-                              )];
-                              weightsConv[y][x] = inputW[
-                                 Duty((outC + outCStart) * inputImagePerGroup * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX),
-                                 (RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0)) / (RangeSize(0,actualKernelH,Y,y) * RangeSize(0,actualKernelW,X,x))
-                              )];
+                              featuresConv[y][x] = inputX[(startY + ky + outerY * strideH) * inputImageW * inputImagePerGroup + (startX + kx + outerX * strideW) * inputImagePerGroup + (inC + startC)];
+                              featuresConv[y][x].workSize = (RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0));
+                              featuresConv[y][x].work = (RangeSize(0,actualKernelH,Y,y) * RangeSize(0,actualKernelW,X,x));
+
+                              weightsConv[y][x] = inputW[(outC + outCStart) * inputImagePerGroup * kernelW * kernelH + (inC + startC) * kernelW * kernelH + (ky + kernelStartY) * kernelW + (kx + kernelStartX)];
+                              weightsConv[y][x].workSize = (RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0));
+                              weightsConv[y][x].work = (RangeSize(0,actualKernelH,Y,y) * RangeSize(0,actualKernelW,X,x));
                            }
                         }
                      }
@@ -180,17 +176,18 @@ module Top_Conv #(X = 2,Y = 2) (){
       for y 0..outputH {
          for x 0..outputW {
             for inC 0..featuresAmount {
-               outputConv = outAddr[Duty(((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + outCStart + inC),RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0) * inputImagePerGroup)];
+               outputConv = outAddr[Duty(((y + outStartY) * outputWidth * outputChannels + (x + outStartX) * outputChannels + outCStart + inC),
+               RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0) * inputImagePerGroup)];
             }
          }
       }
    }
 
-   config Bias(addr : Buffer,size,stride,outerXSize,outerYSize){
+   config Bias(addr : Buffer,size,stride,outerXSize,outerYSize,actualKernelH,actualKernelW,inputImagePerGroup){
       for outerY 0..outerYSize {
          for outerX 0..outerXSize {
             for x 0..size {
-               bias = addr[Duty(x,stride)];
+               bias = addr[Duty(x,RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0) * inputImagePerGroup)];
             }
          }
       }
@@ -490,10 +487,10 @@ module Top_LRN(){
 //merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
 
 merge Test{
-   Top_Add<X=1> add;
+   Top_Add<X=2> add;
    Top_Relu relu;
    Top_Maxpool max;
-   Top_Conv conv;
+   Top_Conv<X=2,Y=2> conv;
    Top_AveragePool average;
    Top_MatMul matMul;
    Top_BatchNormalization norm;

@@ -43,8 +43,8 @@ endif
 TOOLCHAIN_PREFIX ?=riscv64-unknown-elf-
 
 # NOTE: Need to disable reorder optimizations otherwise onnx2c files give JAL relocation errors.
-CFLAGS ?=-O2 -fno-reorder-blocks-and-partition -fno-reorder-functions -ffast-math -nostdlib -march=rv32imafc -mabi=ilp32f --specs=nano.specs -Wcast-align=strict $(USER_CFLAGS)
-LFLAGS ?= -Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS),--strip-debug
+CFLAGS ?=-g -fno-reorder-blocks-and-partition -fno-reorder-functions -ffast-math -nostdlib -march=rv32imafc -mabi=ilp32f --specs=nano.specs -Wcast-align=strict $(USER_CFLAGS)
+LFLAGS ?= -Wl,-L,src,-Bstatic,-T,$(TEMPLATE_LDS)
 LLIBS ?=-lgcc -lc -lnosys
 INCLUDES ?=-I. -Isrc
 
@@ -53,7 +53,7 @@ INCLUDES ?=-I. -Isrc
 #########################################
 
 # compiler flags
-EMUL_CFLAGS ?=-Os -std=gnu99 -Wl,--strip-debug
+EMUL_CFLAGS ?=-Os -g -std=gnu99
 
 CONSOLE_CMD ?=rm -f soc2cnsl cnsl2soc; ../scripts/console.py -L
 
@@ -92,7 +92,7 @@ build_emul: fw_emul
 	@echo "build"
 
 #board client command
-BOARD_GRAB_CMD ?=../scripts/board_client.py grab 300 -b iob_aes_ku040_db_g
+BOARD_GRAB_CMD ?=../scripts/board_client.py grab 10000 -b iob_aes_ku040_db_g
 
 test.log: build_emul
 	$(BOARD_GRAB_CMD) -s './fw_emul' -c '$(CONSOLE_CMD)'

@@ -474,7 +474,14 @@ def PrintSimpleNodeInfo(i, c: Operation):
     pPerms = c.parsedAttributes.get("perm", [])
 
     print(
-        i, inputs, c.nodeIndex, c.opName, c.inputDimensions, c.outputDimensions, pPerms
+        i,
+        inputs,
+        c.nodeIndex,
+        c.opName,
+        c.inputDimensions,
+        c.outputDimensions,
+        pPerms,
+        c.parsedAttributes,
     )
 
 

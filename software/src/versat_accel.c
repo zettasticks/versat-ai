@@ -556,9 +556,11 @@ void ConvWithBias_ProcessWindow(ExtraInfo extra, AdvancedWindow w, void *inputX,
 
   if (bias == NULL) {
     static float bias = 0.0f;
-    Top_Conv_Bias(&bias, 1, 1, w.outputW, w.outputH);
+    Top_Conv_Bias(&bias, 1, 1, w.outputW, w.outputH, w.actualKernelH,
+                  w.actualKernelW, inputImageC);
   } else {
-    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride, w.outputW, w.outputH);
+    Top_Conv_Bias(bias + w.startC, w.outputSizeC, stride, w.outputW, w.outputH,
+                  w.actualKernelH, w.actualKernelW, inputImageC);
   }
 
   // ProfileScope(1,"Gonna start accel");
