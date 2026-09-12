@@ -487,10 +487,10 @@ module Top_LRN(){
 //merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
 
 merge Test{
-   Top_Add<X=2> add;
+   Top_Add<X=1> add;
    Top_Relu relu;
    Top_Maxpool max;
-   Top_Conv<X=2,Y=2> conv;
+   Top_Conv<X=1,Y=1> conv;
    Top_AveragePool average;
    Top_MatMul matMul;
    Top_BatchNormalization norm;
