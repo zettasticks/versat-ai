@@ -1852,7 +1852,7 @@ def GenerateLite(outputPath):
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
-    config.testAdd = 0
+    config.testAdd = 1
     config.testRelu = 0
     config.testReshape = 0
     config.testTranspose = 0
