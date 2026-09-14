@@ -1340,6 +1340,10 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 
   InferenceState *state = &stateInst;
 
+  Top_Conv_NumberUnits_Struct res = Top_Conv_NumberUnits();
+  versat_printf("Add       parameters: %d\n", Top_Add_NumberUnits().val);
+  versat_printf("Conv grid parameters: %d %d\n", res.gridX, res.gridY);
+
   versat_printf("VersatSoft\n");
   versat_timeReset();
   start = versat_time();
@@ -1527,7 +1531,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 1
+#if 0
     // Run profile
     // ================================================================
     versat_printf("L:%d\n", i);

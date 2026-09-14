@@ -1867,11 +1867,11 @@ def GenerateTest(outputPath):
     config.testPad = 0
 
     config.testConv = 1
-    config.generateOneOfEach = 0
-    config.generativeTests = 1
+    config.generateOneOfEach = 1
+    config.generativeTests = 0
     config.testBig = 0
 
-    if 1:
+    if 0:
         # CreateConvolution(
         #    [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
         # )

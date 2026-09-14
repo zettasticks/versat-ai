@@ -32,6 +32,10 @@ module Top_Add #(X=1) (){
          }
       }
    }
+
+   state NumberUnits{
+      val = X;
+   }
 }
 
 module Top_Relu(){
@@ -191,6 +195,11 @@ module Top_Conv #(X = 1,Y = 1) (){
             }
          }
       }
+   }
+
+   state NumberUnits{
+      gridX = X;
+      gridY = Y;
    }
 }
 
@@ -484,13 +493,11 @@ module Top_LRN(){
    }
 }
 
-//merge Test = Top_Add | Top_Relu | Top_Maxpool | Top_Conv | Top_AveragePool | Top_MatMul | Top_BatchNormalization | Top_Gemm | Top_Exp | Top_LRN;
-
-merge Test{
-   Top_Add<X=1> add;
+merge Test #(AddCount=1,ConvGridX=1,ConvGridY=1) {
+   Top_Add<X=AddCount> add;
    Top_Relu relu;
    Top_Maxpool max;
-   Top_Conv<X=1,Y=1> conv;
+   Top_Conv<X=ConvGridX,Y=ConvGridY> conv;
    Top_AveragePool average;
    Top_MatMul matMul;
    Top_BatchNormalization norm;

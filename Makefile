@@ -27,6 +27,10 @@ USE_ETHERNET ?= 0
 TESTER ?= 0
 TESTER_SIM ?= 0
 
+VERSAT_ADD_COUNT ?= 1
+VERSAT_CONV_GRID_X ?= 1
+VERSAT_CONV_GRID_Y ?= 1
+
 ifneq ($(DEBUG),)
 EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
@@ -58,7 +62,7 @@ make-versat-accel: $(VERSAT_ACCEL)
 
 $(VERSAT_ACCEL): versatSpec.txt
 	@rm -f $(VERSAT_SUBMODULE)/iob_versat.py
-	nix-shell --run "python3 ./scripts/versatGenerate.py"
+	nix-shell --run "python3 ./scripts/versatGenerate.py -AAddCount=$(VERSAT_ADD_COUNT) -AConvGridX=$(VERSAT_CONV_GRID_X) -AConvGridY=$(VERSAT_CONV_GRID_Y)"
 
 generate-test:
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py $(TEST)"
