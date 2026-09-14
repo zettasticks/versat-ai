@@ -236,10 +236,14 @@ int main() {
   char *ptr = (char *)metadata.data;
   char *end = ptr + metadata.size;
 
+  printf("We are in A\n");
+
   for (; ptr < end;) {
     if (!IsAlpha(*ptr)) {
       break;
     }
+
+    printf("We are in B\n");
 
     char *lineStart = ptr;
     while (IsAlpha(*ptr)) {
@@ -252,6 +256,8 @@ int main() {
 
     char pathBuffer[256];
     sprintf(pathBuffer, "%.*s_metamodel.bin", size, lineStart);
+
+    printf("We are in C\n");
 
     File metamodel = GetFile(pathBuffer);
     CompiledModel *compiledModel = (CompiledModel *)metamodel.data;

@@ -1396,7 +1396,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     versat_printf("%d\n", ptr->outputSize);
 #endif
 
-#if 0
+#if 1
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
     float *asFloat = (float *)output;
@@ -1527,7 +1527,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     }
 #endif
 
-#if 0
+#if 1
     // Run profile
     // ================================================================
     versat_printf("L:%d\n", i);
@@ -1539,13 +1539,9 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 
     // Versat profiling registers
     // ================================================
-    if (0) {
+    if (1) {
       versat_printf("Runs:");
       PrintU64(p.runCount);
-      versat_printf("\n");
-
-      versat_printf("Cycles since last reset:");
-      PrintU64(p.cyclesSinceLastReset);
       versat_printf("\n");
 
       versat_printf("Cycles running:");

@@ -184,6 +184,19 @@ def setup(py_params_dict):
                     "LOCK_W": 1,
                 },
             },
+            #            {
+            #                "name": "delayed_uut_axi",
+            #                "descr": "AXI bus to connect SoC to interconnect",
+            #                "signals": {
+            #                    "type": "axi",
+            #                    "prefix": "delayed_uut_",
+            #                    "ID_W": "AXI_ID_W",
+            #                    "ADDR_W": "AXI_ADDR_W",
+            #                    "DATA_W": "AXI_DATA_W",
+            #                    "LEN_W": "AXI_LEN_W",
+            #                    "LOCK_W": 1,
+            #                },
+            #            },
             {
                 "name": "axi_ram_mem",
                 "descr": "Connect axi_ram to 'iob_ram_t2p_be' memory",
@@ -222,6 +235,16 @@ def setup(py_params_dict):
 
     # Connect ethernet and its RAM to pbus
     attributes_dict["subblocks"] += [
+        #        {
+        #            "core_name": "versat_axi_simdelay",
+        #            "instance_name": "delay",
+        #            "instance_description": "Delay",
+        #            "connect": {
+        #                "clk_en_rst_s": "clk_en_rst_s",
+        #                "axi_m": "delayed_uut_axi",
+        #                "axi_s": "uut_axi",
+        #            },
+        #        },
         {
             "core_name": "iob_uart",
             "instance_name": "uart_tb",

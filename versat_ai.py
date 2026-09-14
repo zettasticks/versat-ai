@@ -131,16 +131,16 @@ def setup(py_params: dict):
         },
         {
             "name": "iob_axi_merge",
-            "core_name": "iob_axi_merge",
+            "core_name": "axi_merge",
             "instance_name": "versat_uut_merge",
-            "num_subordinates": 2,
-            "data_w": axi_data_w,
-            "addr_w": 32,
-            "parameters": {"LEN_W": 8},
+            # "num_subordinates": 2,
+            # "data_w": axi_data_w,
+            # "addr_w": 32,
+            "parameters": {"DATA_WIDTH": axi_data_w, "ADDR_WIDTH": 32},
             "connect": {
-                "s_0_s": "proper_axi",
-                "s_1_s": "versat_axi",
-                "m_m": (
+                "axi_s0_s": "proper_axi",
+                "axi_s1_s": "versat_axi",
+                "axi_m": (
                     "axi_m",
                     [
                         "{unused_wires_0, axi_araddr_o}",
