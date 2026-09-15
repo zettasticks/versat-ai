@@ -1,4 +1,12 @@
-set AXI_DATA_W 64
+import sys
+
+if __name__ == "__main__":
+    output_location = sys.argv[1]
+    axi_data_w = int(sys.argv[2])
+
+    content = (
+        f"set AXI_DATA_W {axi_data_w}"
+        + """
 set PART xcku040-fbva676-1-c
 set_property part $PART [current_project]
 
@@ -58,7 +66,20 @@ if { $USE_EXTMEM > 0 } {
 
         create_ip -name ddr4 -vendor xilinx.com -library ip -version 2.2 -module_name ddr4_0 -dir ./ip -force
 
-        set_property -dict         [list              CONFIG.C0.DDR4_TimePeriod {1250}              CONFIG.C0.DDR4_InputClockPeriod {4000}              CONFIG.C0.DDR4_CLKOUT0_DIVIDE {5}              CONFIG.C0.DDR4_MemoryPart {EDY4016AABG-DR-F}              CONFIG.C0.DDR4_DataWidth {32}              CONFIG.C0.DDR4_AxiSelection {true}              CONFIG.C0.DDR4_CasLatency {11}              CONFIG.C0.DDR4_CasWriteLatency {11}              CONFIG.C0.DDR4_AxiDataWidth {$AXI_DATA_W}              CONFIG.C0.DDR4_AxiAddressWidth {30}              CONFIG.ADDN_UI_CLKOUT1_FREQ_HZ {100}              CONFIG.C0.BANK_GROUP_WIDTH {1}] [get_ips ddr4_0]
+        set_property -dict \
+        [list \
+             CONFIG.C0.DDR4_TimePeriod {1250} \
+             CONFIG.C0.DDR4_InputClockPeriod {4000} \
+             CONFIG.C0.DDR4_CLKOUT0_DIVIDE {5} \
+             CONFIG.C0.DDR4_MemoryPart {EDY4016AABG-DR-F} \
+             CONFIG.C0.DDR4_DataWidth {32} \
+             CONFIG.C0.DDR4_AxiSelection {true} \
+             CONFIG.C0.DDR4_CasLatency {11} \
+             CONFIG.C0.DDR4_CasWriteLatency {11} \
+             CONFIG.C0.DDR4_AxiDataWidth {$AXI_DATA_W} \
+             CONFIG.C0.DDR4_AxiAddressWidth {30} \
+             CONFIG.ADDN_UI_CLKOUT1_FREQ_HZ {100} \
+             CONFIG.C0.BANK_GROUP_WIDTH {1}] [get_ips ddr4_0]
 
         generate_target all [get_files ./ip/ddr4_0/ddr4_0.xci]
 
@@ -92,4 +113,8 @@ if { $USE_ETHERNET > 0 } {
 if {[file exists "vivado/$BOARD/auto_board.sdc"]} {
     read_xdc vivado/$BOARD/auto_board.sdc
 }
-    
+    """
+    )
+
+    with open(output_location, "w") as f:
+        f.write(content)

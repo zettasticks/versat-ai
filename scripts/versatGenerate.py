@@ -66,6 +66,15 @@ if __name__ == "__main__":
     extra = sys.argv[1:]
 
     axi_data_w = 32
+    toRemove = -1
+    for i, ex in enumerate(extra):
+        if "AXI_DATA_W=" in ex:
+            axi_data_w = int(ex[11:])
+            toRemove = i
+
+    if toRemove != -1:
+        del extra[toRemove]
+
     try:
         output = RunVersat(
             "./versatSpec.txt",

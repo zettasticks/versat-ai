@@ -9,8 +9,7 @@ def setup(py_params: dict):
     name = "versat_ai"
     addr_w = 32
 
-    axi_data_w = 32
-
+    axi_data_w = int(py_params.get("axi_data_w", "32"))
     dataAdapter = "axi_adapter_direct"
     if axi_data_w != 32:
         dataAdapter = "axi_adapter_wider"

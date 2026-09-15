@@ -16,7 +16,7 @@ def setup(py_params_dict):
                 "type": "P",
                 "val": "32",
                 "min": "1",
-                "max": "32",
+                "max": "1024",
             },
         ],
         "ports": [
