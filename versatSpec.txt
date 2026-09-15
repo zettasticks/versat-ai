@@ -158,9 +158,9 @@ module Top_Conv #(X = 1,Y = 1) (){
             for outerY 0..outputH {
                for outerX 0..outputW {
                   for outC 0..featuresAmount {
-                     for inC 0..sizeC {
-                        for ky RangeLow(0,actualKernelH,Y,y)..RangeHigh(0,actualKernelH,Y,y) {
-                           for kx RangeLow(0,actualKernelW,X,x)..RangeHigh(0,actualKernelW,X,x) {
+                     for ky RangeLow(0,actualKernelH,Y,y)..RangeHigh(0,actualKernelH,Y,y) {
+                        for kx RangeLow(0,actualKernelW,X,x)..RangeHigh(0,actualKernelW,X,x) {
+                           for inC 0..sizeC {
                               featuresConv[y][x] = inputX[(startY + ky + outerY * strideH) * inputImageW * inputImagePerGroup + (startX + kx + outerX * strideW) * inputImagePerGroup + (inC + startC)];
                               featuresConv[y][x].workSize = (RangeSize(0,actualKernelH,Y,0) * RangeSize(0,actualKernelW,X,0));
                               featuresConv[y][x].work = (RangeSize(0,actualKernelH,Y,y) * RangeSize(0,actualKernelW,X,x));

@@ -1986,7 +1986,8 @@ void Versat_Init() {
   storedProfiles = malloc(sizeof(ProfileSample) * 1000);
   maxProfiledSamples = 1000;
 
-  versat_printf("Arena %p - %p\n", arena->mem, arena->mem + arena->allocated);
+  // versat_printf("Arena %p - %p\n", arena->mem, arena->mem +
+  // arena->allocated);
 
 #if !EMBED_TABLES
   {

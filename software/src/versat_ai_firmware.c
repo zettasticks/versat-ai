@@ -200,18 +200,6 @@ int main() {
   SetVersatDebugPrintfFunction(printf);
   versat_init(VERSAT0_BASE);
 
-#if DEBUG
-  PrintU64InHex(1ull << 0);
-  PrintU64InHex(1ull << 8);
-  PrintU64InHex(1ull << 16);
-  PrintU64InHex(1ull << 24);
-  PrintU64InHex(1ull << 32);
-  PrintU64InHex(1ull << 40);
-  PrintU64InHex(1ull << 48);
-  PrintU64InHex(1ull << 56);
-  PrintU64InHex(1ull << 63);
-#endif
-
   ConfigCreateVCD(false);
 
   Versat_SetTimeReset(timer_reset);

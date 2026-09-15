@@ -5,8 +5,7 @@ if __name__ == "__main__":
     axi_data_w = int(sys.argv[2])
 
     content = (
-        f"set AXI_DATA_W {axi_data_w}"
-        + """
+        """
 set PART xcku040-fbva676-1-c
 set_property part $PART [current_project]
 
@@ -18,7 +17,9 @@ if { $USE_EXTMEM > 0 } {
             set_property "CONFIG.S${subordinate_number}_AXI_IS_ACLK_ASYNC" 1 [get_ips axi_interconnect_0]
             set_property "CONFIG.S${subordinate_number}_AXI_READ_FIFO_DEPTH" 32 [get_ips axi_interconnect_0]
             set_property "CONFIG.S${subordinate_number}_AXI_WRITE_FIFO_DEPTH" 32 [get_ips axi_interconnect_0]
-            set_property "CONFIG.S${subordinate_number}_AXI_DATA_WIDTH" $AXI_DATA_W [get_ips axi_interconnect_0]
+            set_property "CONFIG.S${subordinate_number}_AXI_DATA_WIDTH" """
+        + str(axi_data_w)
+        + """ [get_ips axi_interconnect_0]
         }
     }
 
@@ -39,8 +40,12 @@ if { $USE_EXTMEM > 0 } {
         set_property CONFIG.NUM_SLAVE_PORTS 1 [get_ips axi_interconnect_0]
         set_property CONFIG.AXI_ADDR_WIDTH 30 [get_ips axi_interconnect_0]
         set_property CONFIG.ACLK_PERIOD 5000 [get_ips axi_interconnect_0]
-        set_property CONFIG.INTERCONNECT_DATA_WIDTH $AXI_DATA_W [get_ips axi_interconnect_0]
-        set_property CONFIG.M00_AXI_DATA_WIDTH $AXI_DATA_W [get_ips axi_interconnect_0]
+        set_property CONFIG.INTERCONNECT_DATA_WIDTH """
+        + str(axi_data_w)
+        + """ [get_ips axi_interconnect_0]
+        set_property CONFIG.M00_AXI_DATA_WIDTH """
+        + str(axi_data_w)
+        + """ [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_IS_ACLK_ASYNC 1 [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_WRITE_FIFO_DEPTH 32 [get_ips axi_interconnect_0]
         set_property CONFIG.M00_AXI_READ_FIFO_DEPTH 32 [get_ips axi_interconnect_0]
@@ -66,19 +71,21 @@ if { $USE_EXTMEM > 0 } {
 
         create_ip -name ddr4 -vendor xilinx.com -library ip -version 2.2 -module_name ddr4_0 -dir ./ip -force
 
-        set_property -dict \
-        [list \
-             CONFIG.C0.DDR4_TimePeriod {1250} \
-             CONFIG.C0.DDR4_InputClockPeriod {4000} \
-             CONFIG.C0.DDR4_CLKOUT0_DIVIDE {5} \
-             CONFIG.C0.DDR4_MemoryPart {EDY4016AABG-DR-F} \
-             CONFIG.C0.DDR4_DataWidth {32} \
-             CONFIG.C0.DDR4_AxiSelection {true} \
-             CONFIG.C0.DDR4_CasLatency {11} \
-             CONFIG.C0.DDR4_CasWriteLatency {11} \
-             CONFIG.C0.DDR4_AxiDataWidth {$AXI_DATA_W} \
-             CONFIG.C0.DDR4_AxiAddressWidth {30} \
-             CONFIG.ADDN_UI_CLKOUT1_FREQ_HZ {100} \
+        set_property -dict \\
+        [list \\
+             CONFIG.C0.DDR4_TimePeriod {1250} \\
+             CONFIG.C0.DDR4_InputClockPeriod {4000} \\
+             CONFIG.C0.DDR4_CLKOUT0_DIVIDE {5} \\
+             CONFIG.C0.DDR4_MemoryPart {EDY4016AABG-DR-F} \\
+             CONFIG.C0.DDR4_DataWidth {32} \\
+             CONFIG.C0.DDR4_AxiSelection {true} \\
+             CONFIG.C0.DDR4_CasLatency {11} \\
+             CONFIG.C0.DDR4_CasWriteLatency {11} \\
+             CONFIG.C0.DDR4_AxiDataWidth {"""
+        + str(axi_data_w)
+        + """} \\
+             CONFIG.C0.DDR4_AxiAddressWidth {30} \\
+             CONFIG.ADDN_UI_CLKOUT1_FREQ_HZ {100} \\
              CONFIG.C0.BANK_GROUP_WIDTH {1}] [get_ips ddr4_0]
 
         generate_target all [get_files ./ip/ddr4_0/ddr4_0.xci]

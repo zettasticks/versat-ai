@@ -1550,7 +1550,7 @@ def OutputFilesFromTestList(outputPath):
             16,
         )
         np.random.seed(persistantHash % (2**31))
-        test.Create(False)
+        test.Create(True)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:
@@ -1870,6 +1870,10 @@ def GenerateTest(outputPath):
     config.generateOneOfEach = 1
     config.generativeTests = 0
     config.testBig = 0
+
+    if 0:
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
+        # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
 
     if 0:
         # CreateConvolution(
