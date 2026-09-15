@@ -27,6 +27,11 @@ USE_ETHERNET ?= 0
 TESTER ?= 0
 TESTER_SIM ?= 0
 
+VERSAT_ADD_COUNT ?= 1
+VERSAT_CONV_GRID_X ?= 1
+VERSAT_CONV_GRID_Y ?= 1
+VERSAT_AXI_DATA_W ?= 32
+
 ifneq ($(DEBUG),)
 EXTRA_ARGS +=--debug_level $(DEBUG)
 endif
@@ -47,7 +52,8 @@ ALL_GENERATED_TESTS:=./tests/alexnet/model.onnx ./tests/generated_heavy ./tests/
 ./tests/softmax: $(PYTHON_ENV)
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py Softmax"
 
-
+py2-setup-only: $(PYTHON_ENV) $(VERSAT_ACCEL)
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM):axi_data_w=$(VERSAT_AXI_DATA_W)' $(EXTRA_ARGS);"
 
 $(PYTHON_ENV):
 	./scripts/makePythonEnv.sh
@@ -57,14 +63,16 @@ make-versat-accel: $(VERSAT_ACCEL)
 
 $(VERSAT_ACCEL): versatSpec.txt
 	@rm -f $(VERSAT_SUBMODULE)/iob_versat.py
-	nix-shell --run "python3 ./scripts/versatGenerate.py"
+	nix-shell --run "python3 ./scripts/versatGenerate.py -AAddCount=$(VERSAT_ADD_COUNT) -AConvGridX=$(VERSAT_CONV_GRID_X) -AConvGridY=$(VERSAT_CONV_GRID_Y) AXI_DATA_W=$(VERSAT_AXI_DATA_W)"
 
 generate-test:
 	bash -c "source $(PYTHON_ENV)/bin/activate ; python3 ./setupTest.py $(TEST)"
 
 test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
+	-rm ./hardware/fpga/vivado/iob_aes_ku040_db_g/board.tcl
+	python3 ./scripts/createBoardTcl.py ./hardware/fpga/vivado/iob_aes_ku040_db_g/board.tcl $(VERSAT_AXI_DATA_W)
 	mkdir -p hardware/simulation
-	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM)' $(EXTRA_ARGS);"
+	nix-shell --run "py2hwsw $(CORE) setup --no_verilog_lint --py_params 'use_intmem=$(USE_INTMEM):use_extmem=$(USE_EXTMEM):init_mem=$(INIT_MEM):use_ethernet=$(USE_ETHERNET):include_tester=$(TESTER):tester_sim=$(TESTER_SIM):axi_data_w=$(VERSAT_AXI_DATA_W)' $(EXTRA_ARGS);"
 	cp -r ./resources ../versat_ai_V$(VERSION)/
 	cp -r submodules/iob_versat/software ../versat_ai_V$(VERSION)/ # Since python file was not being copied and we need a python script from inside software
 	cp -r ./software ../versat_ai_V$(VERSION)/
@@ -75,7 +83,9 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
 	cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/makehex.py ../versat_ai_V$(VERSION)/tester/scripts
 	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
-	
+	cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/scripts
+	-cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/tester/scripts
+
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
 pc-emul-run: test-setup

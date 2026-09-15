@@ -1340,6 +1340,10 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 
   InferenceState *state = &stateInst;
 
+  Top_Conv_NumberUnits_Struct res = Top_Conv_NumberUnits();
+  versat_printf("Add       parameters: %d\n", Top_Add_NumberUnits().val);
+  versat_printf("Conv grid parameters: %d %d\n", res.gridX, res.gridY);
+
   versat_printf("VersatSoft\n");
   versat_timeReset();
   start = versat_time();
@@ -1396,7 +1400,7 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
     versat_printf("%d\n", ptr->outputSize);
 #endif
 
-#if 0
+#if 1
     // For testing purposes we initialize with a very likely bad value
     // To make sure that the operator is not skipping any computation
     float *asFloat = (float *)output;
@@ -1539,13 +1543,9 @@ InferenceOutput RunCompiledInference(CompiledModel *model, void *outputMemory,
 
     // Versat profiling registers
     // ================================================
-    if (0) {
+    if (1) {
       versat_printf("Runs:");
       PrintU64(p.runCount);
-      versat_printf("\n");
-
-      versat_printf("Cycles since last reset:");
-      PrintU64(p.cyclesSinceLastReset);
       versat_printf("\n");
 
       versat_printf("Cycles running:");
@@ -1986,7 +1986,8 @@ void Versat_Init() {
   storedProfiles = malloc(sizeof(ProfileSample) * 1000);
   maxProfiledSamples = 1000;
 
-  versat_printf("Arena %p - %p\n", arena->mem, arena->mem + arena->allocated);
+  // versat_printf("Arena %p - %p\n", arena->mem, arena->mem +
+  // arena->allocated);
 
 #if !EMBED_TABLES
   {

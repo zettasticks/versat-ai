@@ -1550,7 +1550,7 @@ def OutputFilesFromTestList(outputPath):
             16,
         )
         np.random.seed(persistantHash % (2**31))
-        test.Create(False)
+        test.Create(True)
 
     allInputNodesAndValuesInOrder = []
     for x in tests:
@@ -1852,7 +1852,7 @@ def GenerateLite(outputPath):
 def GenerateTest(outputPath):
     config = GenerateTestConfig()
 
-    config.testAdd = 0
+    config.testAdd = 1
     config.testRelu = 0
     config.testReshape = 0
     config.testTranspose = 0
@@ -1867,14 +1867,19 @@ def GenerateTest(outputPath):
     config.testPad = 0
 
     config.testConv = 1
-    config.generateOneOfEach = 0
-    config.generativeTests = 1
+    config.generateOneOfEach = 1
+    config.generativeTests = 0
     config.testBig = 0
 
-    if 1:
+    if 0:
+        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
+        # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
+
+    if 0:
         # CreateConvolution(
         #    [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
         # )
+        CreateBinaryOpTest("Add", [3, 2], [3, 2])
         CreateConvolution(
             [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
         )
