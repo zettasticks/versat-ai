@@ -209,6 +209,85 @@ def setup(py_params_dict):
             },
         ]
 
+    if params["use_ethernet"]:
+        attributes_dict["wires"] += [
+            {
+                "name": "eth_cbus",
+                "descr": "Ethernet CSR bus",
+                "signals": {
+                    "type": "iob",
+                    "prefix": "eth_",
+                    "ADDR_W": periph_addr_w,
+                },
+            },
+            {
+                "name": "unused_eth_axi",
+                "descr": "Ethernet AXI bus (unused: tesbench uses eth without DMA)",
+                "signals": {
+                    "type": "axi",
+                    "prefix": "eth_",
+                    "ADDR_W": ETH_RAM_ADDR_W,
+                    "ID_W": "AXI_ID_W",
+                    "LEN_W": "AXI_LEN_W",
+                },
+            },
+            {
+                "name": "phy_rstn",
+                "descr": "",
+                "signals": [
+                    {
+                        "name": "phy_rstn",
+                        "width": "1",
+                        "descr": "Issuer ethernet reset signal for PHY.",
+                    },
+                ],
+            },
+            {
+                "name": "tb_phy_rstn",
+                "descr": "",
+                "signals": [
+                    {
+                        "name": "tb_phy_rstn",
+                        "width": "1",
+                        "descr": "Testbench ethernet reset signal for PHY.",
+                    },
+                ],
+            },
+            {
+                "name": "mii",
+                "descr": "Ethernet MII interface",
+                "signals": {
+                    "type": "mii",
+                },
+            },
+            {
+                "name": "mii_invert",
+                "descr": "Invert RX and TX signals of ethernet MII bus",
+                "signals": [
+                    {"name": "mii_tx_clk"},
+                    {"name": "mii_rxd"},
+                    {"name": "mii_rx_dv"},
+                    {"name": "mii_rx_er"},
+                    {"name": "mii_rx_clk"},
+                    {"name": "mii_txd"},
+                    {"name": "mii_tx_en"},
+                    {"name": "mii_tx_er"},
+                    {"name": "mii_crs"},
+                    {"name": "mii_col"},
+                    # Create new management signals for testbench eth
+                    {"name": "tb_mii_mdio", "width": "1"},
+                    {"name": "tb_mii_mdc", "width": "1"},
+                ],
+            },
+            {
+                "name": "eth_int",
+                "descr": "Ethernet interrupt",
+                "signals": [
+                    {"name": "eth_interrupt"},
+                ],
+            },
+        ]
+
     #
     # Blocks
     #
@@ -232,6 +311,33 @@ def setup(py_params_dict):
             "dest_dir": "hardware/common_src",
         },
     ]
+
+    if params["use_ethernet"]:
+        attributes_dict["subblocks"][-1]["connect"].update({"mii_io": "mii"})
+        attributes_dict["subblocks"][-1]["connect"].update({"phy_rstn_o": "phy_rstn"})
+    if len(tb_peripherals) > 1:
+        attributes_dict["subblocks"] += [
+            {
+                "core_name": "iob_split",
+                "name": "tb_pbus_split",
+                "instance_name": "iob_pbus_split",
+                "instance_description": "Split between testbench peripherals",
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "reset_i": "split_reset",
+                    "s_s": "tb_s",
+                    "m_0_m": "uart_cbus",
+                },
+                "num_managers": 1,
+                "addr_w": 32,
+            },
+        ]
+    if params["use_ethernet"]:
+        subordinate_num = attributes_dict["subblocks"][-1]["num_managers"]
+        attributes_dict["subblocks"][-1]["num_managers"] += 1
+        attributes_dict["subblocks"][-1]["connect"] |= {
+            f"m_{subordinate_num}_m": "eth_cbus",
+        }
 
     # Connect ethernet and its RAM to pbus
     attributes_dict["subblocks"] += [
@@ -306,10 +412,68 @@ def setup(py_params_dict):
                     "HEXFILE": f'"{params["name"]}_firmware"',
                 }
             )
+
+    if params["use_ethernet"]:
+        attributes_dict["subblocks"] += [
+            {
+                "core_name": "iob_eth",
+                "instance_name": "eth_tb",
+                "parameters": {
+                    "AXI_ID_W": "AXI_ID_W",
+                    "AXI_LEN_W": "AXI_LEN_W",
+                    "AXI_ADDR_W": ETH_RAM_ADDR_W,
+                    "AXI_DATA_W": 32,
+                    "DATA_W": 32,
+                },
+                "connect": {
+                    "clk_en_rst_s": "clk_en_rst_s",
+                    "csrs_cbus_s": ("eth_cbus", ["eth_iob_addr[11:0]"]),
+                    "axi_m": "unused_eth_axi",
+                    "inta_o": "eth_int",
+                    "phy_rstn_o": "tb_phy_rstn",
+                    "mii_io": "mii_invert",
+                },
+            },
+        ]
     #
     # Snippets
     #
     attributes_dict["snippets"] = []
+    if params["use_ethernet"]:
+        attributes_dict["snippets"] += [
+            {
+                "verilog_code": """
+    //ethernet clock: 4x slower than system clock
+    reg [1:0] eth_cnt = 2'b0;
+    reg       eth_clk;
+
+    always @(posedge clk_i) begin
+      eth_cnt <= eth_cnt + 1'b1;
+      eth_clk <= eth_cnt[1];
+    end
+
+    // Set ethernet AXI inputs to low
+    assign eth_axi_awready = 1'b0;
+    assign eth_axi_wready  = 1'b0;
+    assign eth_axi_bid     = {AXI_ID_W{1'b0}};
+    assign eth_axi_bresp   = 2'b0;
+    assign eth_axi_bvalid  = 1'b0;
+    assign eth_axi_arready = 1'b0;
+    assign eth_axi_rid     = {AXI_ID_W{1'b0}};
+    assign eth_axi_rdata   = {AXI_DATA_W{1'b0}};
+    assign eth_axi_rresp   = 2'b0;
+    assign eth_axi_rlast   = 1'b0;
+    assign eth_axi_rvalid  = 1'b0;
+
+    // Connect ethernet MII signals
+    assign mii_tx_clk       = eth_clk;
+    assign mii_rx_clk       = eth_clk;
+    assign mii_col          = 1'b0;
+    assign mii_crs          = 1'b0;
+
+""",
+            },
+        ]
 
     # Calculate and print testbench peripheral memory map
     print("------------------------------------------------------")

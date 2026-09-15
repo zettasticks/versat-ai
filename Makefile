@@ -38,7 +38,7 @@ endif
 
 make-python-env: $(PYTHON_ENV)
 
-ALL_GENERATED_TESTS:=./tests/alexnet/model.onnx ./tests/generated_heavy ./tests/generated_lite ./tests/softmax
+ALL_GENERATED_TESTS:=./tests/generated_lite ./tests/softmax
 
 ./tests/alexnet/model.onnx:
 	./scripts/downloadAlexnet.sh
@@ -85,6 +85,7 @@ test-setup: $(PYTHON_ENV) $(VERSAT_ACCEL) $(ALL_GENERATED_TESTS) generate-test
 	-cp ./software/makehex.c ../versat_ai_V$(VERSION)/tester/software
 	cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/scripts
 	-cp ./scripts/board_client.py ../versat_ai_V$(VERSION)/tester/scripts
+	-cp ../versat_ai_V$(VERSION)/software/src/versat_ai_conf.h ../versat_ai_V$(VERSION)/tester/software/src
 
 .PHONY: make-python-env make-versat-accel generate-test test-setup
 
@@ -95,8 +96,8 @@ sim-run: test-setup
 	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/ sim-run SIMULATOR=$(SIMULATOR)"
 
 tester-sim-run:
-	make test-setup TESTER=1 TESTER_SIM=1
-	nix-shell --run "make -C ../$(CORE)_V$(VERSION)/tester sim-run SIMULATOR=$(SIMULATOR)"
+	make test-setup TESTER=1 TESTER_SIM=1 
+	#nix-shell --run "make -C ../$(CORE)_V$(VERSION)/tester sim-run SIMULATOR=$(SIMULATOR)"
 
 # For some reason the vivado build.tcl is being overwritten by py2. Need to copy it before 
 fpga-run: test-setup

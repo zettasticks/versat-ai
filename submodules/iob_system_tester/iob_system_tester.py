@@ -118,6 +118,16 @@ def setup(py_params):
             # "iob_cyclonev_gt_dk",
             # "iob_zybo_z7",
         ],
+        "confs": [
+            {
+                "name": "AXI_DATA_W",
+                "descr": "Axi data width",
+                "type": "P",
+                "val": 32,
+                "min": "32",
+                "max": "32",
+            },
+        ],
         "wires": [
             {
                 "name": "sut_rs232",

@@ -1871,40 +1871,6 @@ def GenerateTest(outputPath):
     config.generativeTests = 0
     config.testBig = 0
 
-    if 0:
-        CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 1)
-        # CreateConvolution([1, 4, 2, 2], 4, [2, 2], [2, 2], [1, 1], 2)
-
-    if 0:
-        # CreateConvolution(
-        #    [1, 2, 1, 1], 2, [1, 1], [1, 1], [1, 1], 2, False, "NOTSET", [0, 0, 0, 0]
-        # )
-        CreateBinaryOpTest("Add", [3, 2], [3, 2])
-        CreateConvolution(
-            [1, 1, 2, 2], 1, [2, 2], [2, 2], [1, 1], 1, False, "NOTSET", [0, 0, 0, 0]
-        )
-
-    # Is there a bug in the inputs?
-
-    # Needs 32 input channels
-    # Needs 64 output channels
-
-    # CreateConvolution(
-    #    [1, 32, 1, 1], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1]
-    # )
-    # CreateConvolution([1, 32, 2, 2], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 4, 4], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 8, 4], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 4, 8], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 8, 8], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 16, 8], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 8, 16], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 16, 16], 64, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-
-    # CreateConvolution([1, 32, 16, 16], 32, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 32, 16, 16], 32, [3, 3], [2, 2], [1, 1], 1, True, "NOTSET", [1, 1, 1, 1])
-    # CreateConvolution([1, 4, 4, 4], 4, [2, 2], [2, 2], [1, 1], 2)
-
     GenerateSimpleTest(config)
     OutputFilesFromTestList(outputPath)
 

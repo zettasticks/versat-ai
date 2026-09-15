@@ -376,15 +376,15 @@ def setup(py_params: dict):
                     "LOCK_W": 1,
                 },
             },
-            #            {
-            #                "name": "csrs_cbus_s",
-            #                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
-            #                "signals": {
-            #                    "type": "iob",
-            #                    "ADDR_W": 3,
-            #                    "DATA_W": "AXI_DATA_W",
-            #                },
-            #            },
+            {
+                "name": "csrs_cbus_s",
+                "descr": "Control/Status Registers of versat-ai system (using regfileif).",
+                "signals": {
+                    "type": "iob",
+                    "ADDR_W": 3,
+                    "DATA_W": "AXI_DATA_W",
+                },
+            },
             # NOTE: Add other ports here.
         ],
         "wires": [
