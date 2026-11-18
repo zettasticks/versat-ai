@@ -208,7 +208,7 @@ coverage-all-fus: clean test-setup
 
 setup-embedded:
 	$(MAKE) nix-setup-only
-	mkdir ../versat_ai_V$(VERSION)/resources
+	-mkdir ../versat_ai_V$(VERSION)/resources
 	cp embeddedResources/VERSAT_TEST_METADATA.txt      ../versat_ai_V$(VERSION)/resources/VERSAT_TEST_METADATA.txt
 	cp embeddedResources/Generated_model.bin           ../versat_ai_V$(VERSION)/resources/Generated_model.bin
 	cp embeddedResources/Generated_metamodel.bin       ../versat_ai_V$(VERSION)/resources/Generated_metamodel.bin
